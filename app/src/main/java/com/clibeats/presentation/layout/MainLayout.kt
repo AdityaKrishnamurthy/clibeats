@@ -90,14 +90,17 @@ fun MainLayout(
             }
 
             // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
-            PlayerBarHost(playerViewModel)
+            PlayerBarHost(playerViewModel, onQueueClick = { onDestinationSelected(NavDestination.Queue) })
         }
     }
 }
 
 @Suppress("FunctionNaming")
 @Composable
-private fun PlayerBarHost(playerViewModel: PlayerViewModel) {
+private fun PlayerBarHost(
+    playerViewModel: PlayerViewModel,
+    onQueueClick: () -> Unit,
+) {
     val playbackState by playerViewModel.playbackState.collectAsState()
     val trackDuration = playbackState.currentTrack?.durationMs ?: 0L
     val progress =
@@ -122,6 +125,9 @@ private fun PlayerBarHost(playerViewModel: PlayerViewModel) {
         onSkipNextClick = playerViewModel::onSkipNextClick,
         onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
         onSeek = playerViewModel::seekTo,
+        onQueueClick = onQueueClick,
+        repeatMode = playbackState.repeatMode,
+        onRepeatClick = playerViewModel::onRepeatClick,
     )
 }
 

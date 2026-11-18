@@ -56,6 +56,7 @@ class QueueViewModel
             track: Track,
             index: Int,
         ) {
-            playbackRepository.setQueue(playbackRepository.queueState.value, index)
+            // Jump within the existing queue; re-setting the queue restarted every item.
+            playbackRepository.skipToIndex(index)
         }
     }

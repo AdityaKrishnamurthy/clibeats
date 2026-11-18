@@ -38,6 +38,8 @@ interface PlaybackRepository {
 
     fun seekTo(positionMs: Long)
 
+    fun skipToIndex(index: Int)
+
     fun skipToNext()
 
     fun skipToPrevious()

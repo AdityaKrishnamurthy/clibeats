@@ -222,6 +222,13 @@ class PlayerAdapter
             player.seekTo(positionMs)
         }
 
+        fun skipToIndex(index: Int) {
+            if (index in trackList.indices) {
+                player.seekTo(index, 0L)
+                player.play()
+            }
+        }
+
         fun skipToNext() {
             if (player.hasNextMediaItem()) {
                 player.seekToNextMediaItem()

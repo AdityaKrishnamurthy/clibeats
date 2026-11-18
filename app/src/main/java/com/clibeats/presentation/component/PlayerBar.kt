@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.RepeatOne
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.Icon
@@ -43,6 +45,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.clibeats.domain.model.RepeatMode
+import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
@@ -75,6 +79,8 @@ fun PlayerBar(
     onSkipNextClick: () -> Unit = {},
     onSkipPreviousClick: () -> Unit = {},
     onQueueClick: () -> Unit = {},
+    repeatMode: RepeatMode = RepeatMode.OFF,
+    onRepeatClick: () -> Unit = {},
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
@@ -165,6 +171,19 @@ fun PlayerBar(
                             imageVector = Icons.Outlined.SkipNext,
                             contentDescription = null,
                             tint = CliBeatsTextPrimary,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onRepeatClick,
+                        modifier = Modifier.semantics { contentDescription = "Repeat: ${repeatMode.name.lowercase()}" },
+                    ) {
+                        Icon(
+                            imageVector =
+                                if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
+                            contentDescription = null,
+                            tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
                             modifier = Modifier.size(20.dp),
                         )
                     }
