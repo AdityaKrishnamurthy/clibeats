@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -61,14 +62,12 @@ import com.clibeats.presentation.theme.LocalAccentColor
 
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
-fun SearchScreen(
-    onTrackClick: (Track) -> Unit = {},
-    viewModel: SearchViewModel = hiltViewModel(),
-) {
+fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
+    val activeProviderId by viewModel.activeProviderId.collectAsState()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     val focusManager = LocalFocusManager.current
 
@@ -105,7 +104,13 @@ fun SearchScreen(
             },
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        ProviderSwitcher(
+            providers = viewModel.providers,
+            activeProviderId = activeProviderId,
+            onSelect = viewModel::setActiveProvider,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
 
         // ── Results area block ───────────────────────────────────────────
         TuiBlock(title = "Search Results — $providerName", modifier = Modifier.weight(1f)) {
@@ -119,7 +124,7 @@ fun SearchScreen(
                     } else {
                         SearchResultsList(
                             tracks = currentState.tracks,
-                            onTrackClick = onTrackClick,
+                            onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = viewModel::onAddToQueue,
                             onPlayNext = viewModel::onPlayNext,
                             onAddToPlaylist = { playlistPickerTrack = it },
@@ -250,7 +255,7 @@ private fun SearchNoResultsState() {
 @Composable
 private fun SearchResultsList(
     tracks: List<Track>,
-    onTrackClick: (Track) -> Unit,
+    onTrackClick: (Int) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onPlayNext: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
@@ -269,7 +274,7 @@ private fun SearchResultsList(
                 duration = formatDuration(track.durationMs),
                 index = index + 1,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                onClick = { onTrackClick(track) },
+                onClick = { onTrackClick(index) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(

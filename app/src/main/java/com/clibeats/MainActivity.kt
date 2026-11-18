@@ -2,6 +2,7 @@ package com.clibeats
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -11,7 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,30 +42,30 @@ class MainActivity : ComponentActivity() {
             val themeState by themeViewModel.themeState.collectAsState()
 
             CliBeatsTheme(accent = themeState.accent, mode = themeState.mode) {
-                var selectedDestination by remember {
-                    mutableStateOf<NavDestination>(NavDestination.Home)
-                }
+                // Saveable route: tab survives rotation/process death. Back returns to Home before exiting.
+                var route by rememberSaveable { mutableStateOf(NavDestination.Home.route) }
+                val selectedDestination =
+                    NavDestination.all.firstOrNull { it.route == route } ?: NavDestination.Home
+                val navigate: (NavDestination) -> Unit = { route = it.route }
+                BackHandler(enabled = selectedDestination != NavDestination.Home) { navigate(NavDestination.Home) }
                 val playerViewModel: PlayerViewModel = hiltViewModel()
 
                 MainLayout(
                     selectedDestination = selectedDestination,
-                    onDestinationSelected = { selectedDestination = it },
+                    onDestinationSelected = navigate,
                 ) {
                     when (selectedDestination) {
                         NavDestination.Home ->
                             HomeScreen(
-                                onNavigate = { selectedDestination = it },
+                                onNavigate = navigate,
                                 playerViewModel = playerViewModel,
                             )
-                        NavDestination.Search ->
-                            SearchScreen(
-                                onTrackClick = { playerViewModel.playTrack(it) },
-                            )
+                        NavDestination.Search -> SearchScreen()
                         NavDestination.Queue -> QueueScreen()
                         NavDestination.Library -> LibraryScreen()
                         NavDestination.More ->
                             MoreScreen(
-                                onNavigate = { selectedDestination = it },
+                                onNavigate = navigate,
                             )
                         NavDestination.Playlists -> PlaylistScreen()
                         NavDestination.Settings -> SettingsScreen()

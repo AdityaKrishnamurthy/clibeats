@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.PlaybackRepository
@@ -55,8 +56,24 @@ class SearchViewModel
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
 
-        private val activeProviderId =
-            appPreferences.activeProviderId.map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+        val providers: List<MusicProvider> = providerRegistry.providers
+
+        val activeProviderId: StateFlow<String> =
+            appPreferences.activeProviderId
+                .map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
+
+        fun setActiveProvider(id: String) {
+            viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Plays the tapped result with the rest of the results queued after it. */
+        fun onPlay(
+            tracks: List<Track>,
+            index: Int,
+        ) {
+            playbackRepository.setQueue(tracks, index)
+        }
 
         val activeProviderName: StateFlow<String> =
             activeProviderId
