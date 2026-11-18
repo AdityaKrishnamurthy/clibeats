@@ -1,6 +1,9 @@
+<div align="center">
+
 # CLIBeats
 
-> A free, open-source Android music player with a terminal-inspired interface — stream online or play your own lossless library.
+**A free, open-source Android music player with a terminal-inspired interface.**<br>
+Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
 [![Version](https://img.shields.io/badge/version-2.0.0-1DB954)](#)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
@@ -8,39 +11,53 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-CLIBeats is built around three principles:
+<img src="docs/screenshots/strip_now_playing.png" width="66%" alt="Now Playing: online stream and local FLAC">
 
-- **No advertisements**
-- **No accounts and no app-side tracking**
-- **A fast, terminal-inspired interface** instead of a conventional streaming-app design
+</div>
 
-**v2.0** is a full overhaul: gapless queue playback, a real local library (FLAC 16/24-bit, WAV, MP3, …),
-M3U playlists, a full-screen player, favourites, swipe gestures, light/dark/AMOLED themes, smart caching,
-and system media controls with playback resumption.
+> [!NOTE]
+> **v2.0** is a full overhaul: gapless queue playback, a real local library (FLAC 16/24-bit, WAV, MP3, …),
+> M3U playlists, a full-screen player, favourites, swipe gestures, light/dark/AMOLED themes, smart caching,
+> and system media controls with playback resumption.
 
----
+## Contents
 
-**Contents:** [Screenshots](#screenshots) · [Features](#features) · [Gestures](#gestures) ·
-[Navigation](#navigation) · [Architecture](#architecture) · [Technology](#technology) ·
-[Requirements](#requirements) · [Build From Source](#build-from-source) · [Project Structure](#project-structure) ·
-[Privacy](#privacy) · [Legal Notice](#legal-notice) · [Documentation](#documentation) ·
-[Contributing](#contributing) · [License](#license)
-
-**Screenshots:** [1 Home · queue](#shot-1) · [2 Home · favourite](#shot-2) · [3 Search](#shot-3) ·
-[4 Library online](#shot-4) · [5 Library offline](#shot-5) · [6 Playlists](#shot-6) ·
-[7 Settings · theme](#shot-7) · [8 Settings · storage](#shot-8) · [9 Now Playing online](#shot-9) ·
-[10 Now Playing FLAC](#shot-10)
+- [Screenshots](#screenshots)
+- [Features](#features)
+- [Gestures](#gestures)
+- [Navigation](#navigation)
+- [Architecture](#architecture)
+- [Technology](#technology)
+- [Build From Source](#build-from-source)
+- [Project Structure](#project-structure)
+- [Privacy & Legal](#privacy--legal)
+- [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
 ## Screenshots
 
-| | | |
-|:---:|:---:|:---:|
-| <a id="shot-1"></a><img src="docs/screenshots/01_home_swipe_right_queue.png" width="230" alt="Home: swipe right to queue"><br>**1. Home** — swipe right → `+ QUEUE` | <a id="shot-2"></a><img src="docs/screenshots/02_home_swipe_left_favorite.png" width="230" alt="Home: swipe left to favourite"><br>**2. Home** — swipe left → `♥ FAVORITE` | <a id="shot-3"></a><img src="docs/screenshots/03_search.png" width="230" alt="Search"><br>**3. Search** — Online ▾ / Local switch |
-| <a id="shot-4"></a><img src="docs/screenshots/04_library_online.png" width="230" alt="Library online"><br>**4. Library · Online** — only songs you played | <a id="shot-5"></a><img src="docs/screenshots/05_library_offline.png" width="230" alt="Library offline"><br>**5. Library · Offline** — your device music | <a id="shot-6"></a><img src="docs/screenshots/06_playlists_grid.png" width="230" alt="Playlists grid"><br>**6. Playlists** — Favorites, Most Played, local M3U |
-| <a id="shot-7"></a><img src="docs/screenshots/07_settings_theme_local_music.png" width="230" alt="Settings: theme and local music"><br>**7. Settings** — theme, accent, music folders | <a id="shot-8"></a><img src="docs/screenshots/08_settings_storage_about.png" width="230" alt="Settings: storage and about"><br>**8. Settings** — caches, exchange, about | <a id="shot-9"></a><img src="docs/screenshots/09_now_playing_online.png" width="230" alt="Now Playing online"><br>**9. Now Playing** — online (`OPUS · 160 kbps`) |
-| <a id="shot-10"></a><img src="docs/screenshots/10_now_playing_local_flac.png" width="230" alt="Now Playing local FLAC"><br>**10. Now Playing** — local hi-res (`FLAC · 24-bit`) | | |
+<div align="center">
+
+**Home & Search**
+
+<img src="docs/screenshots/strip_home_search.png" width="100%" alt="Home swipe gestures and search">
+
+<br><br>
+
+**Library & Playlists**
+
+<img src="docs/screenshots/strip_library_playlists.png" width="100%" alt="Library online and offline, playlists grid">
+
+<br><br>
+
+**Settings**
+
+<img src="docs/screenshots/strip_settings.png" width="66%" alt="Settings: theme, music folders, storage and about">
+
+</div>
 
 ---
 
@@ -156,14 +173,9 @@ ktlint · detekt.
 
 ---
 
-## Requirements
-
-- Android 8.0 (API 26) or newer
-- To build: JDK 17, Android SDK 34
-
----
-
 ## Build From Source
+
+**Requirements:** Android 8.0 (API 26)+ to run · JDK 17 and Android SDK 34 to build.
 
 ```bash
 git clone https://github.com/Omprakash-p06/clibeats.git
@@ -204,17 +216,13 @@ docs/              # screenshots, ADRs, user guide, licenses
 
 ---
 
-## Privacy
+## Privacy & Legal
 
-CLIBeats is local-first: no CLIBeats account and no CLIBeats backend. Library, playlists, favourites,
+**Privacy.** CLIBeats is local-first: no CLIBeats account and no CLIBeats backend. Library, playlists, favourites,
 queue and history are stored on the device. Online providers receive the requests needed to search and
 stream; their own policies apply.
 
----
-
-## Legal Notice
-
-CLIBeats does not host or provide music. Availability depends on the selected provider. Users are
+**Legal.** CLIBeats does not host or provide music. Availability depends on the selected provider. Users are
 responsible for complying with providers' terms of service and copyright law in their jurisdiction.
 
 ---
