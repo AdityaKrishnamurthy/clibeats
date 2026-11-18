@@ -225,8 +225,8 @@ private fun PlaylistGridView(
         columns = GridCells.Adaptive(minSize = TILE_MIN_DP.dp),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         item(key = "fav") {
             PlaylistTile(
@@ -312,7 +312,7 @@ private fun PlaylistTile(
             contentAlignment = Alignment.Center,
         ) {
             if (coverUrl.isNullOrBlank()) {
-                Text(text = glyph, style = MaterialTheme.typography.displaySmall, color = borderColor)
+                Text(text = glyph, style = MaterialTheme.typography.headlineMedium, color = borderColor)
             } else {
                 AsyncImage(
                     // Same thumbnail URL as song rows: usually already cached, so tiles fill instantly.
@@ -325,7 +325,7 @@ private fun PlaylistTile(
         }
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = if (highlight) CliBeatsAccent else CliBeatsTextPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -347,11 +347,11 @@ private fun NewPlaylistTile(onClick: () -> Unit) {
                     .border(1.dp, CliBeatsAccent, RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(text = "+", style = MaterialTheme.typography.displayMedium, color = CliBeatsAccent)
+            Text(text = "+", style = MaterialTheme.typography.headlineLarge, color = CliBeatsAccent)
         }
         Text(
             text = "NEW PLAYLIST",
-            style = MaterialTheme.typography.bodyMedium,
+            style = MaterialTheme.typography.bodySmall,
             color = CliBeatsAccent,
             modifier = Modifier.padding(top = 6.dp),
         )
@@ -514,4 +514,4 @@ private fun CreatePlaylistDialog(
     )
 }
 
-private const val TILE_MIN_DP = 140
+private const val TILE_MIN_DP = 100 // 3 columns on most phones
