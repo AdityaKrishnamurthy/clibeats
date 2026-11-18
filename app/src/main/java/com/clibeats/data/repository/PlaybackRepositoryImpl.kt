@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "MaxLineLength", "LongMethod", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "MaxLineLength", "LongMethod", "TooManyFunctions", "LongParameterList")
 
 package com.clibeats.data.repository
 
@@ -23,8 +23,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -95,18 +95,18 @@ class PlaybackRepositoryImpl
                             old.repeatMode == new.repeatMode &&
                             old.shuffleEnabled == new.shuffleEnabled
                     }.collect { state ->
-                    val tracks = playerAdapter.queueFlow.value
-                    val currentIndex =
-                        state.currentTrack?.let { current ->
-                            tracks.indexOfFirst { it.id == current.id }
-                        } ?: 0
-                    appPreferences.saveQueueMetadata(
-                        index = if (currentIndex >= 0) currentIndex else 0,
-                        positionMs = state.positionMs,
-                        repeatMode = state.repeatMode.name,
-                        shuffleEnabled = state.shuffleEnabled,
-                    )
-                }
+                        val tracks = playerAdapter.queueFlow.value
+                        val currentIndex =
+                            state.currentTrack?.let { current ->
+                                tracks.indexOfFirst { it.id == current.id }
+                            } ?: 0
+                        appPreferences.saveQueueMetadata(
+                            index = if (currentIndex >= 0) currentIndex else 0,
+                            positionMs = state.positionMs,
+                            repeatMode = state.repeatMode.name,
+                            shuffleEnabled = state.shuffleEnabled,
+                        )
+                    }
             }
         }
 

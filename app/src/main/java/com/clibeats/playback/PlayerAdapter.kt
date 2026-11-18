@@ -308,8 +308,8 @@ class PlayerAdapter
                 error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
                     error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED
             val index = player.currentMediaItemIndex
-            val track = trackList.getOrNull(index) ?: return false
-            if (!retryable || retriedMediaId == track.id) return false
+            val track = trackList.getOrNull(index)
+            if (!retryable || track == null || retriedMediaId == track.id) return false
             retriedMediaId = track.id
             streamResolver.invalidate(track.providerId, track.id)
             val position = player.currentPosition.coerceAtLeast(0L)

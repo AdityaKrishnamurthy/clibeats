@@ -27,7 +27,7 @@ class InnerTubeHeaderInterceptor
             if (original.header("Accept-Language") == null) {
                 builder.header(
                     "Accept-Language",
-                    "${com.clibeats.data.provider.dto.UserLocale.hl}-${com.clibeats.data.provider.dto.UserLocale.gl},${com.clibeats.data.provider.dto.UserLocale.hl};q=0.9,en;q=0.8",
+                    with(com.clibeats.data.provider.dto.UserLocale) { "$hl-$gl,$hl;q=0.9,en;q=0.8" },
                 )
             }
             if (original.header("Origin") == null) {
