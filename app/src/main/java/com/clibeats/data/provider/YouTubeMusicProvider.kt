@@ -93,7 +93,7 @@ class YouTubeMusicProvider
                 return ProviderResult.Success(cached.url)
             }
 
-            // 2. Primary: NewPipeExtractor v0.26.4 maintained extraction
+            // 2. Primary: NewPipeExtractor v0.27.1 maintained extraction
             val newPipeExtracted = newPipeExtractorResolver.resolveStream(rawId, traceId)
             if (newPipeExtracted != null) {
                 DiagnosticLogger.logStreamFormatSelected(
