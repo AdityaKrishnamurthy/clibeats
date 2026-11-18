@@ -20,14 +20,27 @@ and system media controls with playback resumption.
 
 ---
 
+**Contents:** [Screenshots](#screenshots) · [Features](#features) · [Gestures](#gestures) ·
+[Navigation](#navigation) · [Architecture](#architecture) · [Technology](#technology) ·
+[Requirements](#requirements) · [Build From Source](#build-from-source) · [Project Structure](#project-structure) ·
+[Privacy](#privacy) · [Legal Notice](#legal-notice) · [Documentation](#documentation) ·
+[Contributing](#contributing) · [License](#license)
+
+**Screenshots:** [1 Home · queue](#shot-1) · [2 Home · favourite](#shot-2) · [3 Search](#shot-3) ·
+[4 Library online](#shot-4) · [5 Library offline](#shot-5) · [6 Playlists](#shot-6) ·
+[7 Settings · theme](#shot-7) · [8 Settings · storage](#shot-8) · [9 Now Playing online](#shot-9) ·
+[10 Now Playing FLAC](#shot-10)
+
+---
+
 ## Screenshots
 
 | | | |
 |:---:|:---:|:---:|
-| <img src="docs/screenshots/01_home_swipe_right_queue.png" width="230" alt="Home: swipe right to queue"><br>**1. Home** — swipe right → `+ QUEUE` | <img src="docs/screenshots/02_home_swipe_left_favorite.png" width="230" alt="Home: swipe left to favourite"><br>**2. Home** — swipe left → `♥ FAVORITE` | <img src="docs/screenshots/03_search.png" width="230" alt="Search"><br>**3. Search** — Online ▾ / Local switch |
-| <img src="docs/screenshots/04_library_online.png" width="230" alt="Library online"><br>**4. Library · Online** — only songs you played | <img src="docs/screenshots/05_library_offline.png" width="230" alt="Library offline"><br>**5. Library · Offline** — your device music | <img src="docs/screenshots/06_playlists_grid.png" width="230" alt="Playlists grid"><br>**6. Playlists** — Favorites, Most Played, local M3U |
-| <img src="docs/screenshots/07_settings_theme_local_music.png" width="230" alt="Settings: theme and local music"><br>**7. Settings** — theme, accent, music folders | <img src="docs/screenshots/08_settings_storage_about.png" width="230" alt="Settings: storage and about"><br>**8. Settings** — caches, exchange, about | <img src="docs/screenshots/09_now_playing_online.png" width="230" alt="Now Playing online"><br>**9. Now Playing** — online (`OPUS · 160 kbps`) |
-| <img src="docs/screenshots/10_now_playing_local_flac.png" width="230" alt="Now Playing local FLAC"><br>**10. Now Playing** — local hi-res (`FLAC · 24-bit`) | | |
+| <a id="shot-1"></a><img src="docs/screenshots/01_home_swipe_right_queue.png" width="230" alt="Home: swipe right to queue"><br>**1. Home** — swipe right → `+ QUEUE` | <a id="shot-2"></a><img src="docs/screenshots/02_home_swipe_left_favorite.png" width="230" alt="Home: swipe left to favourite"><br>**2. Home** — swipe left → `♥ FAVORITE` | <a id="shot-3"></a><img src="docs/screenshots/03_search.png" width="230" alt="Search"><br>**3. Search** — Online ▾ / Local switch |
+| <a id="shot-4"></a><img src="docs/screenshots/04_library_online.png" width="230" alt="Library online"><br>**4. Library · Online** — only songs you played | <a id="shot-5"></a><img src="docs/screenshots/05_library_offline.png" width="230" alt="Library offline"><br>**5. Library · Offline** — your device music | <a id="shot-6"></a><img src="docs/screenshots/06_playlists_grid.png" width="230" alt="Playlists grid"><br>**6. Playlists** — Favorites, Most Played, local M3U |
+| <a id="shot-7"></a><img src="docs/screenshots/07_settings_theme_local_music.png" width="230" alt="Settings: theme and local music"><br>**7. Settings** — theme, accent, music folders | <a id="shot-8"></a><img src="docs/screenshots/08_settings_storage_about.png" width="230" alt="Settings: storage and about"><br>**8. Settings** — caches, exchange, about | <a id="shot-9"></a><img src="docs/screenshots/09_now_playing_online.png" width="230" alt="Now Playing online"><br>**9. Now Playing** — online (`OPUS · 160 kbps`) |
+| <a id="shot-10"></a><img src="docs/screenshots/10_now_playing_local_flac.png" width="230" alt="Now Playing local FLAC"><br>**10. Now Playing** — local hi-res (`FLAC · 24-bit`) | | |
 
 ---
 
@@ -223,10 +236,6 @@ responsible for complying with providers' terms of service and copyright law in 
 4. Keep UI changes consistent with the terminal design system.
 
 ---
-
-## Credits
-
-Developed by **[Omprakash Panda](https://github.com/Omprakash-p06/clibeats)**.
 
 ## License
 
