@@ -1,14 +1,14 @@
 package com.clibeats.theme
 
 import androidx.compose.ui.graphics.Color
-import com.clibeats.presentation.theme.CliBeatsAccent
-import com.clibeats.presentation.theme.CliBeatsBackground
+import com.clibeats.presentation.theme.CliBeatsAccentDefault
+import com.clibeats.presentation.theme.CliBeatsBackgroundDark
 import com.clibeats.presentation.theme.CliBeatsBorderActive
 import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDestructiveSurface
 import com.clibeats.presentation.theme.CliBeatsDivider
-import com.clibeats.presentation.theme.CliBeatsSurface
+import com.clibeats.presentation.theme.CliBeatsSurfaceDark
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextDisabled
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
@@ -23,12 +23,12 @@ import org.junit.Test
 class CliBeatsColorsTest {
     @Test
     fun background_is_0C0C0C() {
-        assertEquals(Color(0xFF0C0C0C), CliBeatsBackground)
+        assertEquals(Color(0xFF0C0C0C), CliBeatsBackgroundDark)
     }
 
     @Test
     fun surface_is_121212() {
-        assertEquals(Color(0xFF121212), CliBeatsSurface)
+        assertEquals(Color(0xFF121212), CliBeatsSurfaceDark)
     }
 
     @Test
@@ -38,7 +38,7 @@ class CliBeatsColorsTest {
 
     @Test
     fun accent_is_1DB954() {
-        assertEquals(Color(0xFF1DB954), CliBeatsAccent)
+        assertEquals(Color(0xFF1DB954), CliBeatsAccentDefault)
     }
 
     @Test
