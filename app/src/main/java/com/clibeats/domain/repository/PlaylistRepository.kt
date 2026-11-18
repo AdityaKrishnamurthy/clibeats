@@ -8,6 +8,9 @@ import kotlinx.coroutines.flow.Flow
 interface PlaylistRepository {
     fun getAllPlaylistsAsFlow(): Flow<List<Playlist>>
 
+    /** playlistId -> cover artwork URL (first song's artwork). */
+    fun getPlaylistCoversAsFlow(): Flow<Map<String, String?>>
+
     suspend fun getPlaylistById(id: String): Playlist?
 
     suspend fun upsertPlaylist(playlist: Playlist)

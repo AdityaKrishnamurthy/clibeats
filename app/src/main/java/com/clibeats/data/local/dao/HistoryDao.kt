@@ -22,6 +22,13 @@ interface HistoryDao {
     @Query("SELECT s.* FROM songs s INNER JOIN history h ON s.id = h.song_id ORDER BY h.played_at DESC LIMIT :limit")
     fun getRecentlyPlayedTracksAsFlow(limit: Int = 50): Flow<List<SongEntity>>
 
+    @Query(
+        "SELECT s.* FROM songs s INNER JOIN " +
+            "(SELECT song_id, COUNT(*) AS plays, MAX(played_at) AS last_played FROM history GROUP BY song_id) h " +
+            "ON s.id = h.song_id ORDER BY h.plays DESC, h.last_played DESC LIMIT :limit",
+    )
+    fun getMostPlayedTracksAsFlow(limit: Int): Flow<List<SongEntity>>
+
     @Query("SELECT * FROM history ORDER BY played_at DESC")
     fun getAllAsFlow(): Flow<List<HistoryEntity>>
 

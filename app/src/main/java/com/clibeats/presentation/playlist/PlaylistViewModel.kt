@@ -6,11 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,35 +33,52 @@ class PlaylistViewModel
         private val playlistRepository: PlaylistRepository,
         private val playbackRepository: PlaybackRepository,
         private val libraryRepository: LibraryRepository? = null,
+        private val historyRepository: HistoryRepository? = null,
     ) : ViewModel() {
         private val _selectedPlaylistId = MutableStateFlow<String?>(null)
 
-        private val favorites: kotlinx.coroutines.flow.Flow<List<Track>> =
+        private val favorites: Flow<List<Track>> =
             libraryRepository?.getLikedSongs() ?: flowOf(emptyList())
 
-        // Selection is part of the combine so opening a playlist updates immediately
-        // (it previously only refreshed when the playlist list itself changed).
+        private val mostPlayed: Flow<List<Track>> =
+            historyRepository?.getMostPlayedTracks(MOST_PLAYED_LIMIT) ?: flowOf(emptyList())
+
+        private data class Inputs(
+            val playlists: List<Playlist>,
+            val selectedId: String?,
+            val favorites: List<Track>,
+            val mostPlayed: List<Track>,
+            val covers: Map<String, String?>,
+        )
+
+        // Selection is part of the combine so opening a playlist updates immediately.
         val uiState: StateFlow<PlaylistUiState> =
-            combine(playlistRepository.getAllPlaylistsAsFlow(), _selectedPlaylistId, favorites) { p, s, f ->
-                Triple(p, s, f)
-            }.flatMapLatest { (playlists, selectedId, favTracks) ->
-                when (selectedId) {
-                    null -> flowOf(PlaylistUiState.Success(playlists, favoritesCount = favTracks.size))
-                    FAVORITES_ID ->
-                        flowOf(
-                            PlaylistUiState.Success(
-                                playlists = playlists,
-                                favoritesCount = favTracks.size,
-                                selectedPlaylistTracks = favTracks,
-                                isFavoritesOpen = true,
-                            ),
-                        )
+            combine(
+                playlistRepository.getAllPlaylistsAsFlow(),
+                _selectedPlaylistId,
+                favorites,
+                mostPlayed,
+                playlistRepository.getPlaylistCoversAsFlow(),
+                ::Inputs,
+            ).flatMapLatest { input ->
+                val base =
+                    PlaylistUiState.Success(
+                        playlists = input.playlists,
+                        favoritesCount = input.favorites.size,
+                        mostPlayedCount = input.mostPlayed.size,
+                        favoritesCover = input.favorites.firstNotNullOfOrNull { it.artworkUrl },
+                        mostPlayedCover = input.mostPlayed.firstNotNullOfOrNull { it.artworkUrl },
+                        covers = input.covers,
+                    )
+                when (input.selectedId) {
+                    null -> flowOf(base)
+                    FAVORITES_ID -> flowOf(base.copy(selectedPlaylistTracks = input.favorites, isFavoritesOpen = true))
+                    MOST_PLAYED_ID ->
+                        flowOf(base.copy(selectedPlaylistTracks = input.mostPlayed, isMostPlayedOpen = true))
                     else ->
-                        playlistRepository.getSongsForPlaylistAsFlow(selectedId).map { songs ->
-                            PlaylistUiState.Success(
-                                playlists = playlists,
-                                favoritesCount = favTracks.size,
-                                selectedPlaylist = playlists.find { it.id == selectedId },
+                        playlistRepository.getSongsForPlaylistAsFlow(input.selectedId).map { songs ->
+                            base.copy(
+                                selectedPlaylist = input.playlists.find { it.id == input.selectedId },
                                 selectedPlaylistTracks = songs,
                             )
                         }
@@ -107,6 +126,10 @@ class PlaylistViewModel
             _selectedPlaylistId.value = FAVORITES_ID
         }
 
+        fun openMostPlayed() {
+            _selectedPlaylistId.value = MOST_PLAYED_ID
+        }
+
         fun addToQueue(track: Track) {
             playbackRepository.addToQueue(track)
         }
@@ -147,5 +170,7 @@ class PlaylistViewModel
 
         private companion object {
             const val FAVORITES_ID = "__favorites__"
+            const val MOST_PLAYED_ID = "__most_played__"
+            const val MOST_PLAYED_LIMIT = 50
         }
     }

@@ -10,25 +10,34 @@
 package com.clibeats.presentation.playlist
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -43,25 +52,34 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
-import com.clibeats.presentation.theme.CliBeatsDivider
+import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsSurface
+import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
+    val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
@@ -94,6 +112,23 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
                             onSwipeRight = viewModel::addToQueue,
+                            onSwipeLeft = favorites::add,
+                            onLongPress = { addToPlaylistTrack = it },
+                        )
+                    }
+                    s.isMostPlayedOpen -> {
+                        BackHandler { viewModel.selectPlaylist(null) }
+                        PlaylistDetailView(
+                            title = "MOST PLAYED",
+                            subtitle = "${tracks.size} tracks · by play count",
+                            tracks = tracks,
+                            emptyText = "Nothing played yet. Your most played songs will show up here.",
+                            onBackClick = { viewModel.selectPlaylist(null) },
+                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onRemoveClick = null,
+                            removeLabel = "",
+                            onSwipeRight = viewModel::addToQueue,
+                            onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
                         )
                     }
@@ -121,6 +156,7 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
                                 },
                             removeLabel = "Remove from playlist",
                             onSwipeRight = viewModel::addToQueue,
+                            onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 if (readOnly && tracks.isNotEmpty()) {
@@ -131,10 +167,10 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
                         )
                     }
                     else ->
-                        PlaylistListView(
-                            playlists = s.playlists,
-                            favoritesCount = s.favoritesCount,
+                        PlaylistGridView(
+                            state = s,
                             onFavoritesClick = viewModel::openFavorites,
+                            onMostPlayedClick = viewModel::openMostPlayed,
                             onCreateClick = { showCreateDialog = true },
                             onPlaylistClick = { viewModel.selectPlaylist(it.id) },
                             onDeleteClick = { pendingDelete = it },
@@ -173,94 +209,154 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
     }
 }
 
+@Suppress("LongMethod", "LongParameterList")
 @Composable
-private fun PlaylistListView(
-    playlists: List<Playlist>,
-    favoritesCount: Int,
+private fun PlaylistGridView(
+    state: PlaylistUiState.Success,
     onFavoritesClick: () -> Unit,
+    onMostPlayedClick: () -> Unit,
     onCreateClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
     onDeleteClick: (Playlist) -> Unit,
 ) {
-    val (local, app) = playlists.partition { it.isLocalFilePlaylist() }
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            PlaylistRow(
-                name = "♥ FAVORITES",
-                detail = "$favoritesCount tracks",
-                nameColor = CliBeatsAccent,
+    val (local, app) = state.playlists.partition { it.isLocalFilePlaylist() }
+    val fullSpan: (LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = TILE_MIN_DP.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        item(key = "fav") {
+            PlaylistTile(
+                title = "♥ FAVORITES",
+                subtitle = "${state.favoritesCount} tracks",
+                coverUrl = state.favoritesCover,
+                glyph = "♥",
+                highlight = true,
                 onClick = onFavoritesClick,
             )
         }
-        item {
-            Text(
-                text = "[ + NEW PLAYLIST ]",
-                style = MaterialTheme.typography.bodyLarge,
-                color = CliBeatsAccent,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onCreateClick)
-                    .padding(horizontal = 16.dp, vertical = 16.dp),
+        item(key = "most") {
+            PlaylistTile(
+                title = "MOST PLAYED",
+                subtitle = "${state.mostPlayedCount} tracks",
+                coverUrl = state.mostPlayedCover,
+                glyph = "▲",
+                highlight = true,
+                onClick = onMostPlayedClick,
             )
-            HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
-        }
-        item { SectionLabel("MY PLAYLISTS") }
-        if (app.isEmpty()) {
-            item { HintText("No playlists yet. Create one, then long-press any song to add it.") }
         }
         items(app, key = { it.id }) { playlist ->
-            PlaylistRow(
-                name = playlist.name,
-                detail = "${playlist.trackCount} tracks",
+            PlaylistTile(
+                title = playlist.name,
+                subtitle = "${playlist.trackCount} tracks",
+                coverUrl = state.covers[playlist.id],
+                glyph = "♫",
                 onClick = { onPlaylistClick(playlist) },
-                onDelete = { onDeleteClick(playlist) },
+                onLongClick = { onDeleteClick(playlist) },
+                longClickLabel = "Delete playlist",
             )
         }
-        item { SectionLabel("LOCAL PLAYLISTS") }
-        item { HintText("From M3U/PLS files in your music folder (read-only). Rescan in Settings → Local Music.") }
+        item(key = "new") { NewPlaylistTile(onClick = onCreateClick) }
+
+        item(key = "local_label", span = fullSpan) {
+            Column {
+                SectionLabel("LOCAL PLAYLISTS")
+                HintText("From M3U/PLS files in your music folder (read-only). Rescan in Settings → Local Music.")
+            }
+        }
         items(local, key = { it.id }) { playlist ->
-            PlaylistRow(
-                name = playlist.name,
-                detail = "[LOCAL] ${playlist.trackCount} tracks",
+            PlaylistTile(
+                title = playlist.name,
+                subtitle = "[LOCAL] ${playlist.trackCount} tracks",
+                coverUrl = state.covers[playlist.id],
+                glyph = "♫",
                 onClick = { onPlaylistClick(playlist) },
             )
         }
     }
 }
 
+@Suppress("LongParameterList")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PlaylistRow(
-    name: String,
-    detail: String,
+private fun PlaylistTile(
+    title: String,
+    subtitle: String,
+    coverUrl: String?,
+    glyph: String,
     onClick: () -> Unit,
-    nameColor: androidx.compose.ui.graphics.Color = CliBeatsTextPrimary,
-    onDelete: (() -> Unit)? = null,
+    highlight: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    longClickLabel: String? = null,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .clickable(onClick = onClick)
-            .padding(start = 16.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    val borderColor = if (highlight) CliBeatsAccent else CliBeatsBorderInactive
+    Column(
+        modifier =
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onLongClickLabel = longClickLabel,
+            ),
     ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                style = MaterialTheme.typography.bodyMedium,
-                color = nameColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(text = detail, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
-        }
-        if (onDelete != null) {
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Outlined.Delete, contentDescription = "Delete playlist $name", tint = CliBeatsTextSecondary)
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(CliBeatsSurfaceVariant)
+                    .border(1.dp, borderColor, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (coverUrl.isNullOrBlank()) {
+                Text(text = glyph, style = MaterialTheme.typography.displaySmall, color = borderColor)
+            } else {
+                AsyncImage(
+                    // Same thumbnail URL as song rows: usually already cached, so tiles fill instantly.
+                    model = artworkUrlFor(coverUrl, ARTWORK_THUMB_PX * 2),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
         }
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (highlight) CliBeatsAccent else CliBeatsTextPrimary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Text(text = subtitle, style = MaterialTheme.typography.labelSmall, color = CliBeatsTextSecondary, maxLines = 1)
     }
-    HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
+}
+
+@Composable
+private fun NewPlaylistTile(onClick: () -> Unit) {
+    Column(modifier = Modifier.clickable(onClickLabel = "Create new playlist", onClick = onClick)) {
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(6.dp))
+                    .border(1.dp, CliBeatsAccent, RoundedCornerShape(6.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = "+", style = MaterialTheme.typography.displayMedium, color = CliBeatsAccent)
+        }
+        Text(
+            text = "NEW PLAYLIST",
+            style = MaterialTheme.typography.bodyMedium,
+            color = CliBeatsAccent,
+            modifier = Modifier.padding(top = 6.dp),
+        )
+        Text(text = " ", style = MaterialTheme.typography.labelSmall)
+    }
 }
 
 @Composable
@@ -294,6 +390,7 @@ private fun PlaylistDetailView(
     onRemoveClick: ((Track) -> Unit)?,
     removeLabel: String,
     onSwipeRight: (Track) -> Unit,
+    onSwipeLeft: (Track) -> Unit,
     onLongPress: (Track) -> Unit,
     headerAction: Pair<String, () -> Unit>? = null,
 ) {
@@ -348,6 +445,7 @@ private fun PlaylistDetailView(
                         artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                         onClick = { onTrackClick(index) },
                         onSwipeRight = { onSwipeRight(track) },
+                        onSwipeLeft = { onSwipeLeft(track) },
                         onLongPress = { onLongPress(track) },
                         actions =
                             onRemoveClick?.let { remove ->
@@ -415,3 +513,5 @@ private fun CreatePlaylistDialog(
         containerColor = CliBeatsSurface,
     )
 }
+
+private const val TILE_MIN_DP = 140

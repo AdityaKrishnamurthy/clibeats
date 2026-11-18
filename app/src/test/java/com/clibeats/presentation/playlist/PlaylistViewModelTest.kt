@@ -7,6 +7,7 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -36,6 +37,7 @@ class PlaylistViewModelTest {
         playlistRepository = mock()
         playbackRepository = mock()
         whenever(playlistRepository.getAllPlaylistsAsFlow()).thenReturn(fakePlaylistsFlow)
+        whenever(playlistRepository.getPlaylistCoversAsFlow()).thenReturn(flowOf(emptyMap()))
         viewModel = PlaylistViewModel(playlistRepository, playbackRepository)
     }
 

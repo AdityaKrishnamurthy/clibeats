@@ -21,7 +21,7 @@ interface PlaylistDao {
     @Query("SELECT * FROM playlists WHERE id = :id")
     suspend fun getById(id: String): PlaylistEntity?
 
-    @Query("SELECT * FROM playlists ORDER BY name ASC")
+    @Query("SELECT * FROM playlists ORDER BY updated_at DESC")
     fun getAllAsFlow(): Flow<List<PlaylistEntity>>
 
     @Query(
@@ -56,9 +56,21 @@ interface PlaylistDao {
 
     @Query(
         "UPDATE playlists SET track_count = " +
-            "(SELECT COUNT(*) FROM playlist_song_cross_ref WHERE playlist_id = :playlistId) WHERE id = :playlistId",
+            "(SELECT COUNT(*) FROM playlist_song_cross_ref WHERE playlist_id = :playlistId), " +
+            "updated_at = :now WHERE id = :playlistId",
     )
-    suspend fun refreshTrackCount(playlistId: String)
+    suspend fun refreshTrackCount(
+        playlistId: String,
+        now: Long = System.currentTimeMillis(),
+    )
+
+    /** First song's artwork per playlist (by position), used as the playlist tile cover. */
+    @Query(
+        "SELECT c.playlist_id AS playlist_id, s.artwork_url AS artwork_url FROM playlist_song_cross_ref c " +
+            "INNER JOIN songs s ON s.id = c.song_id " +
+            "WHERE c.position = (SELECT MIN(position) FROM playlist_song_cross_ref WHERE playlist_id = c.playlist_id)",
+    )
+    fun getPlaylistCoversAsFlow(): Flow<List<PlaylistCover>>
 
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_song_cross_ref WHERE playlist_id = :playlistId")
     suspend fun nextPosition(playlistId: String): Int
@@ -93,3 +105,8 @@ interface PlaylistDao {
         }
     }
 }
+
+data class PlaylistCover(
+    @androidx.room.ColumnInfo(name = "playlist_id") val playlistId: String,
+    @androidx.room.ColumnInfo(name = "artwork_url") val artworkUrl: String?,
+)

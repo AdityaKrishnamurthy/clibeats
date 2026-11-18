@@ -28,6 +28,9 @@ class PlaylistRepositoryImpl
         private val playlistDao: PlaylistDao,
         private val songDao: SongDao? = null,
     ) : PlaylistRepository {
+        override fun getPlaylistCoversAsFlow(): Flow<Map<String, String?>> =
+            playlistDao.getPlaylistCoversAsFlow().map { covers -> covers.associate { it.playlistId to it.artworkUrl } }
+
         override fun getAllPlaylistsAsFlow(): Flow<List<Playlist>> = playlistDao.getAllAsFlow().map { list -> list.map { it.toDomain() } }
 
         override suspend fun getPlaylistById(id: String): Playlist? = playlistDao.getById(id)?.toDomain()
@@ -53,12 +56,16 @@ class PlaylistRepositoryImpl
             playlistId: String,
             songId: String,
             position: Int,
-        ) = playlistDao.addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId, position))
+        ) {
+            if (isReadOnly(playlistId)) return
+            playlistDao.addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId, position))
+        }
 
         override suspend fun removeSongFromPlaylist(
             playlistId: String,
             songId: String,
         ) {
+            if (isReadOnly(playlistId)) return
             playlistDao.removeSongFromPlaylist(playlistId, songId)
             playlistDao.refreshTrackCount(playlistId)
         }
@@ -66,12 +73,20 @@ class PlaylistRepositoryImpl
         override suspend fun reorderPlaylistSongs(
             playlistId: String,
             songIds: List<String>,
-        ) = playlistDao.reorderPlaylistSongs(playlistId, songIds)
+        ) {
+            if (isReadOnly(playlistId)) return
+            playlistDao.reorderPlaylistSongs(playlistId, songIds)
+        }
+
+        // Playlists mirrored from M3U/M3U8/PLS files are import-only: the file is the source of truth.
+        // (The scanner writes them through PlaylistDao directly, not through this repository.)
+        private fun isReadOnly(playlistId: String) = playlistId.startsWith("localpl:")
 
         override suspend fun addTrackToPlaylist(
             playlistId: String,
             track: Track,
         ) {
+            if (isReadOnly(playlistId)) return
             // The cross-ref has a FK on songs.id; search results aren't in the songs table yet.
             // Persist without the (expiring) stream URL; it is re-resolved at playback.
             val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track

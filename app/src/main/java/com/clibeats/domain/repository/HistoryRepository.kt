@@ -12,6 +12,9 @@ interface HistoryRepository {
 
     fun getRecentlyPlayedTracks(limit: Int = 50): Flow<List<Track>>
 
+    /** Songs ordered by play count (ties: most recent first). */
+    fun getMostPlayedTracks(limit: Int = 50): Flow<List<Track>>
+
     suspend fun recordPlay(
         songId: String,
         providerId: String,

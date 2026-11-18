@@ -23,6 +23,9 @@ class HistoryRepositoryImpl
     ) : HistoryRepository {
         override fun getRecentHistoryAsFlow(limit: Int): Flow<List<HistoryEntity>> = historyDao.getRecentAsFlow(limit)
 
+        override fun getMostPlayedTracks(limit: Int): Flow<List<Track>> =
+            historyDao.getMostPlayedTracksAsFlow(limit).map { entities -> entities.map { it.toDomainTrack() } }
+
         override fun getRecentlyPlayedTracks(limit: Int): Flow<List<Track>> =
             historyDao.getRecentlyPlayedTracksAsFlow(limit).map { entities ->
                 entities.map { it.toDomainTrack() }
