@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport")
+@file:Suppress("ForbiddenImport", "TooManyFunctions")
 
 package com.clibeats.presentation.settings
 
@@ -6,6 +6,8 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.cache.CacheManager
+import com.clibeats.data.cache.CacheUsage
+import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
@@ -33,7 +35,40 @@ class SettingsViewModel
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
         private val localMusicScanner: LocalMusicScanner? = null,
+        private val mediaCaches: MediaCaches? = null,
     ) : ViewModel() {
+        val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
+
+        val artworkCacheMb: StateFlow<Int> =
+            appPreferences.artworkCacheMb.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 128)
+
+        init {
+            viewModelScope.launch { runCatching { mediaCaches?.refreshUsage() } }
+        }
+
+        fun setSongCacheMb(mb: Int) {
+            viewModelScope.launch {
+                appPreferences.setCacheMaxMb(mb)
+                cacheManager.maxCacheSizeBytes = mb * BYTES_IN_MB
+                runCatching { mediaCaches?.setSongLimitMb(mb) }
+            }
+        }
+
+        fun setArtworkCacheMb(mb: Int) {
+            viewModelScope.launch { appPreferences.setArtworkCacheMb(mb) }
+        }
+
+        fun clearSongCache() {
+            viewModelScope.launch {
+                runCatching { cacheManager.clearAllCache() }
+                runCatching { mediaCaches?.clearSongs() }
+            }
+        }
+
+        fun clearArtworkCache() {
+            viewModelScope.launch { runCatching { mediaCaches?.clearArtwork() } }
+        }
+
         val autoQueueRelated: StateFlow<Boolean> =
             appPreferences.autoQueueRelated
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
@@ -116,14 +151,6 @@ class SettingsViewModel
             }
         }
 
-        fun setCacheMaxMb(maxMb: Int) {
-            viewModelScope.launch {
-                appPreferences.setCacheMaxMb(maxMb)
-                cacheManager.maxCacheSizeBytes = maxMb * BYTES_IN_MB
-                cacheManager.evictLruIfNeeded()
-            }
-        }
-
         fun setHighQualityStreaming(enabled: Boolean) {
             viewModelScope.launch {
                 appPreferences.setHighQualityStreaming(enabled)
@@ -139,12 +166,6 @@ class SettingsViewModel
         fun setAccentColor(accent: AccentColor) {
             viewModelScope.launch {
                 appPreferences.setAccentColorName(accent.name)
-            }
-        }
-
-        fun clearCache() {
-            viewModelScope.launch {
-                cacheManager.clearAllCache()
             }
         }
 

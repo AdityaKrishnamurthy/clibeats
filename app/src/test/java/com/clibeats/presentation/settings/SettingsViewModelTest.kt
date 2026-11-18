@@ -47,6 +47,7 @@ class SettingsViewModelTest {
         whenever(appPreferences.authToken).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
         whenever(appPreferences.localMusicTreeUri).thenReturn(flowOf(null))
+        whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
         whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
         whenever(providerRegistry.providers).thenReturn(emptyList())
 
@@ -77,9 +78,9 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `setCacheMaxMb delegates to appPreferences and cacheManager`() =
+    fun `setSongCacheMb delegates to appPreferences and cacheManager`() =
         runTest(testDispatcher) {
-            viewModel.setCacheMaxMb(1024)
+            viewModel.setSongCacheMb(1024)
             testDispatcher.scheduler.advanceUntilIdle()
             verify(appPreferences).setCacheMaxMb(1024)
         }

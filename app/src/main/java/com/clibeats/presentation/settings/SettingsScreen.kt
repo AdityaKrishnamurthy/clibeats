@@ -37,8 +37,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.AccentColor
@@ -46,6 +52,10 @@ import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
 
 private const val BYTES_PER_MB = 1048576L
+private const val MB_PER_GB = 1024
+private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
+private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
+private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
@@ -235,37 +245,28 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Audio Cache Limit ──────────────────────────────────────
-        TuiBlock(title = "Disk Cache Limit") {
-            Column {
-                Text(
-                    text = "Current Usage: ${uiState.currentCacheSizeBytes / BYTES_PER_MB} MB",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // ── Section: Storage (two independent caches) ───────────────────────
+        val cacheUsage by viewModel.cacheUsage.collectAsState()
+        val artworkCacheMb by viewModel.artworkCacheMb.collectAsState()
+        TuiBlock(title = "Storage") {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                CacheRow(
+                    label = "ARTWORK",
+                    usedBytes = cacheUsage.artworkBytes,
+                    options = ARTWORK_CACHE_OPTIONS,
+                    selectedMb = artworkCacheMb,
+                    onSelect = viewModel::setArtworkCacheMb,
+                    onClear = viewModel::clearArtworkCache,
+                    note = "new limit applies on next app start",
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                listOf(256, 512, 1024, 2048).forEach { mb ->
-                    val isSelected = uiState.cacheMaxMb == mb
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.setCacheMaxMb(mb) }
-                                .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = if (isSelected) "(•) " else "( ) ",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = "$mb MB",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+                CacheRow(
+                    label = "SONGS",
+                    usedBytes = cacheUsage.songBytes,
+                    options = SONG_CACHE_OPTIONS,
+                    selectedMb = uiState.cacheMaxMb,
+                    onSelect = viewModel::setSongCacheMb,
+                    onClear = viewModel::clearSongCache,
+                )
             }
         }
 
@@ -328,26 +329,105 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Maintenance ────────────────────────────────────────────
-        TuiBlock(title = "Maintenance Actions") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (uiState.hasAuthToken) {
+            TuiBlock(title = "Session") {
                 Button(
-                    onClick = { viewModel.clearCache() },
+                    onClick = { viewModel.clearAuthToken() },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
                 ) {
-                    Text("CLEAR ALL AUDIO CACHE")
-                }
-                if (uiState.hasAuthToken) {
-                    Button(
-                        onClick = { viewModel.clearAuthToken() },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    ) {
-                        Text("CLEAR SESSION CREDENTIALS")
-                    }
+                    Text("CLEAR SESSION CREDENTIALS")
                 }
             }
+        }
+
+        // ── Section: About (developer credit; name links to GitHub) ─────────
+        TuiBlock(title = "About") {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "CLIBeats v${BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "Developed by: ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "Omprakash Panda",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = accent,
+                        textDecoration = TextDecoration.Underline,
+                        modifier =
+                            Modifier
+                                .semantics { contentDescription = "Omprakash Panda on GitHub" }
+                                .clickable(role = Role.Button) {
+                                    runCatching {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
+                                    }
+                                }.padding(vertical = 4.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Suppress("FunctionNaming", "LongParameterList")
+@Composable
+private fun CacheRow(
+    label: String,
+    usedBytes: Long,
+    options: List<Int>,
+    selectedMb: Int,
+    onSelect: (Int) -> Unit,
+    onClear: () -> Unit,
+    note: String? = null,
+) {
+    val accent = LocalAccentColor.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "$label  ${usedBytes / BYTES_PER_MB} / $selectedMb MB",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "[ CLEAR ]",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier =
+                    Modifier
+                        .semantics { contentDescription = "Clear ${label.lowercase()} cache" }
+                        .clickable(role = Role.Button, onClick = onClear)
+                        .padding(8.dp),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            options.forEach { mb ->
+                val isSelected = mb == selectedMb
+                Text(
+                    text = if (mb >= MB_PER_GB) "${mb / MB_PER_GB}G" else "${mb}M",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .border(1.dp, if (isSelected) accent else MaterialTheme.colorScheme.outlineVariant)
+                            .semantics { selected = isSelected }
+                            .clickable(role = Role.RadioButton) { onSelect(mb) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
+        }
+        if (note != null) {
+            Text(
+                text = note,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
