@@ -4,10 +4,12 @@
     "MagicNumber",
     "LongMethod",
     "FunctionNaming",
+    "LongParameterList",
 )
 
 package com.clibeats.presentation.playlist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,19 +21,17 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,12 +43,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
+import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -57,48 +60,85 @@ import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
-@Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(CliBeatsBackground),
     ) {
-        when (val currentState = state) {
-            is PlaylistUiState.Loading -> {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
-                ) {
+        when (val s = state) {
+            is PlaylistUiState.Loading ->
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = CliBeatsAccent)
                 }
-            }
 
             is PlaylistUiState.Success -> {
-                if (currentState.selectedPlaylist != null) {
-                    PlaylistDetailView(
-                        playlist = currentState.selectedPlaylist,
-                        tracks = currentState.selectedPlaylistTracks,
-                        onBackClick = { viewModel.selectPlaylist(null) },
-                        onTrackClick = { _, index ->
-                            viewModel.playPlaylist(currentState.selectedPlaylistTracks, index)
-                        },
-                        onRemoveClick = { track ->
-                            viewModel.removeSongFromPlaylist(currentState.selectedPlaylist.id, track.id)
-                        },
-                        onSwipeRight = viewModel::addToQueue,
-                    )
-                } else {
-                    PlaylistListView(
-                        playlists = currentState.playlists,
-                        onCreateClick = { showCreateDialog = true },
-                        onPlaylistClick = { playlist -> viewModel.selectPlaylist(playlist.id) },
-                        onDeleteClick = { playlist -> viewModel.deletePlaylist(playlist.id) },
-                    )
+                val tracks = s.selectedPlaylistTracks
+                val selected = s.selectedPlaylist
+                when {
+                    s.isFavoritesOpen -> {
+                        BackHandler { viewModel.selectPlaylist(null) }
+                        PlaylistDetailView(
+                            title = "♥ FAVORITES",
+                            subtitle = "${tracks.size} tracks",
+                            tracks = tracks,
+                            emptyText = "No favorites yet. Tap ♥ in Now Playing to add songs.",
+                            onBackClick = { viewModel.selectPlaylist(null) },
+                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onRemoveClick = viewModel::removeFromFavorites,
+                            removeLabel = "Remove from favorites",
+                            onSwipeRight = viewModel::addToQueue,
+                            onLongPress = { addToPlaylistTrack = it },
+                        )
+                    }
+                    selected != null -> {
+                        BackHandler { viewModel.selectPlaylist(null) }
+                        val readOnly = selected.isLocalFilePlaylist()
+                        PlaylistDetailView(
+                            title = selected.name,
+                            subtitle =
+                                if (readOnly) "[LOCAL] ${tracks.size} tracks · read-only" else "${tracks.size} tracks",
+                            tracks = tracks,
+                            emptyText =
+                                if (readOnly) {
+                                    "No matching songs found. Rescan in Settings → Local Music."
+                                } else {
+                                    "Playlist is empty. Long-press any song to add it."
+                                },
+                            onBackClick = { viewModel.selectPlaylist(null) },
+                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onRemoveClick =
+                                if (readOnly) {
+                                    null
+                                } else {
+                                    { track -> viewModel.removeSongFromPlaylist(selected.id, track.id) }
+                                },
+                            removeLabel = "Remove from playlist",
+                            onSwipeRight = viewModel::addToQueue,
+                            onLongPress = { addToPlaylistTrack = it },
+                            headerAction =
+                                if (readOnly && tracks.isNotEmpty()) {
+                                    "[ SAVE AS APP PLAYLIST ]" to { viewModel.saveAsAppPlaylist(selected, tracks) }
+                                } else {
+                                    null
+                                },
+                        )
+                    }
+                    else ->
+                        PlaylistListView(
+                            playlists = s.playlists,
+                            favoritesCount = s.favoritesCount,
+                            onFavoritesClick = viewModel::openFavorites,
+                            onCreateClick = { showCreateDialog = true },
+                            onPlaylistClick = { viewModel.selectPlaylist(it.id) },
+                            onDeleteClick = { pendingDelete = it },
+                        )
                 }
             }
         }
@@ -113,140 +153,192 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
             },
         )
     }
+    pendingDelete?.let { playlist ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("> rm \"${playlist.name}\"") },
+            text = { Text("Delete this playlist? The songs themselves are not deleted.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deletePlaylist(playlist.id)
+                    pendingDelete = null
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+            containerColor = CliBeatsSurface,
+        )
+    }
+    addToPlaylistTrack?.let { track ->
+        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+    }
 }
 
-@Suppress("FunctionNaming")
 @Composable
 private fun PlaylistListView(
     playlists: List<Playlist>,
+    favoritesCount: Int,
+    onFavoritesClick: () -> Unit,
     onCreateClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
     onDeleteClick: (Playlist) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CliBeatsSurface)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "PLAYLISTS",
-                style = MaterialTheme.typography.titleMedium,
-                color = CliBeatsTextPrimary,
+    val (local, app) = playlists.partition { it.isLocalFilePlaylist() }
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            PlaylistRow(
+                name = "♥ FAVORITES",
+                detail = "$favoritesCount tracks",
+                nameColor = CliBeatsAccent,
+                onClick = onFavoritesClick,
             )
-
-            OutlinedButton(
-                onClick = onCreateClick,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = CliBeatsAccent),
-            ) {
-                Icon(imageVector = Icons.Outlined.Add, contentDescription = "New Playlist")
-                Text(text = " New", style = MaterialTheme.typography.bodySmall)
-            }
         }
-
-        if (playlists.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "No playlists found",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = CliBeatsTextSecondary,
-                )
-            }
-        } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                itemsIndexed(items = playlists, key = { _, playlist -> playlist.id }) { _, playlist ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            .clickable { onPlaylistClick(playlist) }
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = playlist.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = CliBeatsTextPrimary,
-                            )
-                            if (!playlist.description.isNullOrBlankCompat()) {
-                                Text(
-                                    text = playlist.description.orEmpty(),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = CliBeatsTextSecondary,
-                                )
-                            }
-                        }
-
-                        IconButton(onClick = { onDeleteClick(playlist) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Delete,
-                                contentDescription = "Delete playlist",
-                                tint = CliBeatsTextSecondary,
-                            )
-                        }
-                    }
-                    HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
-                }
-            }
+        item {
+            Text(
+                text = "[ + NEW PLAYLIST ]",
+                style = MaterialTheme.typography.bodyLarge,
+                color = CliBeatsAccent,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onCreateClick)
+                    .padding(horizontal = 16.dp, vertical = 16.dp),
+            )
+            HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
+        }
+        item { SectionLabel("MY PLAYLISTS") }
+        if (app.isEmpty()) {
+            item { HintText("No playlists yet. Create one, then long-press any song to add it.") }
+        }
+        items(app, key = { it.id }) { playlist ->
+            PlaylistRow(
+                name = playlist.name,
+                detail = "${playlist.trackCount} tracks",
+                onClick = { onPlaylistClick(playlist) },
+                onDelete = { onDeleteClick(playlist) },
+            )
+        }
+        item { SectionLabel("LOCAL PLAYLISTS") }
+        item { HintText("From M3U/PLS files in your music folder (read-only). Rescan in Settings → Local Music.") }
+        items(local, key = { it.id }) { playlist ->
+            PlaylistRow(
+                name = playlist.name,
+                detail = "[LOCAL] ${playlist.trackCount} tracks",
+                onClick = { onPlaylistClick(playlist) },
+            )
         }
     }
 }
 
-private fun String?.isNullOrBlankCompat(): Boolean = this == null || this.trim().isEmpty()
+@Composable
+private fun PlaylistRow(
+    name: String,
+    detail: String,
+    onClick: () -> Unit,
+    nameColor: androidx.compose.ui.graphics.Color = CliBeatsTextPrimary,
+    onDelete: (() -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .clickable(onClick = onClick)
+            .padding(start = 16.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyMedium,
+                color = nameColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(text = detail, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
+        }
+        if (onDelete != null) {
+            IconButton(onClick = onDelete) {
+                Icon(Icons.Outlined.Delete, contentDescription = "Delete playlist $name", tint = CliBeatsTextSecondary)
+            }
+        }
+    }
+    HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
+}
 
-@Suppress("FunctionNaming", "LongParameterList")
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = CliBeatsAccent,
+        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
+    )
+}
+
+@Composable
+private fun HintText(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = CliBeatsTextSecondary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+    )
+}
+
 @Composable
 private fun PlaylistDetailView(
-    playlist: Playlist,
+    title: String,
+    subtitle: String,
     tracks: List<Track>,
+    emptyText: String,
     onBackClick: () -> Unit,
-    onTrackClick: (Track, Int) -> Unit,
-    onRemoveClick: (Track) -> Unit,
+    onTrackClick: (Int) -> Unit,
+    onRemoveClick: ((Track) -> Unit)?,
+    removeLabel: String,
     onSwipeRight: (Track) -> Unit,
+    onLongPress: (Track) -> Unit,
+    headerAction: Pair<String, () -> Unit>? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(CliBeatsSurface)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = onBackClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = "Back to playlists",
                     tint = CliBeatsTextPrimary,
                 )
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CliBeatsTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
+            }
+        }
+        if (headerAction != null) {
             Text(
-                text = playlist.name,
-                style = MaterialTheme.typography.titleMedium,
-                color = CliBeatsTextPrimary,
-                modifier = Modifier.padding(start = 8.dp),
+                text = headerAction.first,
+                style = MaterialTheme.typography.labelMedium,
+                color = CliBeatsAccent,
+                modifier = Modifier
+                    .clickable(onClick = headerAction.second)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }
-
         if (tracks.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = "Playlist is empty",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = CliBeatsTextSecondary,
-                )
+            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Text(text = emptyText, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {
                 itemsIndexed(items = tracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     SongTableRow(
                         trackTitle = track.title,
@@ -254,17 +346,21 @@ private fun PlaylistDetailView(
                         duration = formatDuration(track.durationMs),
                         index = index + 1,
                         artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                        onClick = { onTrackClick(track, index) },
+                        onClick = { onTrackClick(index) },
                         onSwipeRight = { onSwipeRight(track) },
-                        actions = {
-                            IconButton(onClick = { onRemoveClick(track) }) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Delete,
-                                    contentDescription = "Remove ${track.title} from playlist",
-                                    tint = CliBeatsTextSecondary,
-                                )
-                            }
-                        },
+                        onLongPress = { onLongPress(track) },
+                        actions =
+                            onRemoveClick?.let { remove ->
+                                {
+                                    IconButton(onClick = { remove(track) }) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Delete,
+                                            contentDescription = "$removeLabel: ${track.title}",
+                                            tint = CliBeatsTextSecondary,
+                                        )
+                                    }
+                                }
+                            },
                     )
                 }
             }
@@ -272,7 +368,6 @@ private fun PlaylistDetailView(
     }
 }
 
-@Suppress("FunctionNaming")
 @Composable
 private fun CreatePlaylistDialog(
     onDismiss: () -> Unit,
@@ -283,7 +378,7 @@ private fun CreatePlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "Create Playlist", style = MaterialTheme.typography.titleMedium) },
+        title = { Text(text = "> new playlist", style = MaterialTheme.typography.titleMedium) },
         text = {
             Column {
                 OutlinedTextField(

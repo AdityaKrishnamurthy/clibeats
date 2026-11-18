@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -13,6 +14,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -28,31 +30,45 @@ class PlaylistViewModel
     constructor(
         private val playlistRepository: PlaylistRepository,
         private val playbackRepository: PlaybackRepository,
+        private val libraryRepository: LibraryRepository? = null,
     ) : ViewModel() {
         private val _selectedPlaylistId = MutableStateFlow<String?>(null)
 
+        private val favorites: kotlinx.coroutines.flow.Flow<List<Track>> =
+            libraryRepository?.getLikedSongs() ?: flowOf(emptyList())
+
+        // Selection is part of the combine so opening a playlist updates immediately
+        // (it previously only refreshed when the playlist list itself changed).
         val uiState: StateFlow<PlaylistUiState> =
-            playlistRepository.getAllPlaylistsAsFlow()
-                .flatMapLatest { playlists ->
-                    val selectedId = _selectedPlaylistId.value
-                    if (selectedId == null) {
-                        flowOf(PlaylistUiState.Success(playlists = playlists))
-                    } else {
-                        playlistRepository.getSongsForPlaylistAsFlow(selectedId)
-                            .map { songs ->
-                                val selected = playlists.find { it.id == selectedId }
-                                PlaylistUiState.Success(
-                                    playlists = playlists,
-                                    selectedPlaylist = selected,
-                                    selectedPlaylistTracks = songs,
-                                )
-                            }
-                    }
-                }.stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = PlaylistUiState.Loading,
-                )
+            combine(playlistRepository.getAllPlaylistsAsFlow(), _selectedPlaylistId, favorites) { p, s, f ->
+                Triple(p, s, f)
+            }.flatMapLatest { (playlists, selectedId, favTracks) ->
+                when (selectedId) {
+                    null -> flowOf(PlaylistUiState.Success(playlists, favoritesCount = favTracks.size))
+                    FAVORITES_ID ->
+                        flowOf(
+                            PlaylistUiState.Success(
+                                playlists = playlists,
+                                favoritesCount = favTracks.size,
+                                selectedPlaylistTracks = favTracks,
+                                isFavoritesOpen = true,
+                            ),
+                        )
+                    else ->
+                        playlistRepository.getSongsForPlaylistAsFlow(selectedId).map { songs ->
+                            PlaylistUiState.Success(
+                                playlists = playlists,
+                                favoritesCount = favTracks.size,
+                                selectedPlaylist = playlists.find { it.id == selectedId },
+                                selectedPlaylistTracks = songs,
+                            )
+                        }
+                }
+            }.stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5_000L),
+                initialValue = PlaylistUiState.Loading,
+            )
 
         fun createPlaylist(
             name: String,
@@ -87,6 +103,10 @@ class PlaylistViewModel
             _selectedPlaylistId.value = playlistId
         }
 
+        fun openFavorites() {
+            _selectedPlaylistId.value = FAVORITES_ID
+        }
+
         fun addToQueue(track: Track) {
             playbackRepository.addToQueue(track)
         }
@@ -100,6 +120,22 @@ class PlaylistViewModel
             }
         }
 
+        /** Removes [track] from ♥ Favorites (it is currently liked, so toggling unlikes it). */
+        fun removeFromFavorites(track: Track) {
+            viewModelScope.launch { libraryRepository?.toggleLike(track) }
+        }
+
+        /** Copies a read-only local file playlist into a new editable app playlist and opens it. */
+        fun saveAsAppPlaylist(
+            source: Playlist,
+            tracks: List<Track>,
+        ) {
+            viewModelScope.launch {
+                val id = playlistRepository.createAppPlaylist(source.name, tracks.map { it.id })
+                _selectedPlaylistId.value = id
+            }
+        }
+
         fun playPlaylist(
             tracks: List<Track>,
             startIndex: Int = 0,
@@ -107,5 +143,9 @@ class PlaylistViewModel
             if (tracks.isNotEmpty()) {
                 playbackRepository.setQueue(tracks, startIndex)
             }
+        }
+
+        private companion object {
+            const val FAVORITES_ID = "__favorites__"
         }
     }
