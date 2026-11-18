@@ -20,8 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
@@ -75,6 +73,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.HintedControl
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.theme.CliBeatsAccent
@@ -95,7 +94,6 @@ fun NowPlayingScreen(
     val state by viewModel.playbackState.collectAsState()
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
-    val playlists by viewModel.playlists.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
     val track = state.currentTrack
 
@@ -350,6 +348,7 @@ fun NowPlayingScreen(
         val options = SLEEP_OPTIONS
         AlertDialog(
             onDismissRequest = { showSleepDialog = false },
+            modifier = Modifier.border(1.dp, CliBeatsAccent),
             title = { Text("> sleep --timer") },
             text = {
                 Column {
@@ -373,32 +372,8 @@ fun NowPlayingScreen(
     }
 
     if (showPlaylistDialog && track != null) {
-        AlertDialog(
-            onDismissRequest = { showPlaylistDialog = false },
-            title = { Text("> add --to-playlist") },
-            text = {
-                if (playlists.isEmpty()) {
-                    Text("No playlists yet. Create one in the Playlists tab.", color = CliBeatsTextSecondary)
-                } else {
-                    LazyColumn {
-                        items(playlists, key = { it.id }) { playlist ->
-                            Text(
-                                text = "[ ${playlist.name} ]",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            viewModel.addToPlaylist(track, playlist.id)
-                                            showPlaylistDialog = false
-                                        }.padding(vertical = 10.dp),
-                            )
-                        }
-                    }
-                }
-            },
-            confirmButton = { TextButton(onClick = { showPlaylistDialog = false }) { Text("Cancel") } },
-        )
+        // Shared, themed dialog (same as long-press elsewhere), with inline "+ New playlist".
+        AddToPlaylistDialog(track = track, onDismiss = { showPlaylistDialog = false })
     }
 }
 

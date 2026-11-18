@@ -2,6 +2,7 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -90,6 +91,7 @@ fun AddToPlaylistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.border(1.dp, CliBeatsAccent),
         title = {
             Column {
                 Text("> add --to-playlist", style = MaterialTheme.typography.titleSmall)

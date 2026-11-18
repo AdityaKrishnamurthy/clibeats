@@ -2,7 +2,9 @@
 
 package com.clibeats.presentation.onboarding
 
+import android.Manifest
 import android.content.Intent
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,7 +47,7 @@ import com.clibeats.presentation.theme.CliBeatsThemeMode
 private const val STEP_COUNT = 3
 
 /** First-run setup (new installs only): theme → music folder → default source. */
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun OnboardingScreen(
     currentTheme: CliBeatsThemeMode,
@@ -65,6 +67,18 @@ fun OnboardingScreen(
                 useLocal = true
             }
         }
+    // Android 13+: ask for notification permission at the end of setup (media controls card).
+    val notificationPermission =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            viewModel.finish(useLocal)
+        }
+    val finish = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            viewModel.finish(useLocal)
+        }
+    }
     BackHandler(enabled = step > 0) { step-- }
 
     Column(
@@ -147,7 +161,7 @@ fun OnboardingScreen(
                         else -> "[ NEXT > ]"
                     },
                 primary = true,
-            ) { if (last) viewModel.finish(useLocal) else step++ }
+            ) { if (last) finish() else step++ }
         }
     }
 }

@@ -68,13 +68,24 @@ fun buildCliBeatsColorScheme(
         onSurfaceVariant = CliBeatsTextSecondaryLight,
         outline = CliBeatsDividerLight,
         outlineVariant = CliBeatsBorderInactiveLight,
+        // Dialogs, menus and sheets read these; unset they fall back to Material's purple-grey.
+        surfaceTint = CliBeatsSurfaceLight,
+        surfaceBright = CliBeatsSurfaceLight,
+        surfaceDim = CliBeatsBackgroundLight,
+        surfaceContainerLowest = CliBeatsSurfaceLight,
+        surfaceContainerLow = CliBeatsSurfaceLight,
+        surfaceContainer = CliBeatsSurfaceLight,
+        surfaceContainerHigh = CliBeatsSurfaceLight,
+        surfaceContainerHighest = CliBeatsSurfaceVariantLight,
         error = CliBeatsDestructive,
         errorContainer = Color(0xFFFDE7E7),
     )
 } else {
+    val background = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsBackgroundAmoled else CliBeatsBackgroundDark
+    val surface = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsSurfaceAmoled else CliBeatsSurfaceDark
     darkColorScheme(
-        background = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsBackgroundAmoled else CliBeatsBackgroundDark,
-        surface = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsSurfaceAmoled else CliBeatsSurfaceDark,
+        background = background,
+        surface = surface,
         surfaceVariant = CliBeatsSurfaceVariantDark,
         primary = accent,
         onPrimary = Color(0xFF000000),
@@ -85,6 +96,15 @@ fun buildCliBeatsColorScheme(
         onSurfaceVariant = CliBeatsTextSecondaryDark,
         outline = CliBeatsDividerDark,
         outlineVariant = CliBeatsBorderInactiveDark,
+        // Dialogs, menus and sheets read these; unset they fall back to Material's purple-grey.
+        surfaceTint = surface,
+        surfaceBright = CliBeatsSurfaceVariantDark,
+        surfaceDim = background,
+        surfaceContainerLowest = background,
+        surfaceContainerLow = surface,
+        surfaceContainer = surface,
+        surfaceContainerHigh = surface,
+        surfaceContainerHighest = CliBeatsSurfaceVariantDark,
         error = CliBeatsDestructive,
         errorContainer = CliBeatsDestructiveSurface,
     )
