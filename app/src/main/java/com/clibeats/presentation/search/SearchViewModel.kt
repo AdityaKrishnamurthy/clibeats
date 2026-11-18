@@ -5,10 +5,12 @@ package com.clibeats.presentation.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,8 +21,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val DEBOUNCE_MS = 300L
@@ -33,7 +37,21 @@ class SearchViewModel
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
         private val playbackRepository: PlaybackRepository,
+        private val playlistRepository: PlaylistRepository? = null,
     ) : ViewModel() {
+        val playlists: StateFlow<List<Playlist>> =
+            (playlistRepository?.getAllPlaylistsAsFlow() ?: flowOf(emptyList()))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        fun onAddToPlaylist(
+            track: Track,
+            playlistId: String,
+        ) {
+            viewModelScope.launch {
+                runCatching { playlistRepository?.addTrackToPlaylist(playlistId, track) }
+            }
+        }
+
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
 

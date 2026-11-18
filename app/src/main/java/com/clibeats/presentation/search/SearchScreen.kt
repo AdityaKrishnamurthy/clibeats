@@ -7,6 +7,16 @@
 package com.clibeats.presentation.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import com.clibeats.domain.model.Playlist
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,6 +68,8 @@ fun SearchScreen(
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
+    val playlists by viewModel.playlists.collectAsState()
+    var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -110,11 +122,55 @@ fun SearchScreen(
                             onTrackClick = onTrackClick,
                             onAddToQueue = viewModel::onAddToQueue,
                             onPlayNext = viewModel::onPlayNext,
+                            onAddToPlaylist = { playlistPickerTrack = it },
                         )
                     }
             }
         }
     }
+
+    playlistPickerTrack?.let { track ->
+        AddToPlaylistDialog(
+            playlists = playlists,
+            onPick = { playlist ->
+                viewModel.onAddToPlaylist(track, playlist.id)
+                playlistPickerTrack = null
+            },
+            onDismiss = { playlistPickerTrack = null },
+        )
+    }
+}
+
+@Suppress("FunctionNaming")
+@Composable
+private fun AddToPlaylistDialog(
+    playlists: List<Playlist>,
+    onPick: (Playlist) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("> add --to-playlist") },
+        text = {
+            if (playlists.isEmpty()) {
+                Text("No playlists yet. Create one in the Playlists tab.", color = CliBeatsTextSecondary)
+            } else {
+                LazyColumn {
+                    items(playlists, key = { it.id }) { playlist ->
+                        Text(
+                            text = "[ ${playlist.name} ]",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(playlist) }
+                                .padding(vertical = 10.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Suppress("FunctionNaming")
@@ -197,6 +253,7 @@ private fun SearchResultsList(
     onTrackClick: (Track) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onPlayNext: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -222,6 +279,17 @@ private fun SearchResultsList(
                             Icon(
                                 imageVector = Icons.Outlined.PlaylistPlay,
                                 contentDescription = "Play next",
+                                tint = CliBeatsTextSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { onAddToPlaylist(track) },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                                contentDescription = "Add to playlist",
                                 tint = CliBeatsTextSecondary,
                                 modifier = Modifier.size(18.dp),
                             )

@@ -56,15 +56,6 @@ fun MainLayout(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
-    val playbackState by playerViewModel.playbackState.collectAsState()
-    val trackDuration = playbackState.currentTrack?.durationMs ?: 0L
-    val progress =
-        if (trackDuration > 0L) {
-            (playbackState.positionMs.toFloat() / trackDuration.toFloat()).coerceIn(0f, 1f)
-        } else {
-            0f
-        }
-
     NavigationSuiteScaffold(
         navigationSuiteItems = {
             buildNavItems(
@@ -98,26 +89,40 @@ fun MainLayout(
                 content()
             }
 
-            // ── Persistent Player Bar ─────────────────────────────────────
-            PlayerBar(
-                trackTitle = playbackState.currentTrack?.title ?: "Not playing",
-                artist = playbackState.currentTrack?.artist ?: "",
-                isPlaying = playbackState.isPlaying,
-                progress = progress,
-                currentMs = playbackState.positionMs,
-                totalMs = trackDuration,
-                artworkContent = playbackState.currentTrack?.artworkUrl?.let { url ->
-                    {
-                        TrackArtwork(artworkUrl = url, size = 36)
-                    }
-                },
-                onPlayPauseClick = playerViewModel::onPlayPauseClick,
-                onSkipNextClick = playerViewModel::onSkipNextClick,
-                onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
-                onSeek = playerViewModel::seekTo,
-            )
+            // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
+            PlayerBarHost(playerViewModel)
         }
     }
+}
+
+@Suppress("FunctionNaming")
+@Composable
+private fun PlayerBarHost(playerViewModel: PlayerViewModel) {
+    val playbackState by playerViewModel.playbackState.collectAsState()
+    val trackDuration = playbackState.currentTrack?.durationMs ?: 0L
+    val progress =
+        if (trackDuration > 0L) {
+            (playbackState.positionMs.toFloat() / trackDuration.toFloat()).coerceIn(0f, 1f)
+        } else {
+            0f
+        }
+    PlayerBar(
+        trackTitle = playbackState.currentTrack?.title ?: "Not playing",
+        artist = playbackState.currentTrack?.artist ?: "",
+        isPlaying = playbackState.isPlaying,
+        progress = progress,
+        currentMs = playbackState.positionMs,
+        totalMs = trackDuration,
+        artworkContent = playbackState.currentTrack?.artworkUrl?.let { url ->
+            {
+                TrackArtwork(artworkUrl = url, size = 36)
+            }
+        },
+        onPlayPauseClick = playerViewModel::onPlayPauseClick,
+        onSkipNextClick = playerViewModel::onSkipNextClick,
+        onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
+        onSeek = playerViewModel::seekTo,
+    )
 }
 
 private fun NavigationSuiteScope.buildNavItems(
