@@ -1,261 +1,257 @@
 ---
-last_mapped_commit: 916a56379cbb0bf07eb302edd4489c7633418417
-last_mapped_at: 2026-11-17
+last_mapped_commit: a77dc37a72fa6a498fb1ac17a68d814fbe3770cb
+last_mapped_at: 2026-11-19
 ---
 # Codebase Structure
 
-**Analysis Date:** 2026-11-17
+**Analysis Date:** 2026-11-19
 
 ## Directory Layout
 
 ```text
 clibeats/
-├── app/                              # The single Android application module
-│   ├── build.gradle.kts              # Module build: Compose, Hilt, KSP, Room, Media3, Detekt, Paparazzi
-│   ├── proguard-rules.pro
-│   ├── schemas/                      # Committed Room schema JSON (exportSchema = true)
+├── app/                                  # Single Android application module (:app)
+│   ├── build.gradle.kts                  # AGP, Compose, Hilt/KSP, Room/KSP, Media3, Paparazzi
+│   ├── schemas/                          # Exported Room schemas (committed)
 │   │   └── com.clibeats.data.local.CliBeatsDatabase/
-│   │       ├── 1.json 2.json 3.json
 │   └── src/
 │       ├── main/
-│       │   ├── AndroidManifest.xml   # Application, MainActivity, PlaybackService, permissions
-│       │   ├── java/com/clibeats/     # All production Kotlin (131 files)
-│       │   └── res/                  # drawables, fonts, launcher mipmaps, xml rules
-│       ├── test/java/com/clibeats/    # JVM unit + Paparazzi tests (43 files)
-│       │   └── snapshots/images/     # Paparazzi golden PNGs
-│       └── androidTest/java/com/clibeats/data/local/dao/  # Room instrumented tests (4 files)
-├── config/detekt/detekt.yml          # Detekt rules incl. ForbiddenImport layer guard
-├── docs/
-│   ├── adr/                          # ADR-001 … ADR-011 (architecture decisions)
-│   ├── evidence/                     # Validation screenshots
-│   └── *.docx, USER_GUIDE.md, LICENSES.md, RELEASE_NOTES.md
-├── gradle/
-│   ├── libs.versions.toml            # Version catalog (all dependency/plugin versions)
-│   └── wrapper/                       # Gradle wrapper 8.9
-├── logo/                             # Brand asset
-├── scripts/check-quality-gates.sh    # ktlint → detekt → lint → unit tests
-├── .github/workflows/ci.yml          # CI quality gates + assembleDebug
-├── .planning/                        # GSD planning state (PROJECT, ROADMAP, STATE, evidence, codebase)
-├── .gsd/                             # GSD runtime sentinel
-├── build.gradle.kts                  # Root: plugin aliases (apply false)
-├── settings.gradle.kts               # Repos (google, mavenCentral, jitpack) + `include(":app")`
-├── gradle.properties                 # JVM args, AndroidX, non-transitive R, SDK 35 suppression
+│       │   ├── AndroidManifest.xml       # Activity, PlaybackService, MediaButtonReceiver
+│       │   ├── java/com/clibeats/
+│       │   │   ├── CLIBeatsApp.kt
+│       │   │   ├── MainActivity.kt
+│       │   │   ├── data/
+│       │   │   ├── di/
+│       │   │   ├── domain/
+│       │   │   ├── playback/
+│       │   │   ├── presentation/
+│       │   │   ├── telemetry/
+│       │   │   └── util/
+│       │   └── res/                      # fonts (JetBrains Mono), drawables, xml backup rules
+│       ├── test/                         # JVM unit + Paparazzi screenshot tests (45 files)
+│       │   ├── java/com/clibeats/...     # Mirrors main package layout
+│       │   └── snapshots/images/         # Paparazzi golden PNGs (committed)
+│       └── androidTest/                  # Instrumented Room DAO tests (4 files)
+│           └── java/com/clibeats/data/local/dao/
+├── build.gradle.kts                      # Root build file (plugin aliases only)
+├── settings.gradle.kts                   # Module list + repositories
+├── gradle/libs.versions.toml             # Version catalog (all dependency versions)
+├── gradle/wrapper/                       # Gradle 8.9 wrapper
+├── config/detekt/detekt.yml              # Detekt ruleset
+├── docs/                                 # ADRs, user guide, release notes, licenses, design docs
+│   ├── adr/                              # ADR-001 … ADR-011
+│   ├── evidence/                         # Verification evidence
+│   └── screenshots/                      # UI screenshots
+├── logo/                                 # SVG/PNG launcher artwork source
+├── scripts/check-quality-gates.sh        # Local gate runner (tests, ktlint, detekt, lint)
+├── .github/workflows/                    # ci.yml (quality gates), release.yml (tagged builds)
+├── .planning/                            # GSD state (codebase docs, milestones, debug, evidence)
+├── .agents/AGENTS.md                     # Agent/process standards
+├── .gsd/                                 # GSD runtime files
+├── .gitignore
+├── LICENSE
 └── README.md
 ```
 
 ## Directory Purposes
 
-**`app/src/main/java/com/clibeats/`:**
-
-- Purpose: all production code, organized by architectural layer first, feature second.
-- Contains: `CLIBeatsApp.kt`, `MainActivity.kt`, then layer roots: `data/`, `domain/`, `playback/`, `presentation/`, `di/`, `telemetry/`, `util/`.
-- Key files: `CLIBeatsApp.kt`, `MainActivity.kt`.
-
 **`app/src/main/java/com/clibeats/data/`:**
+- Purpose: All I/O and persistence implementations.
+- Contains: repository implementations, Room schema/DAOs/entities/mappers, remote provider adapters + API interfaces + DTOs + mappers, DataStore settings, caches, download manager, local scanner, playlist exchange.
+- Key files: `data/repository/PlaybackRepositoryImpl.kt`, `data/local/CliBeatsDatabase.kt`, `data/provider/MusicProviderRegistry.kt`, `data/preferences/AppPreferences.kt`, `data/cache/MediaCaches.kt`.
 
-- Purpose: implementations of domain contracts over network/Room/disk.
-- Contains: `provider/` (impls + `api/` + `dto/` + `mapper/` + `youtube/`), `repository/` (5 `*RepositoryImpl.kt`), `local/` (`CliBeatsDatabase.kt`, `CliBeatsTypeConverters.kt`, `dao/`, `entity/`, `mapper/`), `preferences/AppPreferences.kt`, `cache/CacheManager.kt`, `download/` (`TrackDownloadManager.kt`, `DownloadStatus.kt`), `playlist/` (`CliBeatsFile.kt`, `PlaylistExchangeManager.kt`), `network/NetworkMonitor.kt`.
-- Key files: `data/repository/PlaybackRepositoryImpl.kt`, `data/provider/YouTubeMusicProvider.kt`, `data/local/CliBeatsDatabase.kt`.
+**`data/local/`:**
+- Purpose: Room persistence.
+- Contains: `CliBeatsDatabase.kt`, `CliBeatsTypeConverters.kt`, `dao/` (8 DAOs), `entity/` (9 entities), `mapper/` (`SongMapper.kt`, `PlaylistMapper.kt`).
+- Key files: `data/local/dao/SongDao.kt`, `data/local/dao/QueueDao.kt`, `data/local/dao/PlaylistDao.kt`, `data/local/dao/CacheIndexDao.kt`.
+
+**`data/provider/`:**
+- Purpose: Catalog adapters behind `MusicProvider`.
+- Contains: root-level `*MusicProvider.kt` implementations, `api/` (Retrofit interfaces + `InnerTubeHeaderInterceptor`), `dto/` (kotlinx.serialization models, InnerTube `SearchRequest`/`PlayerRequest`), `mapper/` (DTO → `Track`), `youtube/` (resolution internals).
+- Key files: `data/provider/YouTubeMusicProvider.kt:78` (resolution chain), `data/provider/youtube/NewPipeExtractorResolver.kt`, `data/provider/youtube/PoTokenGenerator.kt`, `data/provider/youtube/StreamCacheManager.kt`, `data/provider/youtube/YouTubeClientStrategy.kt`, `data/provider/youtube/StreamUrlDeobfuscator.kt`.
 
 **`app/src/main/java/com/clibeats/domain/`:**
-
-- Purpose: framework-free contracts and models.
-- Contains: `model/` (`Track.kt`, `Album.kt`, `Artist.kt`, `Playlist.kt`, `PlaybackState.kt`, `PlaybackException.kt`), `provider/` (`MusicProvider.kt`, `ProviderRegistry.kt`, `ProviderId.kt`, `ProviderResult.kt`), `repository/` (5 interfaces).
-- Key files: `domain/provider/MusicProvider.kt`, `domain/model/Track.kt`.
-- Note: no use-case package exists.
-
-**`app/src/main/java/com/clibeats/presentation/`:**
-
-- Purpose: Compose UI + ViewModels, one package per screen/feature.
-- Contains: `home/`, `search/`, `library/`, `queue/`, `playlist/`, `settings/`, `more/`, `player/` (ViewModel only), plus `layout/`, `component/`, `theme/`.
-- Key files: `presentation/layout/MainLayout.kt`, `presentation/layout/NavDestination.kt`, `presentation/component/TuiBlock.kt`, `presentation/theme/CliBeatsTheme.kt`.
+- Purpose: Layer contracts with no Android framework usage (one known exception in `HistoryRepository`).
+- Contains: `model/` (7 files), `repository/` (5 interfaces), `provider/` (4 files).
+- Key files: `domain/model/Track.kt`, `domain/model/PlaybackState.kt`, `domain/provider/MusicProvider.kt`, `domain/provider/ProviderRegistry.kt`, `domain/provider/ProviderId.kt`, `domain/repository/PlaybackRepository.kt`.
 
 **`app/src/main/java/com/clibeats/playback/`:**
+- Purpose: Media3 engine, stream resolution, queue state.
+- Contains: `PlayerAdapter.kt`, `StreamResolver.kt`, `TrackUriResolver.kt`, `LocalOrRemoteMediaSourceFactory.kt`, `service/PlaybackService.kt`.
+- Key files: `playback/PlayerAdapter.kt` (494 lines, player mutations + state), `playback/TrackUriResolver.kt` (placeholder scheme), `playback/service/PlaybackService.kt` (MediaLibrarySession).
 
-- Purpose: Media3 integration.
-- Contains: `PlayerAdapter.kt`, `StreamResolver.kt`, `service/PlaybackService.kt`.
-- Key files: `playback/PlayerAdapter.kt`, `playback/service/PlaybackService.kt`.
+**`app/src/main/java/com/clibeats/presentation/`:**
+- Purpose: Compose UI + screen state.
+- Contains feature packages (`home`, `search`, `library`, `queue`, `playlist`, `player`, `settings`, `onboarding`), plus `layout/`, `theme/`, `component/`.
+- Key files: `presentation/layout/MainLayout.kt`, `presentation/layout/NavDestination.kt`, `presentation/player/PlayerViewModel.kt`, `presentation/player/NowPlayingScreen.kt`, `presentation/component/PlayerBar.kt`, `presentation/component/SongTableRow.kt`, `presentation/component/TuiBlock.kt`, `presentation/component/TuiTextField.kt`, `presentation/theme/CliBeatsTheme.kt`.
+
+**`presentation/component/`:**
+- Purpose: Cross-feature UI building blocks (terminal-inspired design system usage).
+- Contains: `PlayerBar.kt`, `SongTableRow.kt`, `TrackArtwork.kt`, `ArtworkUrl.kt` (`ARTWORK_FULL_PX`, `artworkUrlFor`), `AddToPlaylistDialog.kt` (`isLocalFilePlaylist()`), `ProviderSwitcher.kt`, `ButtonHint.kt`, `TuiBlock.kt`, `TuiTextField.kt`, `FavoritesViewModel.kt`.
 
 **`app/src/main/java/com/clibeats/di/`:**
-
-- Purpose: composition root; one module per concern.
-- Contains: `NetworkModule`, `DatabaseModule`, `RepositoryModule`, `ProviderModule`, `PlaybackModule`, `CacheModule`, `DownloadModule`, `StorageModule`, `ImageLoaderModule`, `TelemetryModule`, `AppModule` (empty).
+- Purpose: Hilt graph.
+- Contains: `AppModule.kt` (empty placeholder), `NetworkModule.kt`, `DatabaseModule.kt`, `PlaybackModule.kt`, `ProviderModule.kt`, `RepositoryModule.kt`, `CacheModule.kt`, `DownloadModule.kt`, `ImageLoaderModule.kt`, `StorageModule.kt`, `TelemetryModule.kt`.
+- Key files: `di/PlaybackModule.kt` (ExoPlayer + cache + resolving data source), `di/ProviderModule.kt` (provider ordering), `di/RepositoryModule.kt` (`@Binds`).
 
 **`app/src/main/java/com/clibeats/telemetry/` and `util/`:**
+- Purpose: Cross-cutting diagnostics.
+- Contains: `TelemetryTracker.kt`, `CrashReporter.kt` + Timber implementations, `AnalyticsEvent.kt`; `util/DiagnosticLogger.kt`.
 
-- Purpose: local-only telemetry abstraction and structured diagnostics.
-- Contains: `AnalyticsEvent.kt`, `TelemetryTracker.kt`, `TimberTelemetryTracker.kt`, `CrashReporter.kt`, `TimberCrashReporter.kt`; `util/DiagnosticLogger.kt`.
+**`app/src/test/`:**
+- Purpose: JVM tests and screenshot tests.
+- Contains: provider, mapper, repository, ViewModel, player adapter, cache, preferences, theme, telemetry, license and integration tests; `snapshots/images/` holds Paparazzi goldens.
+- Key files: `app/src/test/java/com/clibeats/presentation/player/PlayerViewModelTest.kt`, `app/src/test/java/com/clibeats/playback/PlayerAdapterQueueTest.kt`, `app/src/test/java/com/clibeats/data/repository/PlaybackRepositoryImplTest.kt`, `app/src/test/java/com/clibeats/theme/PlayerBarScreenshotTest.kt`.
 
-**`app/src/main/res/`:**
-
-- Purpose: Android resources.
-- Contains: `font/` (JetBrains Mono regular/medium/semibold/bold), `drawable/ic_stat_music_note.xml`, `mipmap-*/` launcher icons, `xml/data_extraction_rules.xml`.
-- Note: all UI color/typography constants live in Kotlin (`presentation/theme/`), **not** in `values/*.xml`; there is no `res/values/` directory.
-
-**`app/src/test/java/com/clibeats/`:**
-
-- Purpose: JVM tests, mirroring production packages; plus Paparazzi screenshot tests under `theme/`.
-- Contains: 43 test files (providers, repositories, ViewModels, playback, telemetry, integration, license compliance).
-- Notables: `integration/PlaybackIntegrationTest.kt`, `license/LicenseComplianceTest.kt`, `theme/*ScreenshotTest.kt`.
-
-**`app/src/androidTest/java/com/clibeats/data/local/dao/`:**
-
-- Purpose: Room DAO instrumented tests (`SongDaoTest`, `PlaylistDaoTest`, `HistoryDaoTest`, `CacheIndexDaoTest`).
+**`app/src/androidTest/`:**
+- Purpose: Device/emulator tests requiring a Room database.
+- Contains: `data/local/dao/{SongDaoTest,PlaylistDaoTest,HistoryDaoTest,CacheIndexDaoTest}.kt`.
 
 **`docs/`:**
+- Purpose: Design and process documentation.
+- Contains: `adr/` (11 ADRs), `evidence/`, `screenshots/`, `USER_GUIDE.md`, `RELEASE_NOTES.md`, `LICENSES.md`, and Word design/SRS/SDD/FSD documents.
 
-- Purpose: product/architecture documentation.
-- Contains: `adr/` (ADR-001, 003–011 + template), `evidence/` (screenshots), design `.docx` artifacts, `USER_GUIDE.md`, `LICENSES.md`, `RELEASE_NOTES.md`.
+**`config/detekt/`:**
+- Purpose: Single static-analysis ruleset referenced from `app/build.gradle.kts`.
 
 ## Key File Locations
 
 **Entry Points:**
-- `app/src/main/AndroidManifest.xml`: declares `CLIBeatsApp`, `MainActivity` (launcher), `PlaybackService` (`mediaPlayback` + `MediaSessionService`).
-- `app/src/main/java/com/clibeats/CLIBeatsApp.kt`: `@HiltAndroidApp` application class.
-- `app/src/main/java/com/clibeats/MainActivity.kt`: `@AndroidEntryPoint` Compose host and destination switch.
-- `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`: foreground service entry.
+- `app/src/main/java/com/clibeats/CLIBeatsApp.kt`: `@HiltAndroidApp` application + Coil loader.
+- `app/src/main/java/com/clibeats/MainActivity.kt`: LAUNCHER activity, theme/onboarding gate, six-tab shell.
+- `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`: background media service.
+- `app/src/main/AndroidManifest.xml`: component declarations and permissions.
 
 **Configuration:**
-- `settings.gradle.kts`: module inclusion + repositories (jitpack required by NewPipeExtractor).
-- `build.gradle.kts`: root plugin aliases only.
-- `app/build.gradle.kts`: all app config — `namespace = "com.clibeats"`, SDK 34/min 26, `buildConfigField JAMENDO_CLIENT_ID`, Room schema location, Detekt config path, dependency list.
-- `gradle/libs.versions.toml`: single source of dependency/plugin versions.
-- `gradle.properties`: `org.gradle.jvmargs`, `android.useAndroidX`, `android.nonTransitiveRClass`.
-- `config/detekt/detekt.yml`: `ForbiddenImport` (`com.clibeats.data.*`) layer guard.
-- `.github/workflows/ci.yml`: ktlint → detekt → lint → assembleDebug → unit tests.
-- `scripts/check-quality-gates.sh`: same gates locally.
+- `app/build.gradle.kts`: SDK 34/min 26, JVM 17, Compose, KSP Room schema output, detekt, Paparazzi, signing.
+- `gradle/libs.versions.toml`: every dependency/plugin version.
+- `settings.gradle.kts`: repositories + `include(":app")`.
+- `config/detekt/detekt.yml`: detekt config.
+- `app/src/main/java/com/clibeats/di/`: all dependency wiring.
+- `scripts/check-quality-gates.sh` and `.github/workflows/ci.yml`: the gate commands.
 
 **Core Logic:**
-- `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`: playback/queue engine façade (largest file, 326 lines).
-- `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`: queue persistence/restore + stream resolution orchestration.
-- `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`: primary provider; streaming fallback chain.
-- `app/src/main/java/com/clibeats/data/provider/youtube/`: `NewPipeExtractorResolver.kt`, `PoTokenGenerator.kt`, `StreamUrlDeobfuscator.kt`, `StreamCacheManager.kt`, `YouTubeClientStrategy.kt`.
-- `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt`: schema, versions, migrations.
-- `app/src/main/java/com/clibeats/di/ProviderModule.kt`: provider registration order.
-- `app/src/main/java/com/clibeats/di/NetworkModule.kt`: base URLs, clients, Retrofit instances.
+- `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`: queue + playback state.
+- `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`: restore/persist/prefetch/history.
+- `app/src/main/java/com/clibeats/playback/StreamResolver.kt` + `app/src/main/java/com/clibeats/playback/TrackUriResolver.kt`: lazy stream resolution.
+- `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`: multi-stage stream extraction.
+- `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt`: schema + migrations.
+- `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`: all persisted settings.
 
 **Testing:**
-- Unit tests: `app/src/test/java/com/clibeats/<mirrored package>/`.
-- Instrumented DAO tests: `app/src/androidTest/java/com/clibeats/data/local/dao/`.
-- Screenshot goldens: `app/src/test/snapshots/images/com.clibeats.theme_*.png`.
-- Room schemas used by migration tests: `app/schemas/com.clibeats.data.local.CliBeatsDatabase/`.
+- `app/src/test/java/com/clibeats/`: unit/screenshot tests, packages mirror `main`.
+- `app/src/androidTest/java/com/clibeats/data/local/dao/`: Room DAO instrumented tests.
+- `app/src/test/snapshots/images/`: committed Paparazzi reference images.
 
 ## Naming Conventions
 
 **Files:**
-- One top-level public class per file; filename matches the class (`PlayerAdapter.kt`, `ProviderRegistry.kt`, `CliBeatsTheme.kt`).
-- Screens: `<Feature>Screen.kt`; ViewModels: `<Feature>ViewModel.kt`; UI state: `<Feature>UiState.kt` in the same feature package.
-- Repository implementations: `<Contract>Impl.kt` (`SongRepositoryImpl.kt`, `PlaybackRepositoryImpl.kt`).
-- Room: `*Entity.kt`, `*Dao.kt`; API: `*Api.kt`; DTOs: plural `*Dtos.kt` for provider response groups plus request/response files (`SearchRequest.kt`, `PlayerResponse.kt`).
-- Mappers: lowercase `*Mapper.kt` files containing top-level extension functions (`SongMapper.kt`, `TrackMapper.kt`).
-- DI modules: `<Concern>Module.kt`.
-- Multiple related small types may share a file (`CliBeatsFile.kt` holds model + codec; `DownloadStatus.kt` holds a sealed interface).
+- One top-level type per file, file named after the type in PascalCase: `PlayerAdapter.kt`, `CacheManager.kt`, `NavDestination.kt`.
+- Screen triples per feature: `XScreen.kt`, `XViewModel.kt`, `XUiState.kt` (e.g. `LibraryScreen.kt`, `LibraryViewModel.kt`, `LibraryUiState.kt`). `player/` is the exception: `PlayerViewModel.kt` + `NowPlayingScreen.kt` and no `PlayerUiState.kt` (state is the domain `PlaybackState`).
+- Implementations end in `Impl`: `data/repository/*RepositoryImpl.kt`.
+- Providers end in `MusicProvider`: `YouTubeMusicProvider.kt`, `LocalMusicProvider.kt`.
+- Room types: `XEntity` (`entity/`), `XDao` (`dao/`), `CliBeatsDatabase`.
+- Hilt modules: `XModule.kt` in `di/`.
+- Mappers live in `mapper/` and are named after the source: `SongMapper.kt`, `PlaylistMapper.kt`, `TrackMapper.kt`, `AudiusMapper.kt`, `InternetArchiveMapper.kt`, `JamendoMapper.kt`.
 
-**Functions:**
-- Lowercase camelCase for normal functions (`playTrack`, `saveTrackToCache`, `restorePersistentQueue`).
-- Compose composables are PascalCase (`HomeScreen`, `TuiBlock`, `SongTableRow`) and suppress `FunctionNaming` / `ktlint:standard:function-naming` at file or function level.
-- Mapping extensions: `fun XEntity.toDomain(): Y` and `fun Y.toEntity(...)`; provider mappers: `fun XDto.toDomainTrack(): Track?`.
-- Test methods commonly use backticked descriptive names.
+**Packages:**
+- Root `com.clibeats`, one package per layer (`data`, `domain`, `playback`, `presentation`, `di`, `telemetry`, `util`).
+- Feature packages are single nouns: `presentation/home`, `presentation/search`, `presentation/library`, `presentation/queue`, `presentation/playlist`, `presentation/settings`, `presentation/onboarding`.
+- Cross-cutting UI in `presentation/component`, shell in `presentation/layout`, design system in `presentation/theme`.
+- Tests mirror production packages exactly under `app/src/test/java/com/clibeats/...` and `app/src/androidTest/java/com/clibeats/...`.
 
-**Variables:**
-- `private const val` UPPER_SNAKE_CASE at file scope for constants (`POLL_INTERVAL_MS`, `DEBOUNCE_MS`, `DEFAULT_MAX_CACHE_BYTES`).
-- Backing state: `_playbackState`, `_queueFlow`, `_query`, `_downloads` with public `StateFlow` counterparts.
-- Provider ids are snake_case string literals: `"youtube_music"`, `"internet_archive"`, `"audius"`, `"jamendo"`, `"local"`.
+**Kotlin symbols:**
+- Types: PascalCase (`PlaybackState`, `ProviderResult`).
+- Functions/properties: camelCase (`playTrack`, `setQueue`, `isCurrentLiked`, `playbackState`).
+- Constants: `UPPER_SNAKE_CASE` inside `companion object` or private file-level `const val` (`DEFAULT_PROVIDER_ID`, `POLL_INTERVAL_MS`, `SCHEME`).
+- Compose Composables: PascalCase, frequently `@Suppress("FunctionNaming")` for screen-level functions (`MainLayout`, `AppContent`, `CliBeatsTopAppBar`).
+- Repository methods: `getXAsFlow()` for streams, `upsertX`, `toggleX`, `clearX`, `setX`.
+- State fields: private `_x` backing + public `x` (`_playbackState` / `playbackState`, `_query` / `query`).
+- Test names use backtick sentences (`PlayerAdapterQueueTest.kt`, ViewModel tests).
 
-**Types:**
-- Interfaces: plain noun (`MusicProvider`, `ProviderRegistry`, `TelemetryTracker`).
-- UI state: sealed interface named `<Feature>UiState` with `Loading`/`Success`/`Error`/`Empty`/`Idle` members.
-- Results: sealed class `ProviderResult<out T>` with `Success`/`Error`/`Loading`.
-- Events: sealed class `AnalyticsEvent` with data subclasses.
-- DI qualifiers: `@Named(...)` constants in the providing module (e.g. `JAMENDO_CLIENT_ID_QUALIFIER`).
-
-**Package / Directory:**
-- Layer-first at the root (`data`, `domain`, `presentation`, `playback`), feature-second inside (`presentation/search`, `data/provider/youtube`).
-- All lowercase, no underscores (`presentation`, `playlist`, `youtube`).
-
-**Database:**
-- Tables snake_case plural (`songs`, `playlists`, `queue_items`, `history`, `liked_songs`, `saved_albums`, `saved_artists`, `cache_index`, `playlist_song_cross_ref`).
-- Columns snake_case via `@ColumnInfo(name = "...")` `duration_ms`, `artwork_url`, `provider_id`.
-- Composite keys encode provider: `Track.id = "<providerId>:<sourceId>"`.
-
-**Tests:**
-- `<ClassUnderTest>Test.kt` (`CacheManagerTest.kt`, `SearchViewModelTest.kt`, `PlaybackIntegrationTest.kt`).
-- Screenshot tests named `<Component>ScreenshotTest.kt` with snapshot files `<package>_<Class>_<case>.png`.
+**IDs and keys:**
+- Composite track ids: `providerId:sourceId` (`domain/provider/ProviderId.kt`).
+- Local-playlist mirror ids: `localpl:` prefix (`presentation/component/AddToPlaylistDialog.kt:78`, `data/repository/PlaylistRepositoryImpl.kt:83`).
+- Placeholder playback URIs: `clibeats://track?p=<providerId>&id=<trackId>` (`playback/TrackUriResolver.kt`).
+- Media3 session roots: `clibeats_root`, `clibeats_recent` (`playback/service/PlaybackService.kt:236-237`).
 
 ## Where to Add New Code
 
-**New Music Provider:**
-- Implementation: `app/src/main/java/com/clibeats/data/provider/<Name>MusicProvider.kt` implementing `MusicProvider` with a unique snake_case `providerId`, returning `ProviderResult` only.
-- HTTP client: `app/src/main/java/com/clibeats/data/provider/api/<Name>Api.kt` + base URL/Retrofit provider in `app/src/main/java/com/clibeats/di/NetworkModule.kt`.
-- Wire DTOs: `app/src/main/java/com/clibeats/data/provider/dto/<Name>Dtos.kt` (`@Serializable`).
-- Mapping: `app/src/main/java/com/clibeats/data/provider/mapper/<Name>Mapper.kt` applying `ProviderId.composite`.
-- Registration: add parameter + list entry in `app/src/main/java/com/clibeats/di/ProviderModule.kt` (order = display priority).
-- Tests: `app/src/test/java/com/clibeats/data/provider/<Name>MusicProviderTest.kt` and `.../mapper/<Name>MapperTest.kt` (MockWebServer pattern).
+**New music provider:**
+- Implementation: add `app/src/main/java/com/clibeats/data/provider/<Name>MusicProvider.kt` implementing `domain/provider/MusicProvider.kt`; use `ProviderId.composite` for ids and `ProviderResult` for outcomes.
+- API/DTO/mapping: add `data/provider/api/<Name>Api.kt`, `data/provider/dto/<Name>Dtos.kt`, `data/provider/mapper/<Name>Mapper.kt`.
+- Networking: add a Retrofit provider function in `app/src/main/java/com/clibeats/di/NetworkModule.kt` if the base URL differs.
+- Registration: add the provider to the ordered list in `app/src/main/java/com/clibeats/di/ProviderModule.kt` (position = display priority).
+- Tests: `app/src/test/java/com/clibeats/data/provider/<Name>MusicProviderTest.kt` + mapper test.
 
-**New Screen / Feature:**
-- UI: `app/src/main/java/com/clibeats/presentation/<feature>/<Feature>Screen.kt`, `<Feature>ViewModel.kt` (`@HiltViewModel`), `<Feature>UiState.kt`.
-- Navigation: add a `data object` to `app/src/main/java/com/clibeats/presentation/layout/NavDestination.kt`, add it to `all` (and `mainTabs` only if it belongs in the bottom bar), then add a branch in `MainActivity.kt`'s `when (selectedDestination)`.
-- Tests: `app/src/test/java/com/clibeats/presentation/<feature>/<Feature>ViewModelTest.kt`.
+**New screen/feature:**
+- Create `app/src/main/java/com/clibeats/presentation/<feature>/` with `XScreen.kt`, `XViewModel.kt` (`@HiltViewModel`, constructor injection of domain repositories), and `XUiState.kt`.
+- If it is a top-level tab, add a `data object` to `presentation/layout/NavDestination.kt` (`route`, `label`, `icon`, `contentDescription`) and include it in `mainTabs`; then add the `when (tabs[page])` branch in `MainActivity.kt:133-145`.
+- Use `hiltViewModel()` in the screen; collect state with `collectAsState()`; model loading/success/error as a sealed interface.
+- Reuse `presentation/component/` widgets (`SongTableRow`, `TuiBlock`, `TuiTextField`, `PlayerBar`) and `presentation/theme/` tokens.
 
-**New Repository / Data Operation:**
-- Contract: `app/src/main/java/com/clibeats/domain/repository/<Name>Repository.kt`.
-- Implementation: `app/src/main/java/com/clibeats/data/repository/<Name>RepositoryImpl.kt`, annotated `@Singleton` with `@Inject constructor`.
-- Binding: add `@Binds @Singleton` in `app/src/main/java/com/clibeats/di/RepositoryModule.kt`.
-- Mapping: keep entity↔domain conversion in `app/src/main/java/com/clibeats/data/local/mapper/`; never expose `*Entity` through the contract (exception currently: `HistoryRepository`).
+**New domain model:**
+- Add a data class in `app/src/main/java/com/clibeats/domain/model/`; do not import Android or data-layer types.
+- Map to/from Room in `data/local/mapper/`; map from provider DTOs in `data/provider/mapper/`.
 
-**New Room Entity / Column:**
-- Entity: `app/src/main/java/com/clibeats/data/local/entity/<Name>Entity.kt`.
-- DAO: `app/src/main/java/com/clibeats/data/local/dao/<Name>Dao.kt` (Flow for reads, `suspend` for writes).
-- Database: add to `@Database(entities = [...])`, bump `version`, add a `MIGRATION_x_y`, register it in `app/src/main/java/com/clibeats/di/DatabaseModule.kt`, expose a `provide<Name>Dao` function.
-- Schema: regenerate `app/schemas/com.clibeats.data.local.CliBeatsDatabase/<version>.json` (KSP `room.schemaLocation`).
-- Tests: `app/src/androidTest/java/com/clibeats/data/local/dao/<Name>DaoTest.kt` using in-memory Room.
+**New persisted table:**
+- Add `data/local/entity/XEntity.kt`, `data/local/dao/XDao.kt`, register both in `data/local/CliBeatsDatabase.kt` (bump `version`, add a `MIGRATION_n_n+1` and `.addMigrations(...)` in `di/DatabaseModule.kt`), and provide the DAO in `di/DatabaseModule.kt`.
+- Update `app/schemas/com.clibeats.data.local.CliBeatsDatabase/` by building (schema export is on).
+- Add a repository method to the relevant `domain/repository/` interface + `data/repository/*Impl.kt`.
 
-**New UI Component / Design Token:**
-- Reusable composable: `app/src/main/java/com/clibeats/presentation/component/<Name>.kt`; use `LocalAccentColor`, flat borders, and monospaced `MaterialTheme.typography` instead of raw colors.
-- Theme tokens: `app/src/main/java/com/clibeats/presentation/theme/CliBeatsColors.kt` / `CliBeatsTypography.kt` / `CliBeatsShapes.kt`; accent presets in `AccentColor.kt`; mode enum in `CliBeatsThemeMode.kt`.
+**New setting:**
+- Add a private key + `Flow` getter + setter to `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`.
+- Surface it through `presentation/settings/SettingsViewModel.kt` + `SettingsUiState.kt`; never read DataStore directly from a Composable.
 
-**New Preference:**
-- Add a key to `Keys` in `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`, a `Flow` accessor with a default, and a `suspend fun set...` using `dataStore.edit { }`. Sensitive values go to `securePrefs` instead.
+**New DI binding:**
+- Abstract binding → `@Binds` in `di/RepositoryModule.kt` or `di/TelemetryModule.kt`.
+- Concrete construction → `@Provides @Singleton` in a focused `di/XModule.kt`, installed in `SingletonComponent`.
 
-**New Cache / Download Behaviour:**
-- Cache/index: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt` (+ `CacheIndexDao`).
-- Downloads: `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`; register new managers in `CacheModule.kt` / `DownloadModule.kt`.
-
-**New Telemetry Event:**
-- Add a subclass to `app/src/main/java/com/clibeats/telemetry/AnalyticsEvent.kt`; keep sinks local (no network SDK) unless an ADR approves it.
+**New playback behavior:**
+- Queue/player mutation → extend `playback/PlayerAdapter.kt` (the only place that touches `ExoPlayer`).
+- Domain API → add to `domain/repository/PlaybackRepository.kt` and delegate from `data/repository/PlaybackRepositoryImpl.kt`.
+- Stream URL handling → `playback/StreamResolver.kt`; URI translation → `playback/TrackUriResolver.kt`.
 
 **Utilities:**
-- Android-aware logging: `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt` (add a `log<Event>(traceId, ...)` method).
-- Pure formatting helpers: currently misplaced in `presentation/search/SearchScreen.kt` (`formatDuration`); if adding more, prefer a shared `presentation/component/` or new `presentation/format/` location rather than importing across screens.
+- Shared helpers: `app/src/main/java/com/clibeats/util/` (currently `DiagnosticLogger.kt`); keep UI-only helpers in `presentation/component/`.
+
+**Tests:**
+- Unit tests: `app/src/test/java/com/clibeats/<mirrored package>/` (`XTest.kt`).
+- Instrumented Room tests: `app/src/androidTest/java/com/clibeats/data/local/dao/`.
+- Screenshot tests: `app/src/test/java/com/clibeats/theme/` using Paparazzi; update goldens in `app/src/test/snapshots/images/`.
 
 ## Special Directories
 
 **`app/schemas/com.clibeats.data.local.CliBeatsDatabase/`:**
-- Purpose: Room exported schema JSON for migration verification (currently `1.json`, `2.json`, `3.json`).
-- Generated: Yes (by KSP via `room.schemaLocation`).
-- Committed: Yes — must be updated whenever entities/version change.
+- Purpose: Room export of every schema version (configured by `ksp { arg("room.schemaLocation", …) }`).
+- Generated: Yes (by KSP on build).
+- Committed: Yes — required for migration review.
 
 **`app/src/test/snapshots/images/`:**
-- Purpose: Paparazzi golden images for theme/component regression.
-- Generated: Yes (record with `./gradlew recordPaparazziDebug`).
+- Purpose: Paparazzi golden screenshots (`verifyPaparazziDebug`).
+- Generated: Yes (recorded with `recordPaparazziDebug`).
 - Committed: Yes.
 
-**`app/build/`:**
-- Purpose: Gradle outputs (APKs at `app/build/outputs/apk/debug/`).
-- Generated: Yes. Committed: No (`.gitignore`: `app/build/`, `/build/`, `.gradle/`).
-
-**`.planning/`:**
-- Purpose: GSD project state — `PROJECT.md`, `ROADMAP.md`, `STATE.md`, `MILESTONES.md`, `codebase/` (these docs), `research/`, `evidence/`, `debug/`.
-- Generated: Partly by GSD commands. Committed: Yes.
+**`app/src/main/res/font/`:**
+- Purpose: JetBrains Mono family (regular/medium/semibold/bold) used by `CliBeatsTypography`.
+- Generated: No.
+- Committed: Yes.
 
 **`docs/adr/`:**
-- Purpose: architectural decisions that constrain new code (e.g. ADR-001 layering, ADR-003 storage, ADR-004 Media3).
-- Generated: No. Committed: Yes. Add a new ADR before deviating from these patterns.
+- Purpose: Architecture decision record set (001 architecture/DI, 003 encrypted storage, 004 Media3 background audio, 005 InnerTube provider, 006 playlists/queue/library, 007 caching/downloads security, 008 performance/accessibility, 009 testing, 010 telemetry privacy, 011 release distribution).
+- Generated: No.
+- Committed: Yes.
 
-**`config/detekt/`:**
-- Purpose: static-analysis rules, including the `ForbiddenImport` layer guard.
-- Generated: No. Committed: Yes.
+**`.planning/`:**
+- Purpose: GSD workflow state, including this `codebase/` directory, `milestones/`, `debug/`, `evidence/`, `research/`.
+- Generated: Yes (tooling).
+- Committed: Depends on repository policy; treat as project metadata.
+
+**`logo/`:**
+- Purpose: Source artwork for the launcher icon (SVG + PNG).
+- Generated: No.
+- Committed: Yes.
 
 ---
 
-*Structure analysis: 2026-11-17*
+*Structure analysis: 2026-11-19*

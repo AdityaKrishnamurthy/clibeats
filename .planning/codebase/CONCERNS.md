@@ -1,368 +1,354 @@
 ---
-last_mapped_commit: 916a56379cbb0bf07eb302edd4489c7633418417
-last_mapped_at: 2026-11-17
+last_mapped_commit: a77dc37a72fa6a498fb1ac17a68d814fbe3770cb
+last_mapped_at: 2026-11-19
 ---
 # Codebase Concerns
 
-**Analysis Date:** 2026-11-17
+**Analysis Date:** 2026-11-19
+
+## Priority Summary
+
+Highest-leverage problems in this repo, in order:
+
+1. **`PoTokenGenerator` leaks a `WebView` + main-thread `Handler` runnables on every token generation** (`app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`). Playback extraction depends on it and it is completely untested.
+2. **Release build has R8/minification disabled** (`app/build.gradle.kts:48`) while `app/proguard-rules.pro` and all release docs (`.planning/PROJECT.md`, `docs/RELEASE_NOTES.md`) claim a shrunk release. Shipped APK is unminified, unshrunk, and fully reflectable.
+3. **The whole download subsystem is unreachable dead code** (`app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`), while two independent audio caches with two different size limits coexist.
+4. **`targetSdk`/`compileSdk` are 34** (`app/build.gradle.kts:17,22`) — below current Play Store requirements — and `gradle.properties` still carries `android.suppressUnsupportedCompileSdk=35`.
+5. **Silent-corruption paths:** cache filenames are built from unsanitized track ids (`CacheManager.kt:40`), and a revoked SAF folder is treated as "all files deleted" so the scanner deletes those songs from the library (`LocalMusicScanner.kt:78-110`).
 
 ## Tech Debt
 
-**Stale stream URLs are never re-resolved (no expiry awareness):**
-- Issue: `StreamResolver.resolve()` returns the track untouched whenever `track.streamUrl` is non-blank (`app/src/main/java/com/clibeats/playback/StreamResolver.kt:20-22`). Persisted URLs in `SongEntity.streamUrl` and in-memory queue tracks therefore never refresh, even though YouTube `googlevideo` URLs carry an `expire` query parameter (typically ~6 h) that `StreamCacheManager`/`NewPipeExtractorResolver` already parse.
-- Files: `app/src/main/java/com/clibeats/playback/StreamResolver.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/StreamCacheManager.kt`
-- Impact: Replaying a YouTube track from Library/History/Queue after expiry fails with HTTP 403, with only a log line in `PlayerAdapter`'s `onPlayerError` listener and no retry.
-- Fix approach: Pass an explicit `forceRefresh` flag (or parse `expire=` and compare against `System.currentTimeMillis()`) in `StreamResolver`, and have `PlayerAdapter.onPlayerError` request one re-resolution of the current track before surfacing an error.
+**Release build never shrinks or obfuscates:**
+- Issue: `isMinifyEnabled = false` in the `release` block; `app/proguard-rules.pro` exists (with entity/DAO/serialization keep rules) but is inert.
+- Files: `app/build.gradle.kts:44-55`, `app/proguard-rules.pro`
+- Impact: APK size and method count stay at debug levels; classes/fields remain trivially readable. Every claim of "R8" in `.planning/PROJECT.md`, `.planning/RETROSPECTIVE.md`, and `docs/RELEASE_NOTES.md` is currently false. Enabling it will surface missing keep rules (NewPipeExtractor, OkHttp/Retrofit, kotlinx.serialization).
+- Fix approach: flip `isMinifyEnabled = true`, add `-keep` rules for `org.schabi.newpipe.**` and Coil, then run `assembleRelease` + `testDebugUnitTest` and a device smoke test before tagging.
 
-**Queue items after the start index are shipped to ExoPlayer without stream URLs:**
-- Issue: `PlaybackRepositoryImpl.setQueue` resolves only `tracks[startIndex]` (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:194-214`), while `PlayerAdapter.setQueue` maps the entire list through `Track.toMediaItem()` (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:148-160`, `:300-306`). `TrackMapper` now sets `streamUrl = null` for all InnerTube/YouTube results (`app/src/main/java/com/clibeats/data/provider/mapper/TrackMapper.kt:101-102`), so every non-start YouTube item becomes `android.net.Uri.EMPTY` (`PlayerAdapter.kt:306`).
-- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`
-- Impact: Auto-advance, skip-next, and queue-from-search stop working after the first track for the default provider. There is no per-item resolution hook.
-- Fix approach: Resolve queue items lazily on `onMediaItemTransition`/`onPlayerError`, or resolve the whole queue with bounded parallelism before `setMediaItems` (mirroring `InternetArchiveMusicProvider`'s semaphore pattern).
+**Stale SDK levels and a leftover build suppression:**
+- Issue: `compileSdk = 34`, `targetSdk = 34`, `minSdk = 26`; `gradle.properties` sets `android.suppressUnsupportedCompileSdk=35`, which only makes sense if AGP expected compileSdk 35.
+- Files: `app/build.gradle.kts:17,22`, `gradle.properties:5`
+- Impact: Play Store submission is blocked once target API minimum moves; the suppress flag hides a real AGP/compileSdk mismatch and will mask future upgrades.
+- Fix approach: bump `compileSdk`/`targetSdk` to the current API level, add `FOREGROUND_SERVICE_MEDIA_PLAYBACK` behavior review for the new target, then delete the suppression property.
 
-**Playback failures are swallowed — no user-visible error state:**
-- Issue: Every operation in `PlaybackRepositoryImpl` runs inside `repositoryScope.launch { runCatching { ... }.onFailure { log } }` (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:128-226`). `PlaybackException` subclasses (`app/src/main/java/com/clibeats/domain/model/PlaybackException.kt`) are constructed but never reach any UI. `PlaybackState` (`app/src/main/java/com/clibeats/domain/model/PlaybackState.kt`) has no error field.
-- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt`
-- Impact: Tapping a dead track appears to do nothing; users cannot distinguish loading, resolving, and failure.
-- Fix approach: Add an `error: PlaybackError?` (or a separate `SharedFlow<PlaybackEvent>`) to the playback contract and render it in `PlayerBar`/`MainLayout`.
+**Suppression-heavy static-analysis configuration (`D-02`, still open):**
+- Issue: 63 `@Suppress` annotations in `app/src/main`. Root cause is the over-broad detekt `ForbiddenImport: com.clibeats.data.*` pattern plus detekt 1.23.6 vs ktlint_official `Indentation` mismatch, which forces `@file:Suppress("ForbiddenImport", "Indentation", "MaxLineLength", "Wrapping")` in every data file.
+- Files: `config/detekt/detekt.yml:44-50`, `app/src/main/java/com/clibeats/data/repository/SongRepositoryImpl.kt:19`, `app/src/main/java/com/clibeats/data/repository/PlaylistRepositoryImpl.kt:23`, `app/src/main/java/com/clibeats/data/repository/HistoryRepositoryImpl.kt:17`, `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:21`, `app/src/main/java/com/clibeats/di/DatabaseModule.kt:1-2`, `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt:1`
+- Impact: The `ForbiddenImport` rule no longer meaningfully enforces the presentation→data boundary (presentation files now import data types freely, e.g. `presentation/settings/SettingsViewModel.kt` imports `com.clibeats.data.cache.CacheManager`, `MediaCaches`, `com.clibeats.data.scan.LocalMusicScanner`). Also tracked as open broken window #3 in `.planning/WINDOWS.md`.
+- Fix approach: replace the wildcard pattern with explicit forbidden packages (`com.clibeats.data.repository.*`, `com.clibeats.data.local.*`) and move presentation-facing cache/scan facades behind domain interfaces.
 
-**Signature-cipher "deobfuscation" is a placeholder:**
-- Issue: `StreamUrlDeobfuscator.deobfuscateSignature` returns `signature.reversed()` (`app/src/main/java/com/clibeats/data/provider/youtube/StreamUrlDeobfuscator.kt:103-105`). Real YouTube ciphers require the player-JS decipher routine.
-- Files: `app/src/main/java/com/clibeats/data/provider/youtube/StreamUrlDeobfuscator.kt`
-- Impact: Any format delivered via `cipher`/`signatureCipher` yields an invalid signed URL that fails with 403, silently burning one iteration of the `YouTubeClientStrategy.FALLBACK_CHAIN`.
-- Fix approach: Delete the stub and explicitly skip cipher-only formats (documenting the limitation), or delegate cipher handling to NewPipeExtractor's `YoutubeStreamExtractor`.
+**Deprecated APIs kept deliberately (with a documented migration that has not started):**
+- Issue: `EncryptedSharedPreferences`/`MasterKey` (deprecated in `security-crypto` 1.1.0-alpha06) and Coil 2 `DiskCache` interface overrides.
+- Files: `app/src/main/java/com/clibeats/di/StorageModule.kt:22-23`, `app/src/main/java/com/clibeats/data/cache/ResizableDiskCache.kt:18`
+- Impact: `security-crypto` is pinned to an alpha; the deprecated surface can disappear in any update. `ResizableDiskCache` overrides every member of an interface Coil marks experimental and could break on a Coil major upgrade.
+- Fix approach: migrate the token store to Tink `KeystoreAesGcm` as ADR-003 already promises, and wrap the Coil cache behind `ResizableDiskCache`'s own small interface instead of implementing `DiskCache` directly.
 
-**History recording is dead code (and leaks data types into domain):**
-- Issue: `HistoryRepository.recordPlay` has zero production callers — only `app/src/test/java/com/clibeats/data/repository/HistoryRepositoryImplTest.kt:52-54` invokes it. No playback path writes to the `history` table. The domain interface also imports a data-layer entity (`app/src/main/java/com/clibeats/domain/repository/HistoryRepository.kt:6` returns `HistoryEntity`) behind a `@file:Suppress("ForbiddenImport")` comment.
-- Files: `app/src/main/java/com/clibeats/data/repository/HistoryRepositoryImpl.kt`, `app/src/main/java/com/clibeats/domain/repository/HistoryRepository.kt`, `app/src/main/java/com/clibeats/data/local/dao/HistoryDao.kt`
-- Impact: "Recently played" surfaces can never populate; the domain layer violates Clean Architecture; the repo is bound in `app/src/main/java/com/clibeats/di/RepositoryModule.kt:35` but never consumed.
-- Fix approach: Call `historyRepository.recordPlay(track.id, track.providerId)` from `PlayerAdapter.onMediaItemTransition`/`PlaybackRepositoryImpl.playTrack`, and return a domain `HistoryEntry` model instead of `HistoryEntity`.
+**Download feature is dead code:**
+- Issue: `TrackDownloadManager.downloadTrack()` / `isTrackDownloaded()` are never called from any screen or ViewModel; `DownloadModule` is the only reference.
+- Files: `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt:32`, `app/src/main/java/com/clibeats/data/download/DownloadStatus.kt`, `app/src/main/java/com/clibeats/di/DownloadModule.kt`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt:36-56`
+- Impact: "Offline downloads" is advertised in project docs but impossible in the UI; the dead path still gets maintained and is covered by a test (`app/src/test/java/com/clibeats/data/download/TrackDownloadManagerTest.kt`) that gives false confidence.
+- Fix approach: either wire a download action into `SongTableRow`/`PlayerViewModel` and surface state in Library, or delete the subsystem and rely on `MediaCaches` (streaming cache).
 
-**"Download" is cache-only and cannot be trusted as offline storage:**
-- Issue: `TrackDownloadManager.downloadTrack` writes through `CacheManager.saveTrackToCache` into `context.cacheDir/audio_cache` (`app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt:39-53`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt:23-45`). There is no progress (status stuck at `Downloading(0)`, `TrackDownloadManager.kt:41`), no cancellation, no per-track dedupe, no `SupervisorJob`, no partial-file cleanup, and no distinct "downloaded" index.
-- Files: `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/download/DownloadStatus.kt`
-- Impact: Files disappear when the OS clears cache or LRU eviction runs (500 MB cap); concurrent taps start duplicate downloads; failures can embed the full resolved stream URL in the error message.
-- Fix approach: Add a durable `filesDir/downloads` directory with its own persistence and progress-emitting download queue; keep the cache subsystem separate.
+**Two audio caches, two limits, two accounting models:**
+- Issue: `CacheManager` (`audio_cache`, default 500 MB, `DEFAULT_MAX_CACHE_BYTES`) and `MediaCaches.songCache` (Media3 `SimpleCache`, limit from `AppPreferences.cacheMaxMb`, default 512 MB) both store audio, and Settings "song cache" writes both.
+- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt:28,75`, `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt:53-58`, `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:47-69`
+- Impact: Storage reporting is split-brain (`CacheUsage.songBytes` vs `uiState.currentCacheSizeBytes`); clearing "songs" deletes both; a user lowering the limit can still exceed it via the other cache.
+- Fix approach: collapse to one cache abstraction (or make `CacheManager` a thin index over `MediaCaches`), and one settings value.
 
-**Static-analysis gates are defeated by blanket suppressions:**
-- Issue: 117 `@Suppress`/`@file:Suppress` annotations exist under `app/src/main`. The largest ones sit on the highest-risk code: `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt` (`LongMethod`, `CyclomaticComplexMethod`, `MaxLineLength`), `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt` (`SwallowedException`, `TooGenericExceptionCaught`), `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt` (`TooManyFunctions`), `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt` (`LongMethod`, `TooManyFunctions`). The `ForbiddenImport` rule in `config/detekt/detekt.yml` is suppressed in presentation ViewModels that import `com.clibeats.data.*` (`app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:1`, `app/src/main/java/com/clibeats/presentation/home/HomeViewModel.kt:1`, `app/src/main/java/com/clibeats/presentation/search/SearchViewModel.kt:1`).
-- Files: `config/detekt/detekt.yml`, `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`
-- Impact: `maxIssues: 0` is nominal; the architecture boundary and complexity limits only apply to files nobody had to suppress. Regressions in these files must be caught by tests, which do not exist for most of them.
-- Fix approach: Narrow the `ForbiddenImport` rule to exact offending symbols, move `AppPreferences`/`CacheManager` usage behind domain ports, and split the two provider/playback god-classes instead of suppressing.
+**Nullable secondary constructor / DI smells:**
+- Issue: concrete Hilt types are declared optional (`LocalMusicScanner? = null`, `MediaCaches? = null`, `CliBeatsDatabase? = null`, `LibraryRepository? = null`, `ImageLoader?`) and `PlaybackRepositoryImpl` has a second non-`@Inject` constructor for tests.
+- Files: `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:30-36`, `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:29-36`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:44-70`, `app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt:41-46`
+- Impact: The graph silently tolerates a missing collaborator at runtime (e.g. `localMusicScanner?.scan()` becomes a no-op), which turns DI misconfiguration into "feature does nothing" bugs.
+- Fix approach: make dependencies non-null in production constructors; keep fake collaborators in test-only constructors/factories.
 
-**Release build is not shippable:**
-- Issue: `app/build.gradle.kts:29-40` sets `isMinifyEnabled = false` and `signingConfig = signingConfigs.getByName("debug")` for the `release` build type; `proguard-rules.pro` is therefore dormant. `versionName = "0.1.0"` (`app/build.gradle.kts:24`) disagrees with `docs/RELEASE_NOTES.md` which describes a "CLIBeats v1.0" release. `versionCode` is fixed at `1`.
-- Files: `app/build.gradle.kts`, `app/proguard-rules.pro`, `.github/workflows/ci.yml`, `docs/RELEASE_NOTES.md`
-- Impact: No obfuscation, debug-signed APKs cannot be distributed through Play, and the release variant is never compiled in CI (`ci.yml` only runs `assembleDebug`).
-- Fix approach: Enable R8 with keep rules for NewPipeExtractor/kotlinx.serialization/Hilt, add a real signing config sourced from CI secrets, and add `assembleRelease` to `.github/workflows/ci.yml`.
+**Planning/ADR documentation has drifted from the code:**
+- Issue: `.planning/PROJECT.md` and ADR-012…ADR-020 describe a "CliBeats Gateway (Fastify + Redis)" and `GatewayMusicProvider`/`GatewayApi`; neither exists in `app/src/main` (providers are `YouTubeMusicProvider`, `AudiusMusicProvider`, `InternetArchiveMusicProvider`, `JamendoMusicProvider`, `LocalMusicProvider`). ADR-003 lists 5 entities; `CliBeatsDatabase` has 9.
+- Files: `.planning/PROJECT.md`, `docs/adr/ADR-003-encrypted-storage-local-persistence.md`, `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt:29-40`, `app/src/main/java/com/clibeats/di/ProviderModule.kt`
+- Impact: Plans written from these docs will target modules that don't exist; onboarding and audits waste time.
+- Fix approach: add a superseding ADR for the direct-provider architecture, correct the entity list in ADR-003, and delete/archive gateway references.
 
-**compileSdk/targetSdk drift hidden by a Gradle property:**
-- Issue: `app/build.gradle.kts:17,22` pins `compileSdk = 34` / `targetSdk = 34`, while `gradle.properties:4` sets `android.suppressUnsupportedCompileSdk=35`, indicating at least one dependency expects SDK 35 APIs. Google Play now requires targetSdk 35 for new submissions.
-- Files: `app/build.gradle.kts`, `gradle.properties`
-- Impact: Suppressing the warning hides incompatibility risk; the app cannot be published to Play under current targetSdk policy; future media3/Compose bumps will fail to compile.
-- Fix approach: Bump `compileSdk`/`targetSdk` to 35 (or the current required level), remove the suppression property, and validate notification/FGS behavior on Android 15.
-
-**EncryptedSharedPreferences sits on a deprecated alpha:**
-- Issue: `StorageModule` uses `androidx.security:security-crypto:1.1.0-alpha06` (`gradle/libs.versions.toml:25`, `app/src/main/java/com/clibeats/di/StorageModule.kt:30-49`) with a `@Suppress("DEPRECATION")` and a comment deferring to ADR-003. `AppPreferences` touches `securePrefs` synchronously during construction (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:72-86`).
-- Files: `app/src/main/java/com/clibeats/di/StorageModule.kt`, `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`
-- Impact: Known OEM Keystore keyset-corruption crashes at initialization and synchronous disk I/O on the main thread at first `AppPreferences` resolution.
-- Fix approach: Execute the Tink `KeystoreAesGcm` migration from `docs/adr/ADR-003-encrypted-storage-local-persistence.md`, and wrap creation in a fallback path.
-
-**Cache size defaults disagree and the setting is never applied on startup:**
-- Issue: `AppPreferences.cacheMaxMb` defaults to `512` (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:58`), `CacheManager.DEFAULT_MAX_CACHE_BYTES` is 500 MB (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:28,83`), and `maxCacheSizeBytes` is only assigned from user interaction in `SettingsViewModel.setCacheMaxMb` (`app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:88`). A persisted setting is not re-applied at process start.
-- Files: `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt`
-- Impact: Settings UI reports a limit that is not enforced; users who set 2 GB find the cap back at 500 MB after restart.
-- Fix approach: Apply `cacheMaxMb` in a startup initializer (`CacheManager` constructor or `CLIBeatsApp`), and derive both defaults from one constant.
-
-**Empty and placeholder modules:**
-- Issue: `app/src/main/java/com/clibeats/di/AppModule.kt` is an empty `@Module` object; `TimberTelemetryTracker`/`TimberCrashReporter` are logcat-only stubs despite ADR-009/ADR-010 promising telemetry and crash reporting (`app/src/main/java/com/clibeats/telemetry/TimberTelemetryTracker.kt`, `app/src/main/java/com/clibeats/telemetry/TimberCrashReporter.kt`).
-- Files: `app/src/main/java/com/clibeats/di/AppModule.kt`, `app/src/main/java/com/clibeats/telemetry/*.kt`, `app/src/main/java/com/clibeats/di/TelemetryModule.kt`
-- Impact: Misleading naming ("Timber" is not used), dead DI surface, and an assumption that crashes/events are collected when they only reach logcat.
-- Fix approach: Delete `AppModule` or populate it; either implement transports or rename to `LogcatTelemetryTracker` and record the gap in the ADR.
-
-**PO-token WebView is never destroyed and rescrapes unstable `ytcfg` keys:**
-- Issue: `PoTokenGenerator.generatePoTokenInWebView` constructs `WebView(context)` per generation and never calls `destroy()`/`removeJavascriptInterface` (`app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt:81-160`). The extractor JS reads `window.ytcfg.get('PO_TOKEN')`/`data_.PO_TOKEN`, keys that are not part of the public page config, and polls 20× at 500 ms. `visitorData` from the token result is passed to `PlayerRequest`, but the `videoOrVisitorHint` is only ever used as the embed video id.
-- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/YouTubeClientStrategy.kt`
-- Impact: Leaks a WebView (and its renderer) per token generation on a singleton that lives for the process; the fallback likely returns blank tokens and silently disables the InnerTube path; every YouTube config change can break it.
-- Fix approach: Own a single reused `WebView` behind a mutex and destroy it on app teardown; or remove the WebView path entirely and rely on NewPipeExtractor with a documented degradation.
-
-**Unreadable nested-tuple Flow composition in settings:**
-- Issue: `SettingsViewModel.uiState` combines six flows using nested `Triple`/`Pair` destructuring (`app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:35-84`), requiring a comment-free mental model of `(inner, extra, modeName)`.
-- Files: `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt`
-- Impact: Any new preference multiplies the tuple arity; easy to swap fields silently (no named types).
-- Fix approach: Introduce a private `RawSettings` data class and use `combine(vararg flows)` with named fields.
+**Open broken windows and deferred items:**
+- Files: `.planning/WINDOWS.md` (2 open: instrumented DAO tests never run, detekt-suppression deviation), `.planning/STATE.md` (D-02), `.planning/milestones/v1.0-phases/03-database-local-persistence-layer/deferred-items.md`
+- Impact: `/gsd-ship` is designed to block while `open_count > 0`; these have been open since 2026-08-05.
+- Fix approach: run `connectedDebugAndroidTest` on an emulator (CI job) and resolve/waive the detekt entry after the config refinement above.
 
 ## Known Bugs
 
-**Queue auto-advance / skip-next plays nothing for YouTube queues:**
-- Symptoms: A queue started from Search or Library plays the first track, then stops or errors on advance; `PlayerBar` still shows the next title.
-- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:194-214`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:148-160,300-306`
-- Trigger: `LibraryViewModel.onTrackClick` → `setQueue(tracks, index)` with more than one InnerTube track (`app/src/main/java/com/clibeats/presentation/library/LibraryViewModel.kt:44-51`).
-- Workaround: None in-app; play tracks one at a time via `playTrack`.
+**`PoTokenGenerator` leaks WebViews and background polling runnables:**
+- Symptoms: one unreleased `WebView` plus a 500 ms `Handler` poll loop per token generation; after the timeout the WebView still loads video content in the background.
+- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt:82-107` (`WebView(context)` never `destroy()`ed), `:126-150` (poll loop), `:158-164` (timeout `postDelayed` never removed)
+- Trigger: any YouTube stream that falls through `NewPipeExtractorResolver` (i.e. every NewPipe failure ⇒ PO-token fallback).
+- Workaround: none in code; `invalidate()` only clears the token, not the WebView.
+- Fix: keep one long-lived WebView (created/destroyed on the main thread), remove callbacks in `finally`, and call `webView.destroy()`; consider moving PO-token generation out of the app entirely.
 
-**Expired stream URLs break Library/Queue replay:**
-- Symptoms: A YouTube track that played yesterday fails with 403 on every later attempt; the app shows no error.
-- Files: `app/src/main/java/com/clibeats/playback/StreamResolver.kt`, `app/src/main/java/com/clibeats/data/local/entity/SongEntity.kt`
-- Trigger: Persisted `SongEntity.streamUrl` older than the URL `expire` value.
-- Workaround: Clear app data or re-import playlists.
+**PO-token caching assumes a 12-hour TTL that YouTube does not guarantee:**
+- Symptoms: stale tokens are reused because `tokenTtlMs = 12h` is a local guess; hardcoded fallback video id `NJAv_7lHUIU` is embedded as the token-generation page.
+- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt:43,154`
+- Trigger: YouTube rotating token validity, or that placeholder video becoming unavailable.
+- Fix: invalidate on first `LOGIN_REQUIRED`/`403` (currently only `StreamCacheManager` is invalidated in `PlayerAdapter.retryAfterStreamError`), and use a configurable/real video id.
 
-**Playlist import IDs collide and silently overwrite:**
-- Symptoms: Two imported playlists whose names share `String.hashCode()` map to the same `imported_<hash>` id; the later upsert replaces the earlier playlist's mapping.
-- Files: `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:76`
-- Trigger: Importing `clibeats.json` containing two such names (hash collisions are cheap to construct).
-- Workaround: Rename before import; the overwrite is not reversible in-app.
+**Lowering the audio cache limit does not evict immediately (download cache):**
+- Symptoms: `setSongCacheMb` writes `cacheManager.maxCacheSizeBytes` but never calls `evictLruIfNeeded()`; the user sees a smaller limit while the directory stays over it until the next download.
+- Files: `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt:47-54`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt:58-71`
+- Trigger: Settings → Storage → reduce song cache.
+- Fix: call `cacheManager.evictLruIfNeeded()` after the assignment (and expose it as suspend).
 
-**Imported `sourceUrl` values are trusted verbatim:**
-- Symptoms: A crafted `clibeats.json` puts arbitrary `http(s)`/`file` URLs into `Track.streamUrl`, which `PlayerAdapter.toMediaItem` hands straight to ExoPlayer.
-- Files: `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:86`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:306`
-- Trigger: Write access to `Android/data/com.clibeats/files/clibeats_exchange/clibeats.json` (adb, shared-storage tools, rooted device) followed by Settings → Import.
-- Workaround: None. Fix by validating scheme/host and forcing re-resolution for remote providers on import.
+**Queue restore can resume the wrong track when queue rows outlive songs:**
+- Symptoms: `queue_items` has no foreign key to `songs` and `getQueueSongs()` inner-joins, so missing songs silently shorten the restored list while `lastQueueIndex` still refers to the pre-shrink index (`startIndex.coerceIn` then lands on a neighbouring track).
+- Files: `app/src/main/java/com/clibeats/data/local/entity/QueueEntity.kt`, `app/src/main/java/com/clibeats/data/local/dao/QueueDao.kt:28-42`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:146-170`
+- Trigger: deleting a song that is in the persisted queue, then relaunching.
+- Fix: add `@ForeignKey` (CASCADE) on `songId`, or persist the current track id rather than only an index.
 
-**Media notification never appears on Android 13+:**
-- Symptoms: Playback continues but the notification/controls are missing; `PlaybackService.refreshNotification` is annotated `@SuppressLint("MissingPermission", "NotificationPermission")` (`app/src/main/java/com/clibeats/playback/service/PlaybackService.kt:107`).
-- Files: `app/src/main/AndroidManifest.xml`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Trigger: Any device on API 33+ because `POST_NOTIFICATIONS` is neither declared nor requested anywhere (`grep` finds no permission usage under `app/src/main/java`).
-- Workaround: Manually grant notifications in system settings.
+**Home screen always claims the provider is online:**
+- Symptoms: the "System Status" block hardcodes `[ ONLINE ]` and `NetworkMonitor` is never observed anywhere.
+- Files: `app/src/main/java/com/clibeats/presentation/home/HomeScreen.kt:97`, `app/src/main/java/com/clibeats/data/network/NetworkMonitor.kt`, `app/src/main/java/com/clibeats/di/NetworkModule.kt:135-139`
+- Trigger: airplane mode / offline launch.
+- Fix: collect `NetworkMonitor.isOnline` into `HomeUiState` and render `[ OFFLINE ]`; reuse it to skip network prefetch.
 
-**Cache filenames always use `.mp3` regardless of codec:**
-- Symptoms: WebM/Opus and M4A/AAC streams are stored as `<songId>.mp3` (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:40`). Playback works because ExoPlayer sniffs content, but external players, MediaStore scans, and file inspectors see the wrong type.
-- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`
-- Trigger: Caching any non-MP3 stream (the normal YouTube case is M4A/WebM).
-- Workaround: None.
+**Audius playback has no mirror fallback:**
+- Symptoms: `stream()` returns the single `discoveryprovider.audius.co/v1/tracks/{id}/stream` URL; if that discovery node or its 302 target is unhealthy, the track fails after one retry and is skipped (`MAX_CONSECUTIVE_FAILURES = 5`).
+- Files: `app/src/main/java/com/clibeats/data/provider/AudiusMusicProvider.kt:100-104`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:420-445`
+- Trigger: Audius content-node/gateway flakiness (documented in `.planning/debug/2026-08-10-no-audio-and-audius-catalog.md`).
+- Fix: query `/v1/tracks/{id}/stream` against a small list of discovery providers or use the embedded `stream.mirrors` as fallbacks.
 
-**Cache clearing uses a time-travel cutoff:**
-- Symptoms: `clearAllCache` deletes index rows with `deleteBefore(System.currentTimeMillis() + 1000)` (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:75-78`) instead of clearing the table, leaving a 1-second window of orphaned rows pointing at deleted files.
-- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/local/dao/CacheIndexDao.kt`
-- Trigger: Clear cache while a download completes; `getAllCachedAsFlow` reports phantom bytes until the next eviction.
-- Workaround: Restart the app.
+**`highQualityStreaming` preference has no effect:**
+- Symptoms: the toggle persists and renders, but no provider or cache path reads it; `NewPipeExtractorResolver` always picks `audioStreams.maxByOrNull { averageBitrate }`.
+- Files: `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:61-62`, `app/src/main/java/com/clibeats/presentation/settings/SettingsScreen.kt:309`, `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt:82`
+- Trigger: turning "high quality streaming" off (expectation: lower bitrate ⇒ less data).
+- Fix: pass the preference into stream selection (bitrate cap) or remove the setting from the UI.
 
 ## Security Considerations
 
-**Backup exclusions only apply on Android 12+:**
-- Risk: `app/src/main/AndroidManifest.xml:9-10` sets `android:allowBackup="true"` with `android:dataExtractionRules` only. That attribute is ignored below API 31, and no `android:fullBackupContent` is declared, so on API 26–30 Auto Backup ships the Room DB, DataStore, and `clibeats_secure_prefs.xml` to Google Drive.
-- Files: `app/src/main/AndroidManifest.xml`, `app/src/main/res/xml/data_extraction_rules.xml`
-- Current mitigation: Exclusions exist for API 31+ only; restoring encrypted prefs to a new device yields undecryptable ciphertext anyway because the Keystore key is not backed up.
-- Recommendations: Add `res/xml/backup_rules.xml` and reference it with `android:fullBackupContent`, excluding `clibeats_secure_prefs.xml`, DataStore, and `clibeats.db`; consider `allowBackup="false"` given the project's privacy posture.
+**Exported media service accepts every controller:**
+- Risk: `PlaybackService` is `android:exported="true"` and `LibraryCallback.onConnect` calls `super.onConnect` without verifying `controller.packageName`/uid; any installed app can browse the queue metadata (titles/artists/artwork URIs) and drive playback.
+- Files: `app/src/main/AndroidManifest.xml:30-41`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt:130-136`, `app/src/main/AndroidManifest.xml:44-50` (`MediaButtonReceiver` exported)
+- Current mitigation: none beyond platform signature checks on `MediaBrowserService`.
+- Recommendations: keep export for System UI/Android Auto but reject unknown controllers with `ConnectionResult.reject()` unless `controller.isTrusted`; log rejected packages.
 
-**Diagnostics log user search queries and track titles in release builds:**
-- Risk: `DiagnosticLogger` is not gated on `BuildConfig.DEBUG`; `logSearchRequest` writes the raw query (`app/src/main/java/com/clibeats/util/DiagnosticLogger.kt:27-32`) and `logTrackSelected`/`logStreamUrlResolved` write titles, ids, and CDN hosts (`DiagnosticLogger.kt:47-53,86-98`). Any app with `READ_LOGS` or adb access on a debuggable/flashed build can read listening history.
-- Files: `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt`, `app/src/main/java/com/clibeats/di/NetworkModule.kt:53-60`
-- Current mitigation: Only the OkHttp `BODY` logger is debug-gated; the diagnostic logger is not.
-- Recommendations: Wrap `safeLog` in `if (BuildConfig.DEBUG)`, redact query text, and keep `Level.BODY` limited to debug.
+**Release logs contain user queries and listening activity:**
+- Risk: `DiagnosticLogger` writes search queries, track titles/ids, and stream hosts to logcat at INFO with no `BuildConfig.DEBUG` guard; `TimberTelemetryTracker` logs every analytics event.
+- Files: `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt:31,46,55`, `app/src/main/java/com/clibeats/telemetry/TimberTelemetryTracker.kt:12`
+- Current mitigation: `TimberCrashReporter` redacts `Bearer …` tokens only (`app/src/main/java/com/clibeats/telemetry/TimberCrashReporter.kt:14`).
+- Recommendations: gate `DiagnosticLogger` behind `BuildConfig.DEBUG`, or route through a logger with a release-level allowlist.
 
-**Hidden WebView with JavaScript bridge and no network hardening:**
-- Risk: `PoTokenGenerator` enables `javaScriptEnabled`/`domStorageEnabled`, registers `PoTokenBridge`, and loads remote YouTube HTML (`app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt:88-160`). No `network_security_config`, no `setAllowFileAccess(false)`, no `setSafeBrowsingEnabled`, no domain allowlist.
-- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `app/src/main/res/xml/` (no network-security config present)
-- Current mitigation: Only a 10 s timeout and a JSON-string JS bridge that accepts blank values.
-- Recommendations: Disable file/content access on the WebView, restrict navigation via `shouldOverrideUrlLoading`, and only attach the JS interface after the expected origin loads.
+**Cloud backup includes the library database:**
+- Risk: `android:allowBackup="true"`; backup rules exclude only the encrypted prefs and the DataStore file, so `clibeats.db` (9 tables: playlists, liked songs, full play history, local file paths) is uploaded to Google Drive.
+- Files: `app/src/main/AndroidManifest.xml:12`, `app/src/main/res/xml/backup_rules.xml`, `app/src/main/res/xml/data_extraction_rules.xml`
+- Current mitigation: secure prefs are excluded (and correctly documented as undecryptable on a new device).
+- Recommendations: exclude `database` domain entirely (or provide a `db` include list without history), since SAF grants and cache paths do not survive device transfer anyway.
 
-**Exported MediaSessionService accepts control intents from any app:**
-- Risk: `PlaybackService` is `android:exported="true"` (`app/src/main/AndroidManifest.xml:29-35`) and `onGetSession` returns the session to all controllers (`app/src/main/java/com/clibeats/playback/service/PlaybackService.kt:61`). Any installed app can bind or send `com.clibeats.action.PLAY_PAUSE`/`NEXT`/`PREVIOUS` intents.
-- Files: `app/src/main/AndroidManifest.xml`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Current mitigation: Media3 default controller policy; the actions are limited to transport controls.
-- Recommendations: Keep exported (required for media integration) but add a `MediaSession.Callback.onConnect` policy that only accepts system/own UID controllers.
+**Cache filenames derived from attacker/API-controlled ids (path traversal / arbitrary write):**
+- Risk: `File(cacheDir, "$songId.mp3")` uses the raw composite id. `ProviderId.composite()` allows arbitrary `sourceId` (SAF document ids look like `primary:Music/Album/track.flac` and contain `/`), and `PlaylistExchangeManager.import` accepts arbitrary `providerId`/`sourceId` from a JSON file.
+- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt:40`, `app/src/main/java/com/clibeats/domain/provider/ProviderId.kt:13-16`, `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:100-106`
+- Current mitigation: the bug is currently unreachable from the UI because downloads are unwired — it becomes live the moment the download feature is connected.
+- Recommendations: hash the id (`UUID.nameUUIDFromBytes` or SHA-256 hex) before using it as a filename; validate `providerId` against `ProviderRegistry` on import.
 
-**Cache file path is derived from unvalidated `songId`:**
-- Risk: `File(cacheDir, "$songId.mp3")` in `CacheManager.saveTrackToCache` (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:40`) treats provider ids as filenames. Composite ids come from `ProviderId.composite` and imported playlist data, so a crafted id containing `/` or `..` can escape the cache directory.
-- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/domain/provider/ProviderId.kt`, `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`
-- Current mitigation: None structural — providers currently emit safe ids.
-- Recommendations: Sanitize with a regex allowlist before building any file name, and reject ids that normalize outside `cacheDir`.
+**WebView executes remote page script with a JS bridge:**
+- Risk: `WebView` with `javaScriptEnabled` + `domStorageEnabled` loads `youtube.com/embed/...` and registers `@JavascriptInterface object` as `PoTokenBridge`; no `shouldOverrideUrlLoading` restriction, no `setAllowFileAccess(false)` call.
+- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt:82-107`
+- Current mitigation: the bridge only hands back token/visitor strings.
+- Recommendations: restrict navigation to the youtube.com host, disable file/content access explicitly, and destroy the WebView after use.
 
-**Spoofed browser headers against YouTube endpoints:**
-- Risk: `InnerTubeHeaderInterceptor` stamps a desktop Chrome UA plus `Origin`/`Referer` (`app/src/main/java/com/clibeats/data/provider/api/InnerTubeHeaderInterceptor.kt:18-40`), and `NewPipeExtractorResolver` does the same for its extractor downloads (`app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt:47-64`). This is deliberate anti-bot evasion and a Terms-of-Service exposure.
-- Files: `app/src/main/java/com/clibeats/data/provider/api/InnerTubeHeaderInterceptor.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`, `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`
-- Current mitigation: Multi-client fallback and stream caching; the legal notice in `README.md` shifts responsibility to users.
-- Recommendations: Keep the behavior documented in `docs/adr/ADR-005-provider-integration-innertube.md` and ensure provider failures degrade gracefully (currently they do not — see silent failures).
+**Token storage lifecycle:**
+- Risk: `EncryptedSharedPreferences` is excluded from backup (good) but uses a deprecated alpha library; `AppPreferences` keeps an in-memory mirror via `OnSharedPreferenceChangeListener` that is never unregistered (singleton, so bounded).
+- Files: `app/src/main/java/com/clibeats/di/StorageModule.kt:22-52`, `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:118-137`
+- Recommendations: migrate to Tink Keystore as ADR-003 planned; drop the listener when migrating.
+
+**Export writes signed stream URLs into a user-visible file:**
+- Risk: `CliBeatsTrack.sourceUrl` is populated from `song.streamUrl`, which for YouTube is a signed `googlevideo` URL with `expire=`; exported `clibeats.json` therefore contains short-lived signed URLs (and full artwork URLs) that are useless on import but leak request parameters.
+- Files: `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:70-80`, `:148` (`safeStreamUrl` keeps only local/`file` URLs on import)
+- Recommendations: never export `sourceUrl`/`artworkUrl` for non-local providers.
 
 ## Performance Bottlenecks
 
-**DataStore write every 500 ms during playback:**
-- Problem: `PlayerAdapter.startPositionTicker` calls `updateState()` every 500 ms (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:70-79,324`), which emits a new `PlaybackState` with a changed `positionMs`. `PlaybackRepositoryImpl` collects that flow and calls `appPreferences.saveQueueMetadata(...)` on every emission (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:70-84`), which performs a `DataStore.edit` (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:118-130`).
-- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`
-- Cause: Position (a high-frequency value) is persisted alongside low-frequency queue metadata; the collector has no `distinctUntilChanged`/sampling.
-- Improvement path: Persist queue index/position only on `onMediaItemTransition`, pause, stop, or a lifecycle callback (e.g. every 15–30 s or on `ON_STOP`), never per tick.
+**Blocking DataStore reads during Hilt graph construction (cold start):**
+- Problem: `runBlocking { appPreferences.*.first() }` runs on whichever thread first requests the singleton — the main thread at startup for both the Coil cache and the Media3 cache.
+- Files: `app/src/main/java/com/clibeats/di/ImageLoaderModule.kt:35`, `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt:53`
+- Cause: DataStore's first read includes file IO; the DoD budget is cold start < 2 s.
+- Improvement path: read the limits asynchronously after startup (default value first, then `collect` and apply), e.g. expose `applyLimits()` on `MediaCaches`/`ResizableDiskCache` called from a coroutine.
 
-**Blocking Room query on the main thread for every media item:**
-- Problem: `PlayerAdapter.Track.toMediaItem()` calls `runBlocking { cacheManager.getCachedFile(id) }` (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:300-301`). This runs once per queue item while building `MediaItem`s on the caller's thread (main thread for UI-triggered queue changes and player callbacks).
-- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`
-- Cause: Cached-file lookup is asynchronous but media-item construction is synchronous.
-- Improvement path: Pre-resolve cached files off-main and pass a `Map<trackId, File>` into `setQueue`/`restoreQueue`, or build media items in a coroutine and hand the prepared list to ExoPlayer on the main thread.
+**`SimpleCache` is constructed eagerly on the main thread:**
+- Problem: `MediaCaches` builds `SimpleCache(...)` in its constructor (`MediaCaches.kt:55-56`), and `PlaybackModule.provideExoPlayer` injects `mediaCaches` non-lazily (`app/src/main/java/com/clibeats/di/PlaybackModule.kt:66`), so the cache index/database is opened during first player request.
+- Cause: no `Lazy`/background init; SimpleCache initialization scans the cache directory.
+- Improvement path: construct `SimpleCache` on `Dispatchers.IO` (`dagger.Lazy<MediaCaches>` everywhere) or defer until the first `prepare()`.
 
-**Whole-layout recomposition at 2 Hz:**
-- Problem: `MainLayout` collects `playbackState` (`app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt:60-68`) and derives the progress fraction, so the nav suite, top bar, and content slot are recomposed every tick.
-- Files: `app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt`, `app/src/main/java/com/clibeats/presentation/component/PlayerBar.kt`
-- Cause: One broad `State` read in the root composable; progress is computed in the shell.
-- Improvement path: Read `positionMs` only inside `PlayerBar` (or a `derivedStateOf`/`graphicsLayer`-driven progress), keeping the shell on a coarse state.
+**Synchronous cache metadata reads on the main thread every 500 ms:**
+- Problem: `PlayerAdapter.updateState()` calls `streamResolver.knownBitrateKbps(...)`, which falls through to `MediaCaches.cachedBitrateKbps()` → `SimpleCache.getContentMetadata()` (SQLite) on the main thread, twice a second while playing, whenever the format reports no bitrate (typical for YouTube).
+- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:386`, `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt:76-85`, ticker at `PlayerAdapter.kt:86-92` (`POLL_INTERVAL_MS = 500`)
+- Cause: bitrate lookup is treated as cheap; it is a disk/DB call.
+- Improvement path: memoize per track id in `PlayerAdapter` (like `localBitrateKbps`), do the lookup off the main thread, and only recompute on track change.
 
-**YouTube stream resolution is a long sequential chain:**
-- Problem: `YouTubeMusicProvider.stream` runs cache → NewPipeExtractor → PO-token WebView (up to 10 s) → `FALLBACK_CHAIN` clients sequentially (`app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt:96-200`). The UI has no "resolving" state.
-- Files: `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/YouTubeClientStrategy.kt`
-- Cause: Every stage must fail before the next starts, and failures are only logged.
-- Improvement path: Race safe stages where possible, cap total resolution time, and emit a `Resolving` UI state so the delay is visible.
+**Whole playback tree recomposes twice per second:**
+- Problem: the ticker publishes a new `PlaybackState` (position, buffered) every 500 ms; `PlayerBarHost`, `NowPlayingScreen`, `QueueScreen` and `HomeScreen` all `collectAsState()` the same object.
+- Files: `app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt:156-197`, `app/src/main/java/com/clibeats/presentation/player/NowPlayingScreen.kt:95`, plus 31 `collectAsState()` call sites
+- Cause: single monolithic state object; no lifecycle-aware collection (`collectAsStateWithLifecycle` is used nowhere).
+- Improvement path: split position/progress into its own state read only inside the progress composable, use `collectAsStateWithLifecycle`, and use `derivedStateOf` for formatted strings.
 
-**Insertion-order eviction instead of LRU:**
-- Problem: `CacheManager.evictLruIfNeeded` sorts solely by `cachedAt` (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:59-73`); `cachedAt` is never refreshed on a cache hit, and there is no `lastAccessedAt` column.
-- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/local/entity/CacheIndexEntity.kt`
-- Cause: The eviction key records creation, not use.
-- Improvement path: Add `lastAccessedAt` and update it on `getCachedFile` hits; serialize save/evict with a mutex to avoid size races.
+**Position persisted to DataStore every 5 s while playing:**
+- Problem: `persistPlaybackPosition()` writes 4 keys via `dataStore.edit` every `POSITION_SAVE_STEP_MS` (5 s) for the entire playback session.
+- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:125-141,272`
+- Cause: no throttle beyond the 5 s bucket; DataStore rewrites the whole preferences file.
+- Improvement path: throttle to 30 s / on pause / on `onStop`, and batch with `saveQueueMetadata` writes.
 
-**Metadata fan-out on Internet Archive search:**
-- Problem: `rankAndMap` issues up to 8 additional `api.metadata` calls per search with semaphore 4 (`app/src/main/java/com/clibeats/data/provider/InternetArchiveMusicProvider.kt:110-144`).
-- Files: `app/src/main/java/com/clibeats/data/provider/InternetArchiveMusicProvider.kt`
-- Cause: Search docs do not include file metadata; each item needs a detail fetch.
-- Improvement path: Cache metadata per identifier and reduce `METADATA_CAP` if search latency is user-visible.
+**Full queue rewrite on every queue mutation:**
+- Problem: `persistQueueItems` upserts every queued song and `replaceQueue` deletes + reinserts all rows for each emission; adding 20 songs one by one triggers 20 full rewrites.
+- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:100-106,174-190`
+- Improvement path: `debounce(500)` the collection and diff against the previous persisted list.
 
-**Library groups the entire song table on every emission:**
-- Problem: `LibraryViewModel` groups all tracks into artists/albums synchronously in `map` (`app/src/main/java/com/clibeats/presentation/library/LibraryViewModel.kt:21-42`); `getAllTracksAsFlow` has no pagination.
-- Files: `app/src/main/java/com/clibeats/presentation/library/LibraryViewModel.kt`, `app/src/main/java/com/clibeats/data/local/dao/SongDao.kt`
-- Cause: Full-table Flow plus in-memory grouping.
-- Improvement path: Use `PagingSource` and aggregate counts in SQL once the library grows past a few thousand rows.
+**Coil prefetch without size hints:**
+- Problem: `imageLoader.enqueue(ImageRequest.Builder(context).data(url).build())` with no `.size(...)`, both in `prefetchArtwork` and `MainLayout`'s hi-res preload.
+- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:240-248`, `app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt:163-168`
+- Cause: decodes at original resolution into the memory cache (25 % of heap) for every cover.
+- Improvement path: `.size(ARTWORK_FULL_PX)` (and a smaller size for the notification) so the memory cache holds a predictable bitmap.
+
+**Internet Archive search fans out per query:**
+- Problem: each search performs up to `METADATA_CAP = 8` `/metadata/{id}` calls (4 in parallel) before returning anything, and `trending` does the same.
+- Files: `app/src/main/java/com/clibeats/data/provider/InternetArchiveMusicProvider.kt:112-150`
+- Improvement path: return search hits immediately and backfill duration/file selection lazily, or cache metadata per identifier.
 
 ## Fragile Areas
 
-**YouTube provider stack (highest fragility):**
-- Files: `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/StreamUrlDeobfuscator.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/StreamCacheManager.kt`, `app/src/main/java/com/clibeats/data/provider/api/InnerTubeHeaderInterceptor.kt`, `app/src/main/java/com/clibeats/data/provider/api/InnerTubeApi.kt`
-- Why fragile: Entirely reverse-engineered/undocumented behavior (InnerTube payloads, `ytcfg` keys, `googlevideo` signature params, bot checks). Each stage has its own silent failure mode, and several are suppression-heavy with no behavioral tests.
-- Safe modification: Change one stage at a time, keep the NewPipe-first fallback ordering, and manually smoke-test real playback (`Attention`, `Blinding Lights`) before merging. Do not remove `StreamCacheManager` expiry margins.
-- Test coverage: `app/src/test/java/com/clibeats/data/provider/YouTubeMusicProviderTest.kt` covers request construction, not fallback ordering, cache expiry, WebView token generation, or cipher handling.
+**YouTube extraction stack (`NewPipeExtractorResolver` + `PoTokenGenerator` + `StreamCacheManager` + `YouTubeClientStrategy`):**
+- Files: `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`, `.../PoTokenGenerator.kt`, `.../StreamCacheManager.kt`, `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt:90-185`
+- Why fragile: three undocumented fallbacks (NewPipe → InnerTube with PO token → per-client fallback chain), all dependent on an unofficial pinned extractor version and on YouTube anti-bot behaviour; `NewPipe.init` is global and initialized lazily with an `AtomicBoolean`.
+- Safe modification: keep all extraction behind `YouTubeMusicProvider.stream()`, never call `ServiceList`/`api.player` from UI or repositories, and add a diagnostic log line per fallback decision (already partially present via `DiagnosticLogger`).
+- Test coverage: none for any of these four classes.
 
-**Playback pipeline (singleton ExoPlayer shared by app and service):**
-- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/playback/StreamResolver.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Why fragile: One `ExoPlayer` instance provided by `app/src/main/java/com/clibeats/di/PlaybackModule.kt:21-32` is driven both by UI calls and by the foreground service's hand-rolled notification. `PlayerAdapter` mirrors ExoPlayer state into its own `trackList`, and every mirroring bug (queue reordering, restore, skip) desynchronizes the two. `PlaybackService.onDestroy` deliberately does not release the player (`PlaybackService.kt:66-77`) — a subtle invariant.
-- Safe modification: Keep `PlayerAdapter` as the only mutator of ExoPlayer; never release the player from the service; add the queue-resolution fix only after tests cover `restoreQueue`/`moveTrack` index mapping.
-- Test coverage: `PlayerAdapterTest.kt`, `PlayerAdapterQueueTest.kt`, `PlaybackRepositoryImplTest.kt`, `PlaybackIntegrationTest.kt`; `PlaybackService` has no tests at all.
+**`StreamResolver` / `TrackUriResolver` resolution inside ExoPlayer's loader thread:**
+- Files: `app/src/main/java/com/clibeats/playback/TrackUriResolver.kt:25-45`, `app/src/main/java/com/clibeats/playback/StreamResolver.kt:26-68`
+- Why fragile: `runBlocking` around network extraction inside `ResolvingDataSource.Resolver.resolveDataSpec`; a slow provider stalls the loader up to OkHttp's 20 s read timeout, and the placeholder `Track` it builds has blank title/artist, so providers that need metadata (Jamendo/IA re-fetch by id anyway) can behave differently from the UI path. Expiry detection is a regex on `expire=` (`StreamResolver.kt:85`), so any provider that signs differently is treated as non-expiring.
+- Safe modification: keep the placeholder contract (`p` + `id` params) stable; any change to `ProviderId` format breaks cached queue entries and persisted `streamUrl`s.
+- Test coverage: none.
 
-**Playlist import/export:**
-- Files: `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt`, `app/src/main/java/com/clibeats/data/playlist/CliBeatsFile.kt`, `app/src/main/java/com/clibeats/data/playlist/CliBeatsFileCodec.kt`
-- Why fragile: Depends on `getExternalFilesDir(null)` (user- and OEM-clearable), derives ids from `name.hashCode()`, trusts file URLs, and performs many separate DAO writes without an enclosing transaction — a mid-import failure leaves a partially imported playlist.
-- Safe modification: Wrap `import()` in `withTransaction`, introduce a stable content-hash id, and validate URLs before persisting.
-- Test coverage: `app/src/test/java/com/clibeats/data/playlist/CliBeatsFileCodecTest.kt` only; no import/export flow tests.
+**Error recovery is single-shot and stateful:**
+- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:406-445` (`skipAfterError` 406, `retryAfterStreamError` 423)
+- Why fragile: one retry per media id (`retriedMediaId`), `consecutiveFailures` only resets on `STATE_READY` (not on a manual play/skip), and `retryAfterStreamError` only strips `http` URLs before re-preparing. A stream that 403s twice is permanently skipped until the queue changes.
+- Safe modification: add instrumentation around `onPlayerError` before changing the retry policy; keep `MAX_CONSECUTIVE_FAILURES` behaviour (queue-wide outage) intact.
+- Test coverage: `PlayerAdapterQueueTest`/`PlayerAdapterTest` cover queue ops; retry/skip paths are untested.
 
-**Foreground service notification lifecycle:**
-- Files: `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Why fragile: The notification is built manually around `MediaSession`, `startForeground` is invoked in `onStartCommand` for every start, `refreshNotification` suppresses missing-permission lint, and there is no `POST_NOTIFICATIONS` handling. There is no `WAKE_LOCK` permission or `setWakeMode` anywhere in the manifest or `PlaybackModule`, so CPU sleep can stall network streaming after screen-off.
-- Safe modification: Add the notification permission flow first, then test FGS start/stop, notification taps, and screen-off playback on API 26 and 34 emulators.
-- Test coverage: None (no unit or instrumentation tests).
+**Background service start is best-effort and excepted away:**
+- Files: `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:48-53`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt:78-81`
+- Why fragile: `runCatching { context.startService(...) }` silently swallows `IllegalStateException` when Android forbids a background start; playback then runs with no foreground notification and can be killed. `onTaskRemoved` deliberately keeps the service alive, which on Android 14+ depends on the foreground-service type being posted in time.
+- Safe modification: test on API 34 with the app swiped away; if you switch to `startForegroundService`, guarantee `startForeground` within 5 s.
 
-**Telemetry/crash reporting contracts:**
-- Files: `app/src/main/java/com/clibeats/telemetry/TelemetryTracker.kt`, `app/src/main/java/com/clibeats/telemetry/CrashReporter.kt`, `app/src/main/java/com/clibeats/telemetry/TimberTelemetryTracker.kt`, `app/src/main/java/com/clibeats/telemetry/TimberCrashReporter.kt`
-- Why fragile: The interfaces look production-ready but only write to logcat; ADR-010 describes privacy guarantees that have no implementation to verify.
-- Safe modification: Keep the interfaces; swap implementations when real transports land.
+**Local library scanning conflates "permission revoked" with "folder empty":**
+- Files: `app/src/main/java/com/clibeats/data/scan/LocalMusicScanner.kt:69-110`
+- Why fragile: a failed `listDocuments` becomes `emptyListing`, the "delete songs not found" pass then removes those songs (cascading to playlist/liked rows), and the M3U mirror playlists are deleted too. A transient SAF failure, ejected SD card, or revoked grant wipes the user's local library entries and playlists.
+- Safe modification: only run deletions when every tree listed successfully; otherwise mark the scan as partial and leave rows untouched.
+- Test coverage: only `PlaylistFileParserTest` exists; the scanner itself is untested.
+
+**Local artwork files are written forever and never cleaned:**
+- Files: `app/src/main/java/com/clibeats/data/scan/LocalMusicScanner.kt:225,244-253`
+- Why fragile: every changed file writes `filesDir/local_artwork/<uuid>.img` (no size cap); deleting songs (`songDao.deleteByIds`) never removes the image, so `filesDir` grows unbounded and is included in device backups.
+- Safe modification: store artwork in `cacheDir` (or delete alongside `deleteByIds`).
+
+**`AdjustableLruEvictor` size accounting depends on callbacks alone:**
+- Files: `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt:118-182`
+- Why fragile: `onCacheInitialized()` is a no-op and `currentSize` starts at 0, so the evictor's view of existing spans relies on Media3 replaying `onSpanAdded` at init; `trim()` synchronizes on the cache instance to avoid deadlock, which is subtle and untested. A wrong `currentSize` either never evicts or over-evicts.
+- Safe modification: add a unit test with a fake `Cache` that verifies `trim()` after a simulated startup population; do not change the `TreeSet` comparator without re-checking `CacheSpan` equality.
+
+**Playlist import/export assumes a well-formed file:**
+- Files: `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt:84-138`, `app/src/main/java/com/clibeats/data/playlist/CliBeatsFileCodec.kt`
+- Why fragile: imports run inside `withTransaction` only when `database != null`; with the nullable-DI constructor they can partially apply. Provider ids from the file are accepted verbatim, so a typo yields tracks that can never resolve a stream.
+- Safe modification: validate `providerId` against `ProviderRegistry` and reject unknown ids; remove the nullable database path.
 
 ## Scaling Limits
 
-**In-memory stream cache:**
-- Current capacity: Unbounded `ConcurrentHashMap<String, ExtractedStreamInfo>` (`app/src/main/java/com/clibeats/data/provider/youtube/StreamCacheManager.kt:11-49`), entries dropped only on expiry (URL TTL + 60 s) or `clear()`.
-- Limit: Long sessions with many tracks retain every resolved URL plus metadata until process death.
-- Scaling path: Cap entries (LRU map) or persist the cache with TTL; small strings, so the risk is modest but unbounded.
+**Cache directories live under `cacheDir`:**
+- Current capacity: song cache bounded by `cacheMaxMb` (default 512 MB), Coil artwork by `artworkCacheMb` (default 128 MB), both in `context.cacheDir`.
+- Limit: Android may clear `cacheDir` under storage pressure, invalidating `CacheIndexEntity` rows and silently removing "downloaded" tracks (the index tolerates it via `file.exists()`, but the index rows leak).
+- Scaling path: keep explicit downloads in `filesDir`, keep streaming caches in `cacheDir`, and reconcile the index on startup.
 
-**Audio cache:**
-- Current capacity: 500 MB hard cap shared by streaming cache and "downloads" (`app/src/main/java/com/clibeats/data/cache/CacheManager.kt:28`); eviction by `cachedAt` ascending.
-- Limit: Frequently replayed tracks are evicted before one-off tracks; there is no per-file progress or partial-file accounting; concurrent save/evict can overshoot the cap transiently.
-- Scaling path: Access-time-based LRU, a mutex around save+evict, and a separate durable download store.
+**Unbounded history and `LIKE '%query%'` search:**
+- Current capacity: `history` grows one row per play; `SongDao.searchAsFlow`/`searchLocalAsFlow` scan with leading-wildcard LIKE on title/artist/album.
+- Limit: history size is unbounded (`getPlayedOnlineAsFlow` groups all rows per query), and full-table LIKE scans degrade past a few thousand local tracks.
+- Scaling path: prune history to N days, index `history(song_id)` (currently absent, see `app/src/main/java/com/clibeats/data/local/entity/HistoryEntity.kt`), and move local search to FTS4/FTS5.
 
-**Room library tables:**
-- Current capacity: Unbounded `songs`, `playlists`, `playlist_song_cross_ref`, `queue_items`, `history`; no pagination in `SongDao`/`PlaylistDao` flows.
-- Limit: `LibraryViewModel` sorts/groups the full table on the main thread at every emission.
-- Scaling path: `PagingSource` + SQL aggregates (counts per artist/album) before implementing a MediaStore scan, which can add thousands of rows at once.
+**Artwork memory cache at 25 % of heap:**
+- Current capacity: `MEMORY_CACHE_PERCENT = 0.25` in `app/src/main/java/com/clibeats/di/ImageLoaderModule.kt:20`.
+- Limit: prefetching full-resolution covers (see above) can fill it quickly on low-RAM devices and push `AsyncImage` back to disk.
+- Scaling path: bound sizes at request time and lower the percentage on `ActivityManager.isLowRamDevice`.
 
 ## Dependencies at Risk
 
-**NewPipeExtractor v0.26.4 (JitPack, GPLv3) — license and stability risk:**
-- Risk: `com.github.TeamNewPipe:NewPipeExtractor:v0.26.4` is pulled from JitPack (`gradle/libs.versions.toml:28`, `settings.gradle.kts:9`) and is licensed **GPLv3**, while this project ships under MIT (`README.md`). It is not mentioned in `docs/LICENSES.md` at all, which contradicts `docs/adr/ADR-011-production-release-distribution.md`'s claim of "100% open source license compliance verified". It is also a pinned snapshot of a reverse-engineered extractor.
-- Impact: (1) Legal: distributing an MIT-licensed app that links GPLv3 code is a copyleft violation unless the whole app is GPL-compatible — this is the single largest release blocker. (2) Technical: any YouTube change can break the primary stream path; the pinned commit only advances when the team bumps it.
-- Migration plan: Decide licensing first — either relicense the app under GPLv3 and document it, or isolate/replace NewPipe with an in-house extractor (or drop YouTube as a bundled provider). Track upstream releases and add a dependency-license check to CI.
+**`org.schabi.newpipe:extractor` (0.27.1, pinned):**
+- Risk: unofficial, fast-moving extractor that breaks whenever YouTube changes its player/anti-bot flow; the repo already contains an in-progress investigation (`.planning/debug/yt-po-token-investigation.md`) describing `LOGIN_REQUIRED` across all InnerTube clients.
+- Impact: primary YouTube stream path fails, forcing the WebView PO-token fallback (which leaks memory, see above).
+- Migration plan: treat extraction as a remote/configurable concern; keep the multi-provider registry (Audius/IA/Jamendo/local already work) and degrade YouTube gracefully with a user-facing message instead of silent skips.
 
-**androidx.security:security-crypto 1.1.0-alpha06:**
-- Risk: Deprecated alpha with known keyset-corruption and OEM Keystore issues (`gradle/libs.versions.toml:25`).
-- Impact: Startup crash path in `StorageModule` and auth-token storage.
-- Migration plan: Tink `KeystoreAesGcm` per `docs/adr/ADR-003-encrypted-storage-local-persistence.md`.
+**InnerTube internal endpoints + hardcoded client strategies:**
+- Risk: `app/src/main/java/com/clibeats/data/provider/api/InnerTubeApi.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/YouTubeClientStrategy.kt`, and `InnerTubeHeaderInterceptor` encode unofficial `youtubei/v1` request shapes that can be invalidated server-side without notice.
+- Impact: search and streaming for the default provider (`DEFAULT_PROVIDER_ID = "youtube_music"`).
+- Migration plan: keep it behind `YouTubeMusicProvider`, add a fallback to another provider on `ProviderResult.Error` (currently the UI just shows the error).
 
-**Implicit Truth dependency in 32 test files:**
-- Risk: Test sources import `com.google.common.truth.Truth` (e.g. `app/src/test/java/com/clibeats/license/LicenseComplianceTest.kt:3`) but `com.google.truth:truth` is not declared in `gradle/libs.versions.toml` or `app/build.gradle.kts`; it resolves only transitively (via `room-testing`/Compose test artifacts).
-- Impact: A routine dependency bump can break compilation of the majority of the test suite with `Unresolved reference: Truth`.
-- Migration plan: Declare Truth explicitly as `testImplementation`.
+**`androidx.security:security-crypto` 1.1.0-alpha06:**
+- Risk: alpha SDK with deprecated APIs (see Tech Debt).
+- Impact: token storage; a major upgrade changes both the API and the on-disk format (needs a re-encryption migration).
+- Migration plan: Tink `KeystoreAesGcm` behind the existing `SharedPreferences` façade in `StorageModule`/`AppPreferences`.
 
-**androidx.media3 1.4.1 / Room 2.6.1 / AGP 8.5.2 / Kotlin 2.0.21 / Compose BOM 2024.09.03 / Coil 2.7.0:**
-- Risk: All roughly a year+ behind current stable lines; media3 1.4.x predates several session/notification fixes; Coil 2.x is in maintenance while 3.x is current.
-- Impact: Cumulative bug fixes and new test APIs unavailable; the `compileSdk 34` plus `suppressUnsupportedCompileSdk=35` combination is already forced.
-- Migration plan: Bump deliberately in one PR per major component, re-running `verifyPaparazziDebug` and notification smoke tests (media3 changes notification defaults).
-
-**No dependency-update or vulnerability automation:**
-- Risk: `.github/` contains only `workflows/ci.yml` — no Dependabot/Renovate config, no OWASP dependency-check, no secret scanning, no SAST.
-- Impact: Stale/fragile dependencies (above) are discovered manually.
-- Migration plan: Add `.github/dependabot.yml` covering Gradle, plus a license-check step in CI.
+**Media3 `UnstableApi` surface used broadly:**
+- Risk: `@OptIn(UnstableApi::class)` / `@file:Suppress("ForbiddenImport")` appear in caching, playback and DI files (`MediaCaches.kt`, `ResizableDiskCache.kt` (experimental Coil), `PlaybackModule.kt`, `PlayerAdapter.kt`, `TrackUriResolver.kt`, `LocalOrRemoteMediaSourceFactory.kt`).
+- Impact: minor-version upgrades can change `CacheDataSource`, `ResolvingDataSource`, `CacheEvictor` or `SimpleCache` semantics without a deprecation cycle.
+- Migration plan: pin the media3 version in the catalog and add instrumentation tests for cache + resolver before each bump.
 
 ## Missing Critical Features
 
-**No user-facing playback error/resolving state:**
-- Problem: `PlaybackState` has no error or resolving field, so failures and multi-second stream resolution are invisible (`app/src/main/java/com/clibeats/domain/model/PlaybackState.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`).
-- Blocks: Trustworthy playback UX, retry-on-403 behavior, and any useful debugging by non-developers.
+**Downloads / true offline mode:**
+- Problem: no UI entry point for `TrackDownloadManager`; "offline" in Library means "local scanned files" only (`app/src/main/java/com/clibeats/presentation/library/LibraryScreen.kt:83`).
+- Blocks: offline listening of streamed catalogs; the settings screen already promises cache management for "songs", which users will read as downloads.
 
-**No notification permission flow (Android 13+):**
-- Problem: `POST_NOTIFICATIONS` is absent from `app/src/main/AndroidManifest.xml` and never requested; `PlaybackService` suppresses the lint instead.
-- Blocks: Media controls on modern devices, and passing Play policy review.
+**Network awareness:**
+- Problem: `NetworkMonitor` exists but is not injected anywhere; nothing disables Home trending, search, or prefetch when offline.
+- Blocks: graceful offline UX; currently the user gets provider errors and repeated failed stream resolutions.
 
-**No on-device (MediaStore) library and no add-to-library path:**
-- Problem: `LocalMusicProvider` explicitly documents MediaStore scanning as future work (`app/src/main/java/com/clibeats/data/provider/LocalMusicProvider.kt:17-19`); the only writers to `songs` are the import path and queue persistence. `READ_MEDIA_AUDIO`/`READ_EXTERNAL_STORAGE` is not declared.
-- Blocks: The "Local" provider is non-functional for un-imported music; "Library" cannot be populated from search/player.
+**Real crash reporting / telemetry sink:**
+- Problem: `TelemetryTracker` and `CrashReporter` are bound to `TimberTelemetryTracker`/`TimberCrashReporter`, which only call `Log.*`, and neither interface is injected into any consumer.
+- Blocks: field validation promised in `.planning/PROJECT.md` ("beta feedback, crash telemetry review").
 
-**No real telemetry/crash reporting despite ADR-009/ADR-010:**
-- Problem: Both interfaces resolve to logcat-only stubs.
-- Blocks: Any beta feedback loop; crash diagnosis in the field.
+**Sleep timer survives process death / backgrounding:**
+- Problem: the countdown is a `viewModelScope` coroutine (`app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt:163-197`); it dies when the ViewModel clears, leaving audio playing past the requested time.
+- Blocks: reliable sleep timer for background listening.
 
-**No wake-lock support for background streaming:**
-- Problem: Neither `android.permission.WAKE_LOCK` in `app/src/main/AndroidManifest.xml` nor `setWakeMode(C.WAKE_MODE_NETWORK)` in `app/src/main/java/com/clibeats/di/PlaybackModule.kt`; screen-off playback of network streams can stall.
-- Blocks: Reliable background playback, a headline README feature.
-
-**No license attribution for the GPL dependency:**
-- Problem: `docs/LICENSES.md` omits NewPipeExtractor entirely while claiming a complete inventory, and `app/src/test/java/com/clibeats/license/LicenseComplianceTest.kt` only greps for AndroidX/Media3/OkHttp strings.
-- Blocks: A compliant release; the existing "compliance test" gives false assurance.
+**Settings persistence for the "high quality" toggle:**
+- Problem: see Known Bugs — the value is stored but not honoured.
 
 ## Test Coverage Gaps
 
-**Queue resolution and playback failure paths (Highest priority):**
-- What's not tested: Resolution of queue items 2..n, `Uri.EMPTY` media items, `onPlayerError` recovery, stale-URL retry, and error surfacing to UI.
-- Files: `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`, `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/playback/StreamResolver.kt`
-- Risk: The most visible user-facing failures (silent queue breakage) are completely uncovered.
+**Untrusted/extraction code is entirely untested:**
+- What's not tested: PO-token WebView lifecycle, NewPipe extraction/format selection, stream URL cache expiry, `StreamResolver` expiry regex, `TrackUriResolver` placeholder resolution.
+- Files: `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `.../NewPipeExtractorResolver.kt`, `.../StreamCacheManager.kt`, `app/src/main/java/com/clibeats/playback/StreamResolver.kt`, `app/src/main/java/com/clibeats/playback/TrackUriResolver.kt`
+- Risk: the most fragile, most provider-dependent code has zero regression protection; a library bump silently breaks playback.
 - Priority: High
 
-**YouTube resolution chain (High):**
-- What's not tested: Fallback ordering, `StreamCacheManager` expiry boundaries, `StreamUrlDeobfuscator.parseCipher`/`deobfuscateSignature`, `PoTokenGenerator` (WebView path), and `NewPipeExtractorResolver` error mapping.
-- Files: `app/src/main/java/com/clibeats/data/provider/youtube/*`, `app/src/test/java/com/clibeats/data/provider/YouTubeMusicProviderTest.kt`
-- Risk: Default provider regressions ship silently.
+**Caching layer untested for eviction/resize semantics:**
+- What's not tested: `AdjustableLruEvictor` accounting, `MediaCaches.setSongLimitMb`/`setArtworkLimitMb`, `ResizableDiskCache.resize`.
+- Files: `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt`, `app/src/main/java/com/clibeats/data/cache/ResizableDiskCache.kt` (only `CacheManagerTest` exists)
+- Risk: over-limit growth or accidental mass eviction goes unnoticed.
 - Priority: High
 
-**UI screens (High):**
-- What's not tested: `HomeScreen.kt`, `SearchScreen.kt`, `LibraryScreen.kt`, `PlaylistScreen.kt`, `QueueScreen.kt`, `MoreScreen.kt`, `SettingsScreen.kt`, `MainLayout.kt`, and the player screen have no Compose UI tests; only `PlayerBar`, `SongTableRow`, and `SearchScreenKt` have coverage (`app/src/test/java/com/clibeats/presentation/component/`, `app/src/test/java/com/clibeats/presentation/search/SearchScreenKtTest.kt`), plus four Paparazzi snapshots in `app/src/test/java/com/clibeats/theme/`.
-- Files: `app/src/main/java/com/clibeats/presentation/*`
-- Risk: Layout/interaction regressions (keyboard navigation, dense table rendering, empty states) are invisible.
+**Local scanner and playlist exchange untested end to end:**
+- What's not tested: `LocalMusicScanner.scan()` (permission revocation, unchanged-file skipping, stale-row deletion), `PlaylistExchangeManager.import/export`, M3U mirror sync.
+- Files: `app/src/main/java/com/clibeats/data/scan/LocalMusicScanner.kt`, `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt`
+- Risk: the data-loss scenario above (revoked folder wipes library) has no test that would catch a fix or a regression.
 - Priority: High
 
-**Foreground service and notification (Medium):**
-- What's not tested: `PlaybackService` lifecycle, action intents, notification content/actions, `startForeground` on API 26 vs 34.
+**Playback service / media session callbacks untested:**
+- What's not tested: `PlaybackService.LibraryCallback` (root, children, resumption, `onSetMediaItems`), `afterRestore` ordering.
 - Files: `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Risk: Notification/FGS crashes and permission regressions.
+- Risk: the "resume card" contract (why `MediaLibraryService` is used at all) can regress without any failing test.
 - Priority: Medium
 
-**Storage, caching, and exchange flows (Medium):**
-- What's not tested: cache eviction ordering and save/evict races, `TrackDownloadManager` failure/cancel, `PlaylistExchangeManager` import/export end-to-end, `AppPreferences` Keystore fallback.
-- Files: `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt`, `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt`, `app/src/test/java/com/clibeats/data/cache/CacheManagerTest.kt`
-- Risk: Data-loss and crash bugs found only by users.
+**Instrumented tests never run; CI does not exercise them:**
+- What's not tested in CI: `app/src/androidTest/java/com/clibeats/data/local/dao/*` (Room DAO integration), Compose UI tests (`androidTestImplementation` deps present, `manifest` debug artifact declared).
+- Files: `.github/workflows/ci.yml` (only `testDebugUnitTest`), `app/src/androidTest/**`, `.planning/WINDOWS.md` broken window #2
+- Risk: Room migrations and UI flows are unverified on device; DoD items "UI & Compose Tests" and "≥85 % coverage" are not enforced anywhere.
 - Priority: Medium
 
-**CI does not exercise device, screenshot, or release layers:**
-- What's not tested: `.github/workflows/ci.yml` runs `ktlintCheck`, `detekt`, `lintDebug`, `assembleDebug`, `testDebugUnitTest` only. Room DAO instrumentation tests in `app/src/androidTest/java/com/clibeats/data/local/dao/` (4 files) never run; Paparazzi screenshot tests are never verified despite `docs/adr/ADR-009` and `README.md` claiming them as a gate; `assembleRelease` is never built; no coverage report is produced or enforced.
-- Files: `.github/workflows/ci.yml`, `app/src/androidTest/java/com/clibeats/data/local/dao/`, `app/src/test/java/com/clibeats/theme/*ScreenshotTest.kt`
-- Risk: Migration breaks, visual regressions, and release-only failures (R8/signing) reach main undetected.
-- Priority: High
-
-**Migration tests for Room v1→v2→v3 (Medium):**
-- What's not tested: `MIGRATION_1_2` and `MIGRATION_2_3` in `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt:56-113` have no `MigrationTestHelper` coverage, although schemas `app/schemas/com.clibeats.data.local.CliBeatsDatabase/1.json`–`3.json` are exported and `room-testing` is available.
-- Files: `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt`, `app/schemas/`
-- Risk: An upgrade-path SQL error wipes or crashes existing users' libraries on release.
-- Priority: Medium
+**ViewModel tests bypass the real dependencies:**
+- What's not tested: behaviour with `LocalMusicScanner`/`MediaCaches` absent (the nullable-DI path), and `SettingsViewModel` cache-limit side effects.
+- Files: `app/src/test/java/com/clibeats/presentation/settings/SettingsViewModelTest.kt`, `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt`
+- Risk: the null-tolerant production path (no scanning, no cache usage) is only exercised in tests, never asserted.
+- Priority: Low
 
 ---
 
-*Concerns audit: 2026-11-17*
+*Concerns audit: 2026-11-19*

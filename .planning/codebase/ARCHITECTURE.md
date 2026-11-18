@@ -1,331 +1,312 @@
 ---
-last_mapped_commit: 916a56379cbb0bf07eb302edd4489c7633418417
-last_mapped_at: 2026-11-17
+last_mapped_commit: a77dc37a72fa6a498fb1ac17a68d814fbe3770cb
+last_mapped_at: 2026-11-19
 ---
-<!-- refreshed: 2026-11-17 -->
+<!-- refreshed: 2026-11-19 -->
+
 # Architecture
 
-**Analysis Date:** 2026-11-17
+**Analysis Date:** 2026-11-19
 
 ## System Overview
 
-CLIBeats is a single-module Android application (`:app`) built as **MVVM + Clean Architecture** with Hilt DI. There is no backend service: all state is on-device (Room + DataStore), and music is sourced directly from third-party providers over HTTP.
-
 ```text
-┌──────────────────────────────────────────────────────────────────────┐
-│                        Presentation (`presentation/`)                │
-│  Compose screens · ViewModels · UiState sealed interfaces · Theme    │
-│  `MainActivity.kt` · `presentation/home/HomeScreen.kt` ·             │
-│  `presentation/layout/MainLayout.kt` · `presentation/theme/`         │
-└───────────────┬───────────────────────────────▲──────────────────────┘
-                │ domain interfaces / StateFlow │
-┌───────────────▼───────────────────────────────┴──────────────────────┐
-│                          Domain (`domain/`)                          │
-│  `Track` · `Album` · `Artist` · `Playlist` · `PlaybackState`         │
-│  `MusicProvider` · `ProviderRegistry` · `ProviderResult`             │
-│  Repository interfaces (`SongRepository`, `PlaybackRepository`, …)   │
-└───────────────▲───────────────────────────────┬──────────────────────┘
-                │ implements                     │ uses
-┌───────────────┴───────────────────┐   ┌────────▼─────────────────────┐
-│      Data (`data/`)               │   │  Playback (`playback/`)      │
-│  Provider impls + Retrofit APIs   │◄──┤  `PlayerAdapter` (ExoPlayer) │
-│  Repository impls                 │   │  `StreamResolver`            │
-│  Room (`data/local/`)             │   │  `service/PlaybackService`   │
-│  DataStore/EncryptedSharedPrefs   │   └────────┬─────────────────────┘
-│  Cache · Downloads · Exchange     │            │
-└───────────────┬───────────────────┘            │
-                │                                │
-      ┌─────────▼─────────┐          ┌───────────▼────────────┐
-      │ Room `clibeats.db`│          │ Media3 ExoPlayer       │
-      │ + `audio_cache/`  │          │ (singleton) + MediaSession│
-      └───────────────────┘          └────────────────────────┘
-
-  Cross-cutting: `di/` (Hilt), `telemetry/`, `util/DiagnosticLogger.kt`
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Entry points                                                                 │
+│  `app/.../CLIBeatsApp.kt`        `app/.../MainActivity.kt`                   │
+│  `app/.../PlaybackService.kt`    `androidx.media3.session.MediaButtonReceiver`│
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ setContent / service binding
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│ Presentation — Jetpack Compose (Material 3 + custom TUI design system)       │
+│  `presentation/layout/MainLayout.kt`  `presentation/layout/NavDestination.kt` │
+│  `presentation/home|search|library|queue|playlist|player|settings/`           │
+│  `presentation/onboarding|theme|component/`                                   │
+│  Each feature = Screen.kt + ViewModel.kt (@HiltViewModel) + *UiState.kt       │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ StateFlow / method calls
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│ Domain — pure Kotlin contracts (models + interfaces, no Android imports)     │
+│  `domain/model/`  `domain/repository/`  `domain/provider/`                   │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ implemented by
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│ Data — Room, DataStore, providers, caches, scanner, exchange                 │
+│  `data/repository/`  `data/local/`  `data/provider/`  `data/preferences/`    │
+│  `data/cache/`  `data/download/`  `data/scan/`  `data/playlist/`             │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │ Track objects / MediaItems
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│ Playback subsystem                                                           │
+│  `playback/PlayerAdapter.kt`       singleton wrapper around singleton ExoPlayer │
+│  `playback/StreamResolver.kt`      provider stream lookup + expiry checks     │
+│  `playback/TrackUriResolver.kt`    clibeats:// placeholder → real URI         │
+│  `playback/service/PlaybackService.kt`  MediaLibrarySession + notification    │
+└───────────────────────────────┬──────────────────────────────────────────────┘
+                                │
+┌───────────────────────────────▼──────────────────────────────────────────────┐
+│ DI — Hilt (KSP), all modules in SingletonComponent                            │
+│  `di/AppModule.kt` `di/NetworkModule.kt` `di/DatabaseModule.kt`               │
+│  `di/PlaybackModule.kt` `di/ProviderModule.kt` `di/RepositoryModule.kt`       │
+│  `di/CacheModule.kt` `di/DownloadModule.kt` `di/ImageLoaderModule.kt`         │
+│  `di/StorageModule.kt` `di/TelemetryModule.kt`                                │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Component Responsibilities
 
 | Component | Responsibility | File |
 |-----------|----------------|------|
-| Application shell | `@HiltAndroidApp` entry; no custom logic | `app/src/main/java/com/clibeats/CLIBeatsApp.kt` |
-| Activity / navigation host | Sets Compose content, resolves theme, manual `when`-based destination switching | `app/src/main/java/com/clibeats/MainActivity.kt` |
-| Root layout | Adaptive nav suite (bar/rail/drawer), top bar, content slot, persistent player bar | `app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt` |
-| Destination model | Sealed `NavDestination` with `mainTabs` and `all` lists | `app/src/main/java/com/clibeats/presentation/layout/NavDestination.kt` |
-| Domain track model | Provider-agnostic track (`id`, `streamUrl`, `providerId`) | `app/src/main/java/com/clibeats/domain/model/Track.kt` |
-| Provider contract | `search`/`trending`/`getTrack`/`stream`/`playlists`/`queue` | `app/src/main/java/com/clibeats/domain/provider/MusicProvider.kt` |
-| Provider selection | Ordered registry, id lookup, default (`youtube_music`) | `app/src/main/java/com/clibeats/domain/provider/ProviderRegistry.kt`, `app/src/main/java/com/clibeats/data/provider/MusicProviderRegistry.kt` |
-| Provider result type | `Success`/`Error`/`Loading` sealed class (no exceptions across layer boundary) | `app/src/main/java/com/clibeats/domain/provider/ProviderResult.kt` |
-| Provider id scheme | Composite ids `providerId:sourceId` | `app/src/main/java/com/clibeats/domain/provider/ProviderId.kt` |
-| Provider implementations | YouTube Music (InnerTube + NewPipe + PO token), Internet Archive, Audius, Jamendo, Local | `app/src/main/java/com/clibeats/data/provider/*MusicProvider.kt` |
-| HTTP clients | One Retrofit `OkHttpClient` + separate InnerTube client with header interceptor | `app/src/main/java/com/clibeats/di/NetworkModule.kt` |
-| Repository impls | Room ↔ domain mapping, playback orchestration, history, library | `app/src/main/java/com/clibeats/data/repository/*.kt` |
-| Playback orchestration | `PlayerAdapter` wraps the singleton `ExoPlayer`; `StreamResolver` lazily resolves URLs | `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`, `app/src/main/java/com/clibeats/playback/StreamResolver.kt` |
-| Background audio | `MediaSessionService` with manual notification + action intents | `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt` |
-| Persistence | Room database v3, 9 entities, 8 DAOs, schema export | `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt` |
-| Preferences | DataStore (non-sensitive) + EncryptedSharedPreferences (auth token) | `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt` |
-| Audio cache / downloads | LRU file cache with Room index; OkHttp download manager | `app/src/main/java/com/clibeats/data/cache/CacheManager.kt`, `app/src/main/java/com/clibeats/data/download/TrackDownloadManager.kt` |
-| Playlist exchange | `clibeats.json` export/import codec + file manager | `app/src/main/java/com/clibeats/data/playlist/CliBeatsFile.kt`, `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt` |
-| DI graph | Hilt `@SingletonComponent` modules | `app/src/main/java/com/clibeats/di/*.kt` |
-| Telemetry | Local-only event/crash logging interfaces (no network SDK) | `app/src/main/java/com/clibeats/telemetry/*.kt` |
-| Diagnostics | Structured trace-id logging funnel | `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt` |
+| `CLIBeatsApp` | `@HiltAndroidApp` application; supplies the Hilt-built Coil `ImageLoader` via `ImageLoaderFactory` | `app/src/main/java/com/clibeats/CLIBeatsApp.kt` |
+| `MainActivity` | Sole Activity; theme + onboarding gate; builds the six-tab `HorizontalPager` shell | `app/src/main/java/com/clibeats/MainActivity.kt` |
+| `MainLayout` | Adaptive nav suite, 48dp top bar, persistent `PlayerBar`, full-screen Now Playing overlay | `app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt` |
+| `NavDestination` | Sealed tab model (`Home, Search, Library, Queue, Playlists, Settings`) with route/label/icon | `app/src/main/java/com/clibeats/presentation/layout/NavDestination.kt` |
+| `PlaybackService` | `MediaLibraryService` owning the `MediaLibrarySession`; notification, lock screen, resume card, library browse | `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt` |
+| `PlayerAdapter` | Only class that mutates `ExoPlayer`; maps player listener events into `StateFlow<PlaybackState>` / `StateFlow<List<Track>>` | `app/src/main/java/com/clibeats/playback/PlayerAdapter.kt` |
+| `StreamResolver` | Asks the active `MusicProvider` for a playable URL; caches/invalidates; detects `expire=` URLs | `app/src/main/java/com/clibeats/playback/StreamResolver.kt` |
+| `TrackUriResolver` | Media3 `ResolvingDataSource.Resolver` turning `clibeats://track?p=…&id=…` into cache file or fresh URL | `app/src/main/java/com/clibeats/playback/TrackUriResolver.kt` |
+| `LocalOrRemoteMediaSourceFactory` | Routes `content://`/`file://` to a non-caching source; everything else through `CacheDataSource` | `app/src/main/java/com/clibeats/playback/LocalOrRemoteMediaSourceFactory.kt` |
+| `PlaybackRepositoryImpl` | Domain-facing facade over `PlayerAdapter`; persists/restores queue and position; records history; prefetches | `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt` |
+| `ProviderRegistry` + `MusicProviderRegistry` | Ordered provider list and active-provider lookup | `app/src/main/java/com/clibeats/domain/provider/ProviderRegistry.kt`, `app/src/main/java/com/clibeats/data/provider/MusicProviderRegistry.kt` |
+| `YouTubeMusicProvider` | Default provider; NewPipeExtractor → InnerTube PO-token → client fallback chain | `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt` |
+| `CliBeatsDatabase` | Room DB v3 with 9 entities, 8 DAOs, migrations 1→2 and 2→3 | `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt` |
+| `AppPreferences` | DataStore settings + encrypted `auth_token` via `EncryptedSharedPreferences` | `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt` |
+| `MediaCaches` | Media3 `SimpleCache` for songs with adjustable LRU + Coil artwork disk cache | `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt` |
+| `LocalMusicScanner` | SAF `DocumentsContract` walk, `MediaMetadataRetriever` tags, M3U/PLS mirroring | `app/src/main/java/com/clibeats/data/scan/LocalMusicScanner.kt` |
+| `PlaylistExchangeManager` | Import/export `clibeats.json` through SAF | `app/src/main/java/com/clibeats/data/playlist/PlaylistExchangeManager.kt` |
 
 ## Pattern Overview
 
-**Overall:** Layered Clean Architecture (Presentation → Domain ← Data) with MVVM and Hilt DI. ADR-001 (`docs/adr/ADR-001-architecture-and-di-strategy.md`) is the governing decision.
+**Overall:** MVVM + Clean Architecture (Presentation → Domain → Data) with a dedicated playback subsystem, wired by Hilt in a single `SingletonComponent`. Documented in `docs/adr/ADR-001-architecture-and-di-strategy.md`.
 
 **Key Characteristics:**
-- **No use-case layer.** ViewModels call `domain.repository` interfaces or `MusicProvider` directly; business rules live in repository impls and providers.
-- **Interface-based boundaries.** All cross-layer contracts are interfaces in `domain/` (`MusicProvider`, `ProviderRegistry`, five repository interfaces), bound to impls in `di/RepositoryModule.kt` and `di/ProviderModule.kt`.
-- **Reactive state everywhere.** Repositories and playback expose `Flow`/`StateFlow`; screens collect with `collectAsState()`; UiState is expressed as sealed interfaces.
-- **Provider-agnostic core.** `Track` carries `providerId`; ids are composite (`ProviderId.composite`), so library/queue/cache keys stay unique across providers.
-- **Single long-lived player.** One `ExoPlayer` `@Singleton` is shared by `PlayerAdapter` and `PlaybackService`; the service never releases it.
-- **Local-first.** No backend, no accounts; Room + file cache + DataStore are the sources of truth.
-- **Manual navigation.** No Navigation-Compose; a sealed class + `when` in `MainActivity` drives screens.
-- **TUI design system.** Monochrome palette, monospaced typography, `TuiBlock`/`TuiTextField`/`SongTableRow` primitives, accent color via `LocalAccentColor`.
+- Three source layers (`presentation`, `domain`, `data`) plus `playback` as an engine-side subsystem that depends on both `domain` and `data`.
+- One screen feature package = `XScreen.kt` (Composable) + `XViewModel.kt` (`@HiltViewModel`) + `XUiState.kt` (sealed interface or data class). Examples: `presentation/library/LibraryScreen.kt`, `presentation/library/LibraryViewModel.kt`, `presentation/library/LibraryUiState.kt`.
+- No use-case/interactor layer. ViewModels call repository interfaces directly; providers are reached through `ProviderRegistry` or through `StreamResolver`.
+- Reactive state only: `StateFlow` (and one `SharedFlow` for transient player messages) produced by the data/playback layer, collected in Compose with `collectAsState()`.
+- Single `ExoPlayer` singleton is shared by `PlayerAdapter` (UI-facing) and `PlaybackService` (system-facing); the service never releases it.
+- Provider-agnostic catalog access through `MusicProvider`; every `Track.id` is a composite `providerId:sourceId`.
+- Local-first persistence: Room for songs/playlists/history/queue/likes/saved albums/artists/cache index; DataStore for settings.
 
 ## Layers
 
 **Presentation:**
-- Purpose: render state, capture input, expose actions.
+- Purpose: Compose UI and screen state.
 - Location: `app/src/main/java/com/clibeats/presentation/`
-- Contains: one package per feature (`home`, `search`, `library`, `queue`, `playlist`, `settings`, `more`, `player`), plus `layout/`, `component/`, `theme/`.
-- Depends on: `domain` models/repositories/providers. In practice (and in violation of the stated layer rule) also `data.preferences.AppPreferences`, `data.cache.CacheManager`, `data.playlist.PlaylistExchangeManager`.
-- Used by: `MainActivity.kt`.
+- Contains: feature packages (`home`, `search`, `library`, `queue`, `playlist`, `player`, `settings`, `onboarding`), `layout/`, `theme/`, and reusable `component/`.
+- Depends on: `domain` repository/provider interfaces, plus (in practice) a few data-layer types — see Anti-Patterns.
+- Used by: `MainActivity` for screen composition.
 
 **Domain:**
-- Purpose: pure Kotlin contracts and models.
+- Purpose: Framework-free models and contracts.
 - Location: `app/src/main/java/com/clibeats/domain/`
-- Contains: `model/` (`Track`, `Album`, `Artist`, `Playlist`, `PlaybackState`, `PlaybackException`), `provider/` (`MusicProvider`, `ProviderRegistry`, `ProviderResult`, `ProviderId`), `repository/` (5 interfaces).
-- Depends on: nothing Android except one leak: `domain/repository/HistoryRepository.kt` imports `com.clibeats.data.local.entity.HistoryEntity` (suppressed `ForbiddenImport`).
-- Used by: presentation, data, playback.
+- Contains: `model/` (`Track`, `Playlist`, `Album`, `Artist`, `PlaybackState`, `RepeatMode`, `PlaybackException`), `repository/` (5 interfaces), `provider/` (`MusicProvider`, `ProviderRegistry`, `ProviderResult`, `ProviderId`).
+- Depends on: Kotlin stdlib/coroutines only — with one documented exception: `domain/repository/HistoryRepository.kt` imports `data.local.entity.HistoryEntity`.
+- Used by: `data` implementations, `playback`, all ViewModels.
 
 **Data:**
-- Purpose: implement domain contracts over network, Room, disk, and preferences.
+- Purpose: Persistence, remote catalog adapters, caches, device scanning, import/export.
 - Location: `app/src/main/java/com/clibeats/data/`
-- Contains: `provider/` (5 provider impls, Retrofit APIs in `provider/api/`, DTOs in `provider/dto/`, mappers in `provider/mapper/`, YouTube internals in `provider/youtube/`), `repository/` (5 impls), `local/` (Database, DAOs, entities, mappers, type converters), `preferences/`, `cache/`, `download/`, `playlist/`, `network/`.
-- Depends on: `domain`, `playback` (`PlaybackRepositoryImpl` → `PlayerAdapter`, `StreamResolver`), `util`.
-- Used by: domain consumers through interfaces; presentation (violations listed below).
+- Contains: `repository/*Impl`, `local/{CliBeatsDatabase,dao,entity,mapper}`, `provider/{api,dto,mapper,youtube}` + five `*MusicProvider`, `preferences/AppPreferences`, `cache/{MediaCaches,CacheManager,ResizableDiskCache}`, `download/TrackDownloadManager`, `scan/{LocalMusicScanner,PlaylistFileParser}`, `playlist/{CliBeatsFile,PlaylistExchangeManager}`.
+- Depends on: domain interfaces/models, Android framework, Room, DataStore, Retrofit/OkHttp, Coil, Media3 cache, NewPipeExtractor.
+- Used by: `domain` consumers through `RepositoryModule` bindings, and by `playback` (`StreamResolver`, `TrackUriResolver`).
 
 **Playback:**
-- Purpose: own the ExoPlayer instance, map player callbacks to `StateFlow`, provide background audio.
+- Purpose: Audio engine, stream resolution, queue state, background service.
 - Location: `app/src/main/java/com/clibeats/playback/`
-- Contains: `PlayerAdapter.kt` (queue + transport + state mapping), `StreamResolver.kt` (unresolved `streamUrl` → provider call), `service/PlaybackService.kt`.
-- Depends on: `domain`, `data.cache.CacheManager`, `util.DiagnosticLogger`.
-- Used by: `data/repository/PlaybackRepositoryImpl.kt`, `di/PlaybackModule.kt`, `di/AppModule` consumers.
+- Contains: `PlayerAdapter`, `StreamResolver`, `TrackUriResolver`, `LocalOrRemoteMediaSourceFactory`, `service/PlaybackService`.
+- Depends on: `domain` (`Track`, `PlaybackState`, `ProviderRegistry`), `data` (`MediaCaches`, `CacheManager`, `YouTubeMusicProvider` for cache invalidation), Media3.
+- Used by: `PlaybackRepositoryImpl` (UI path) and `PlaybackService` (system path).
 
 **DI:**
-- Purpose: assemble the graph.
-- Location: `app/src/main/java/com/clibeats/di/` (11 modules).
-- Contains: `NetworkModule` (OkHttp/Retrofit/APIs/NetworkMonitor), `DatabaseModule` (DB + DAOs), `RepositoryModule` (`@Binds`), `ProviderModule` (ordered provider list), `PlaybackModule` (ExoPlayer), `CacheModule`, `DownloadModule`, `StorageModule` (DataStore + EncryptedSharedPreferences), `ImageLoaderModule` (Coil), `TelemetryModule` (`@Binds`), `AppModule` (empty marker).
-- Depends on: all layers (composition root).
-- Used by: Hilt-generated components.
-
-**Telemetry / Util:**
-- Purpose: local logging and event abstraction.
-- Location: `app/src/main/java/com/clibeats/telemetry/`, `app/src/main/java/com/clibeats/util/`
-- Contains: `TelemetryTracker`/`TimberTelemetryTracker`, `CrashReporter`/`TimberCrashReporter`, `AnalyticsEvent`; `DiagnosticLogger`.
-- Note: classes are named "Timber*" but there is no Timber dependency — they use `android.util.Log`.
+- Purpose: Object graph construction.
+- Location: `app/src/main/java/com/clibeats/di/`
+- Contains: 10 Hilt modules, all `@InstallIn(SingletonComponent::class)`; `RepositoryModule`/`TelemetryModule` use `@Binds`, the rest `@Provides`.
+- Depends on: everything.
+- Used by: Hilt-generated components at app start.
 
 ## Data Flow
 
-### Primary Request Path: Search
+### Primary Request Path — play a track from a list
 
-1. User types in `TuiTextField`; `SearchScreen` collects `viewModel.query` (`app/src/main/java/com/clibeats/presentation/search/SearchScreen.kt`).
-2. `SearchViewModel.onQueryChange` updates `_query`; pipeline debounces 300 ms, requires 2+ chars, switches on `appPreferences.activeProviderId` (`app/src/main/java/com/clibeats/presentation/search/SearchViewModel.kt`).
-3. Provider resolved from `ProviderRegistry` (default `youtube_music`); `provider.search(q)` runs.
-4. `YouTubeMusicProvider.search` posts an InnerTube request and maps JSON with `toTrackList()` (`app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`, `app/src/main/java/com/clibeats/data/provider/mapper/TrackMapper.kt`).
-5. Result mapped to `SearchUiState.Success/Error/Loading/Idle`; rendered as rows with play / add-to-queue / play-next actions.
+1. Screen calls `PlayerViewModel.playQueue(tracks, index)` (`app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt:89`) or `playTrack` (`:84`).
+2. `PlayerViewModel` delegates to `PlaybackRepository.setQueue/playTrack` (`app/src/main/java/com/clibeats/domain/repository/PlaybackRepository.kt`).
+3. `PlaybackRepositoryImpl` generates a trace id and launches on `Dispatchers.Main` into `PlayerAdapter` (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:191-224`).
+4. `PlayerAdapter.setQueue` starts `PlaybackService`, converts each `Track` to a `MediaItem`, sets items and calls `prepare()`/`play()` (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:183-195`).
+5. `Track.toMediaItem` uses a direct URL only when it is non-`expire`; otherwise it builds a `clibeats://track` placeholder (`PlayerAdapter.kt:443-464`).
+6. ExoPlayer asks `LocalOrRemoteMediaSourceFactory` for a source; remote items go through `CacheDataSource(SimpleCache)` → `ResolvingDataSource` (`app/src/main/java/com/clibeats/di/PlaybackModule.kt:64-83`).
+7. `TrackUriResolver.resolveDataSpec` returns a cached file from `CacheManager` or calls `StreamResolver.resolve` (`app/src/main/java/com/clibeats/playback/TrackUriResolver.kt:26-41`).
+8. `StreamResolver` picks the provider via `ProviderRegistry`, calls `MusicProvider.stream(trackId)` and returns `track.copy(streamUrl = …)` (`app/src/main/java/com/clibeats/playback/StreamResolver.kt:22-55`).
+9. Provider execution: for YouTube, `StreamCacheManager` → `NewPipeExtractorResolver` → `PoTokenGenerator` + `InnerTubeApi.player` over `YouTubeClientStrategy.FALLBACK_CHAIN` (`app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt:78-188`).
+10. Player listener events update `_playbackState` and `_queueFlow` (`PlayerAdapter.kt:101-170`, `:357-392`); `PlayerBarHost` and `NowPlayingScreen` recompose from `PlayerViewModel.playbackState` (`app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt:153-197`).
 
-### Primary Request Path: Play a Track
+### Search / trending flow
 
-1. Row click → `PlayerViewModel.playTrack(track)` (`app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt`).
-2. `PlaybackRepositoryImpl.playTrack` generates a trace id, logs, and launches on its own IO `CoroutineScope` (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`).
-3. `StreamResolver.resolve` returns the track unchanged if `streamUrl` is set; otherwise calls the matching provider's `stream(trackId)` and copies the URL into the track, throwing `PlaybackException.StreamResolutionFailed` on error (`app/src/main/java/com/clibeats/playback/StreamResolver.kt`).
-4. `PlayerAdapter.playTrack` starts `PlaybackService`, sets a `MediaItem` (prefers a cached file from `CacheManager.getCachedFile`), prepares and plays (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`).
-5. Player listener callbacks rebuild `_playbackState`/`_queueFlow`; a 500 ms ticker updates position while playing.
+1. Query enters `SearchViewModel._query` and is debounced 300 ms, filtered to ≥2 chars (`app/src/main/java/com/clibeats/presentation/search/SearchViewModel.kt:79-103`).
+2. `activeProviderId` comes from `AppPreferences`, falling back to `ProviderRegistry.DEFAULT_PROVIDER_ID` (`SearchViewModel.kt:45-48`).
+3. `flatMapLatest` calls `provider.search(q)`; `ProviderResult` maps to `SearchUiState.Loading/Success/Error`.
+4. `onPlay` either queues all results or only the tapped track depending on the `auto_queue_related` preference (`SearchViewModel.kt:55-67`).
+5. Home mirrors this with `provider.trending(15)` and `historyRepository.getRecentlyPlayedTracks(50)` (`app/src/main/java/com/clibeats/presentation/home/HomeViewModel.kt:46-110`).
 
-### Background Playback / Notification
+### Queue persistence and restoration flow
 
-1. `PlayerAdapter.startPlaybackService()` calls `startForegroundService(PlaybackService)`.
-2. `PlaybackService` (a `MediaSessionService`) injects the **same** `ExoPlayer` singleton and builds a `MediaSession` (`app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`).
-3. Because nothing binds a `MediaController`, the service manually builds and posts a `MediaStyle` notification and handles `ACTION_PLAY_PAUSE` / `ACTION_NEXT` / `ACTION_PREVIOUS` in `onStartCommand`.
-4. `onDestroy` releases only the `MediaSession`, never the player (releasing it would permanently kill playback).
+1. `PlaybackRepositoryImpl.init` launches `restorePersistentQueue()` on an IO scope (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:94-120`).
+2. Restore reads `QueueDao.getQueueSongs()` + `AppPreferences.lastQueueIndex/lastPlaybackPosition/savedRepeatMode/savedShuffleEnabled`, then calls `PlayerAdapter.restoreQueue` on `Dispatchers.Main` (`:147-172`).
+3. After restore, `queueFlow.drop(1)` is persisted via `SongDao.upsertAll` + `QueueDao.replaceQueue` (`:174-189`).
+4. Position/repeat/shuffle are saved on meaningful changes and every 5 s while playing (`:126-145`).
+5. `CompletableDeferred restored` gates `awaitRestored()`; `PlaybackService.afterRestore` uses it so the resume card and media-browser queries see a live queue (`app/src/main/java/com/clibeats/playback/service/PlaybackService.kt:106-116`).
 
-### Queue Persistence and Restore
+### History + prefetch flow
 
-1. `PlaybackRepositoryImpl.init` launches three collectors on an IO scope: restore queue, persist `queueFlow` → `QueueDao.replaceQueue` + `songDao.upsertAll`, and persist playback metadata (index/position/repeat/shuffle) → `AppPreferences.saveQueueMetadata`.
-2. Empty queue → `QueueDao.clearQueue()`.
-3. On next launch the same `init` calls `restorePersistentQueue()` which reads songs from `QueueDao.getQueueSongs()` plus preferences and calls `playerAdapter.restoreQueue(...)` on `Dispatchers.Main`.
-4. Failures are swallowed through `runCatching` + `DiagnosticLogger.logError`.
+1. `playbackState.map { currentTrack }.distinctUntilChanged { id }` triggers on each new track (`PlaybackRepositoryImpl.kt:108-119`).
+2. `HistoryRepository.recordPlay(songId, providerId)` writes a `HistoryEntity`.
+3. `prefetchAfter` warms artwork (Coil) and resolves stream URLs for the next 2 queue items (`:226-243`).
 
-### Library Browsing
+### Background / system-control flow
 
-1. Room emits `SongEntity` flows from `SongDao.getAllAsFlow()`.
-2. `SongRepositoryImpl` maps entities to `Track`.
-3. `LibraryViewModel` groups by artist and (album, artist), producing a `LibraryUiState` consumed by the Tracks / Artists / Albums tabs (`app/src/main/java/com/clibeats/presentation/library/LibraryViewModel.kt`).
-
-### Settings & Theme
-
-1. `AppPreferences` reads DataStore keys (`theme_mode`, `accent_color_name`, `active_provider_id`, `cache_max_mb`, `queue` metadata).
-2. `ThemeViewModel` combines mode+accent into a `StateFlow<ThemeState>`; `MainActivity` feeds it into `CliBeatsTheme`.
-3. `SettingsViewModel` combines provider list, cache size, token presence, and theme settings into `SettingsUiState`; write actions call `AppPreferences` / `CacheManager` / `PlaylistExchangeManager`.
-
-### Offline Cache / Download
-
-1. `TrackDownloadManager.downloadTrack` issues an OkHttp GET for `track.streamUrl` on an IO scope.
-2. `CacheManager.saveTrackToCache` writes to `context.cacheDir/audio_cache/<id>.mp3`, upserts `CacheIndexEntity`, then evicts LRU while over `maxCacheSizeBytes` (default 500 MB).
-3. Playback prefers the cached file in `PlayerAdapter.toMediaItem`.
-
-### Provider Selection
-
-1. `AppPreferences.activeProviderId` (DataStore) is the only selector.
-2. `MusicProviderRegistry.getProvider(id)` → `defaultProvider()` falls back to `youtube_music`, then to the first registered provider.
-3. `ProviderModule` fixes registration order: YouTube Music, Internet Archive, Audius, Jamendo, Local.
+1. `PlayerAdapter` starts `PlaybackService` with `context.startService` before any playback call (`PlayerAdapter.kt:48-52`).
+2. `PlaybackService.onCreate` builds a `MediaLibrarySession` over the injected singleton `ExoPlayer` and registers it with `addSession` (`PlaybackService.kt:53-68`).
+3. `LibraryCallback` answers `onGetLibraryRoot` (`clibeats_root` / `clibeats_recent`), `onGetChildren`, `onGetItem`, `onPlaybackResumption`, `onSetMediaItems`, `onAddMediaItems` (`PlaybackService.kt:129-227`).
+4. `onTaskRemoved` keeps the service alive while the player has items (`PlaybackService.kt:78-81`); the service never releases the player (`PlaybackService.kt:83-92`).
 
 **State Management:**
-- ViewModels expose `StateFlow` built with `stateIn(WhileSubscribed(5_000))`; UI state is sealed interfaces (`HomeUiState`, `SearchUiState`, `LibraryUiState`, `QueueUiState`, `PlaylistUiState`).
-- Playback state is a singleton `StateFlow` in `PlayerAdapter`, proxied by `PlaybackRepository`.
-- Screen selection lives in `MainActivity` as `remember { mutableStateOf<NavDestination>(...) }` — not saveable, no back stack.
-- Persisted state: Room (library/playlists/queue/cache index/history/likes/saved albums+artists) and DataStore (settings, queue metadata).
+- Data/playback state is exposed as `StateFlow` and collected with `collectAsState()`; screens use `SharingStarted.WhileSubscribed(5_000L)` so work stops 5 s after the UI leaves.
+- Ephemeral UI signals use `SharedFlow` (`PlayerAdapter.messages` → `PlayerViewModel.playerMessage` with a 3 s auto-clear) and `MutableStateFlow` hints (`PlayerViewModel.hint`).
+- Local UI-only state (pager page, Now Playing visibility, search focus) uses `rememberSaveable` / `remember` in `MainActivity` and `MainLayout`.
+- No global Compose state holder, no Navigation-Compose back stack: navigation is a `HorizontalPager` indexed by `NavDestination.mainTabs`, with Now Playing as an overlay.
 
 ## Key Abstractions
 
 **`MusicProvider` (domain contract):**
-- Purpose: isolate all provider-specific networking/extraction.
-- Examples: `app/src/main/java/com/clibeats/data/provider/YouTubeMusicProvider.kt`, `AudiusMusicProvider.kt`, `InternetArchiveMusicProvider.kt`, `JamendoMusicProvider.kt`, `LocalMusicProvider.kt`
-- Pattern: every implementation returns `ProviderResult<T>` and never throws across the boundary; each declares a snake_case `providerId` and a human `displayName`.
+- Purpose: One interchangeable catalog/source adapter (search, trending, getTrack, stream, playlists, queue).
+- Examples: `data/provider/YouTubeMusicProvider.kt`, `InternetArchiveMusicProvider.kt`, `AudiusMusicProvider.kt`, `JamendoMusicProvider.kt`, `LocalMusicProvider.kt`.
+- Pattern: `ProviderResult<T>` sealed class (`Success`/`Error`/`Loading`) instead of exceptions across the boundary; implementations wrap in `runCatching`.
 
-**`ProviderId` composite keys:**
-- Purpose: keep `Track.id` unique across providers.
-- Pattern: `ProviderId.composite(providerId, sourceId)` on write; `ProviderId.rawSourceId(providerId, id)` before calling provider APIs (`app/src/main/java/com/clibeats/domain/provider/ProviderId.kt`).
+**`ProviderRegistry` (provider selection):**
+- Purpose: Ordered provider list + active-provider lookup; the only selection mechanism.
+- Examples: `domain/provider/ProviderRegistry.kt`, `data/provider/MusicProviderRegistry.kt`, construction in `di/ProviderModule.kt`.
+- Pattern: Registry over an explicitly ordered list (avoids Dagger `List<MusicProvider>` resolution); `DEFAULT_PROVIDER_ID = "youtube_music"`.
 
-**`PlayerAdapter` (playback façade):**
-- Purpose: single owner of ExoPlayer queue/transport plus state mapping.
-- Pattern: imperative methods (`playTrack`, `setQueue`, `moveTrack`, `removeFromQueue`, …) that mutate the player and call `updateState()`; state exposed as `StateFlow` (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`).
+**Composite track identity (`ProviderId`):**
+- Purpose: Collision-safe ids and cache keys across providers.
+- Examples: `domain/provider/ProviderId.kt` (`composite`, `rawSourceId`).
+- Pattern: `"$providerId:$sourceId"`, e.g. `youtube_music:<videoId>`, `local:<documentId>`.
 
-**`TuiBlock` / `TuiTextField` / `SongTableRow` (design primitives):**
-- Purpose: enforce the terminal look consistently.
-- Examples: `app/src/main/java/com/clibeats/presentation/component/TuiBlock.kt`, `TuiTextField.kt`, `SongTableRow.kt`, `PlayerBar.kt`, `TrackArtwork.kt`
-- Pattern: border-only flat surfaces, `LocalAccentColor` for active state, monospaced typography.
+**`Track` (domain model):**
+- Purpose: The single currency between providers, repositories, player, and UI.
+- File: `app/src/main/java/com/clibeats/domain/model/Track.kt` (`id, title, artist, album, durationMs, artworkUrl, streamUrl, providerId`).
+- Pattern: Immutable data class; providers fill `streamUrl` lazily or eagerly; persistence strips signed `expire=` URLs.
 
-**Theme composition locals:**
-- Purpose: let deep components read accent/mode without prop drilling.
-- Pattern: `LocalAccentColor` / `LocalThemeMode` provided by `CliBeatsTheme` (`app/src/main/java/com/clibeats/presentation/theme/CliBeatsColors.kt`, `CliBeatsTheme.kt`).
+**`TrackUriResolver` placeholder scheme:**
+- Purpose: Decouple queue construction from stream extraction.
+- File: `app/src/main/java/com/clibeats/playback/TrackUriResolver.kt:43-52`.
+- Pattern: `clibeats://track?p=<providerId>&id=<trackId>` resolved on ExoPlayer's loader thread; also acts as the `SimpleCache` key.
 
-**Provider DTO → domain mappers:**
-- Purpose: keep DTO shapes out of the domain.
-- Examples: `app/src/main/java/com/clibeats/data/provider/mapper/TrackMapper.kt`, `AudiusMapper.kt`, `JamendoMapper.kt`, `InternetArchiveMapper.kt`
-- Pattern: top-level extension functions returning `Track?` (null = skip unparseable item), composite ids applied here.
+**Room + mapper pattern:**
+- Purpose: Keep entities out of the domain and vice versa.
+- Examples: `data/local/mapper/SongMapper.kt` (`SongEntity.toDomain()`, `Track.toEntity()`), `data/local/mapper/PlaylistMapper.kt`.
+- Pattern: Extension functions in `mapper/` directories; providers use their own `provider/mapper/*Mapper.kt`.
+
+**Repository interface + Impl binding:**
+- Purpose: Domain-facing persistence API; swap/testable.
+- Examples: `domain/repository/*.kt` bound in `di/RepositoryModule.kt` to `data/repository/*Impl.kt`.
+- Pattern: Interfaces return `Flow`/`StateFlow`; blocking work is `suspend`.
+
+**Singleton `ExoPlayer` + `PlayerAdapter`:**
+- Purpose: One engine shared by UI and service, with a single mutation point.
+- Examples: `di/PlaybackModule.kt:44-88`, `playback/PlayerAdapter.kt`.
+- Pattern: `PlayerAdapter` owns the mutable track list and emits `PlaybackState`; `PlaybackRepositoryImpl` is the domain facade.
 
 ## Entry Points
 
-**Application:**
+**`CLIBeatsApp`:**
 - Location: `app/src/main/java/com/clibeats/CLIBeatsApp.kt`
-- Triggers: process start (`android:name=".CLIBeatsApp"`).
-- Responsibilities: `@HiltAndroidApp` graph initialization only.
+- Triggers: Process start (declared `android:name=".CLIBeatsApp"` in `app/src/main/AndroidManifest.xml`).
+- Responsibilities: `@HiltAndroidApp` graph creation; `ImageLoaderFactory` returns the injected Coil loader.
 
-**Activity:**
+**`MainActivity`:**
 - Location: `app/src/main/java/com/clibeats/MainActivity.kt`
-- Triggers: `MAIN`/`LAUNCHER` intent filter (`app/src/main/AndroidManifest.xml`).
-- Responsibilities: edge-to-edge, theme resolution, destination switching, hosting `MainLayout` + `PlayerBar`.
+- Triggers: LAUNCHER intent.
+- Responsibilities: edge-to-edge + system bar styling, theme/onboarding gate (`ThemeViewModel`), six-tab pager shell, double-tap tab gestures, back handling.
 
-**Media service:**
+**`PlaybackService`:**
 - Location: `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`
-- Triggers: `startForegroundService` from `PlayerAdapter`, plus `androidx.media3.session.MediaSessionService` intent filter.
-- Responsibilities: foreground notification, media session, notification action handling.
+- Triggers: `startService` from `PlayerAdapter`; media buttons; resume card; media-browser connections (manifest intent filters for `MediaLibraryService`, `MediaSessionService`, `MediaBrowserService`).
+- Responsibilities: media notification, foreground playback, session/library callbacks, queue restoration for external controllers.
 
-**Build entry:**
-- `settings.gradle.kts` (single `:app` module), `app/build.gradle.kts`, `gradle/libs.versions.toml`.
+**`MediaButtonReceiver`:**
+- Location: Declared in `app/src/main/AndroidManifest.xml`
+- Triggers: `android.intent.action.MEDIA_BUTTON`.
+- Responsibilities: Routes hardware/Bluetooth transport controls to `PlaybackService`.
 
 ## Architectural Constraints
 
-- **Threading:** UI/player mutations must run on `Dispatchers.Main`; `PlaybackRepositoryImpl` explicitly wraps `playerAdapter` calls in `withContext(Dispatchers.Main)`. Provider/repository IO uses `Dispatchers.IO` scopes. `PlayerAdapter` uses a `SupervisorJob` + Main scope for its position ticker.
-- **Global/singleton state:** one `ExoPlayer` (`di/PlaybackModule.kt`), one `PlayerAdapter`, one `PlaybackRepositoryImpl` (each `@Singleton`), one Room DB, one in-memory `StreamCacheManager` (`ConcurrentHashMap`), plus object singletons `DiagnosticLogger` and `ProviderRegistry.DEFAULT_PROVIDER_ID`.
-- **No use-case layer:** adding business rules means either extending a repository impl or putting logic in a ViewModel; do not introduce `domain/usecase/` without an ADR.
-- **Provider isolation:** `domain` must not import provider implementation packages; all provider calls go through `MusicProvider` / `ProviderRegistry`.
-- **Layer enforcement:** Detekt `ForbiddenImport` bans `com.clibeats.data.*` outside the data layer (`config/detekt/detekt.yml`). Files that legitimately cross the boundary must opt out with `@file:Suppress("ForbiddenImport")`.
-- **Room schema:** `exportSchema = true`; schemas committed under `app/schemas/com.clibeats.data.local.CliBeatsDatabase/` (versions 1–3). Any entity change requires a migration registered in `DatabaseModule` + a new schema JSON.
-- **Background service contract:** never release or recreate the singleton player in `PlaybackService`; never remove `startForeground` from `onStartCommand`.
-- **Permissions:** only `INTERNET`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` are declared; local MediaStore scanning is not implemented.
-- **Build configuration:** `compileSdk`/`targetSdk` 34, `minSdk` 26, JDK 17, Kotlin 2.0.21, Compose BOM 2024.09.03, Gradle wrapper 8.9.
-- **Release signing:** `release` build type uses the debug signing config — not production-ready.
+- **Threading:** Player mutation is posted to `Dispatchers.Main` by `PlayerAdapter` and `PlaybackRepositoryImpl`. Room/DataStore/cache work runs on IO. `TrackUriResolver` intentionally blocks with `runBlocking` on ExoPlayer's loader thread inside `resolveDataSpec` (`app/src/main/java/com/clibeats/playback/TrackUriResolver.kt:32-40`).
+- **Global state:** `PlayerAdapter` (`@Singleton`) holds `trackList`, `consecutiveFailures`, `retriedMediaId`, and `localBitrateKbps`. `PlaybackService` holds `librarySession`. `MediaCaches` owns a process-wide `SimpleCache`. `NewPipeExtractorResolver` guards `NewPipe.init` with an `AtomicBoolean`.
+- **Single player instance:** `PlaybackModule.provideExoPlayer` is `@Singleton`; `PlaybackService` must not release it (comment at `PlaybackService.kt:85-86`).
+- **Startup blocking reads:** `MediaCaches` and `ImageLoaderModule` use `runBlocking { appPreferences.…first() }` during DI construction to size caches (`MediaCaches.kt:47-48`, `di/ImageLoaderModule.kt:24-28`).
+- **One module:** The whole app is the `:app` Gradle module (`settings.gradle.kts`); no `:core`, `:feature`, or `:domain` modules. Layering is enforced by package convention and detekt `ForbiddenImport`, not Gradle boundaries.
+- **No Navigation-Compose:** Destinations are pager pages; deep links and per-destination back stacks do not exist.
+- **Ordering contract:** `ProviderModule` fixes provider display priority: YouTube Music, Internet Archive, Audius, Jamendo, Local.
+- **State restoration contract:** `PlaybackRepositoryImpl` intentionally restores before it starts persisting; `drop(1)` prevents the empty initial player state from overwriting the saved queue (`PlaybackRepositoryImpl.kt:94-107`).
 
 ## Anti-Patterns
 
-### Presentation importing the data layer
+### Domain layer imports a data entity
 
-**What happens:** `SettingsViewModel` imports `CacheManager`, `PlaylistExchangeManager`, `AppPreferences`; `SearchViewModel`, `HomeViewModel`, `ThemeViewModel` import `AppPreferences` (`app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt`, `search/SearchViewModel.kt`, `home/HomeViewModel.kt`, `theme/ThemeViewModel.kt`).
-**Why it's wrong:** ViewModels now depend on concrete data classes instead of domain contracts; each file needs `@file:Suppress("ForbiddenImport")` to pass Detekt, and changes to storage ripple into UI.
-**Do this instead:** define domain-level interfaces (e.g. `UserPreferences`, `CacheController`, `PlaylistExchange`) in `domain/repository/` and `@Binds` the data impls in `di/RepositoryModule.kt`, mirroring how `SongRepository` is wired.
+**What happens:** `domain/repository/HistoryRepository.kt` returns `Flow<List<HistoryEntity>>` from `data/local/entity/HistoryEntity.kt`, with a `@file:Suppress("ForbiddenImport")` explaining the Plan 03-03 spec.
+**Why it's wrong:** The domain layer now compiles against Room-annotated data types, breaking ADR-001's "pure Kotlin domain" rule and making domain tests depend on the data layer.
+**Do this instead:** Return a domain model (e.g. a `PlayHistory` data class) and map in `HistoryRepositoryImpl`, following `SongMapper.kt`.
 
-### Domain depending on a data entity
+### Playback layer depends on presentation helpers
 
-**What happens:** `HistoryRepository` returns `Flow<List<HistoryEntity>>` and imports `com.clibeats.data.local.entity.HistoryEntity` (`app/src/main/java/com/clibeats/domain/repository/HistoryRepository.kt`).
-**Why it's wrong:** the domain layer is no longer pure Kotlin and cannot be tested without Room types; the documented ADR-001 promise is broken.
-**Do this instead:** return a domain model (e.g. a `PlayHistoryEntry`) and map inside `HistoryRepositoryImpl`, as `SongRepository` does with `Track`.
+**What happens:** `PlayerAdapter` imports `presentation.component.ARTWORK_FULL_PX` and `presentation.component.artworkUrlFor` (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt:16-17`); `PlaybackRepositoryImpl` does the same (`:21-22`); `PlaybackService` imports `com.clibeats.R`.
+**Why it's wrong:** The engine layer gains a compile-time dependency on the UI layer; artwork sizing policy leaks into playback and cannot be reused headlessly.
+**Do this instead:** Move artwork URL/size helpers to a neutral package (e.g. `util/` or `domain/model/`) and have presentation and playback both depend on it.
 
-### Repository reaching into playback internals
+### Optional constructor dependencies for testability
 
-**What happens:** `PlaybackRepositoryImpl` imports and owns `PlayerAdapter` and `StreamResolver` directly (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`).
-**Why it's wrong:** the data layer depends on a sibling layer; `PlaybackRepository` cannot be tested without a Media3 player.
-**Do this instead:** declare a playback port in the domain layer (e.g. `PlaybackEngine`) implemented by `PlayerAdapter`, and inject that interface into the repository impl.
+**What happens:** Production classes declare nullable/defaulted collaborators: `PlaybackRepositoryImpl(historyRepository = null, imageLoader = null, appContext = null)` (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt:52-55`), `PlayerViewModel(playlistRepository? = null, libraryRepository? = null)` (`presentation/player/PlayerViewModel.kt:44-45`), `HomeViewModel(historyRepository? = null, playbackRepository? = null)` (`presentation/home/HomeViewModel.kt:36-37`), `PlaylistExchangeManager(database? = null, libraryRepository? = null)`, `SettingsViewModel(localMusicScanner? = null, mediaCaches? = null)`.
+**Why it's wrong:** Every call site must branch on null, real misconfiguration is hidden at runtime, and the class silently degrades instead of failing at graph construction.
+**Do this instead:** Keep constructor dependencies non-null and required; use constructor injection with test doubles in `app/src/test/...` (as `PlaybackRepositoryImplTest.kt` already does) or a test-specific factory.
 
-### Business logic in ViewModels
+### ViewModels reach directly into the data layer
 
-**What happens:** search debounce/min-length, provider fallback, trending fetch, and library grouping all live in ViewModels (`SearchViewModel`, `HomeViewModel`, `LibraryViewModel`).
-**Why it's wrong:** logic is untestable without a `ViewModel`/`viewModelScope` and is duplicated per screen (provider resolution appears in both `SearchViewModel` and `HomeViewModel`).
-**Do this instead:** extract a thin `domain/usecase` (e.g. `SearchTracks`, `ObserveTrending`) once an ADR authorizes the layer; at minimum centralize provider resolution in a single helper.
+**What happens:** `HomeViewModel`/`SearchViewModel`/`OnboardingViewModel` import `data.preferences.AppPreferences`; `SettingsViewModel` imports `data.cache.CacheManager`, `data.cache.MediaCaches`, `data.scan.LocalMusicScanner`, `data.playlist.PlaylistExchangeManager`.
+**Why it's wrong:** There is no use-case boundary; preference keys, cache internals and scanner status become part of the UI contract, and swapping persistence requires editing ViewModels.
+**Do this instead:** Expose the needed operations through repository interfaces (e.g. a `SettingsRepository`/`LibraryScanner` contract in `domain/repository/`) as ADR-001 intends.
 
-### Manual navigation with non-saveable state
+### Suppression-heavy files
 
-**What happens:** `MainActivity` keeps `var selectedDestination by remember { mutableStateOf(...) }` and renders screens with a `when` (`app/src/main/java/com/clibeats/MainActivity.kt`).
-**Why it's wrong:** destination is lost on configuration change/process death, there is no back stack, no deep links, and no per-destination ViewModel scoping.
-**Do this instead:** either use `rememberSaveable` plus an explicit back handler for incremental fixes, or migrate to Navigation-Compose with `NavDestination.route` values.
-
-### Blocking cache lookup on the main thread
-
-**What happens:** `PlayerAdapter.toMediaItem()` calls `runBlocking { cacheManager.getCachedFile(id) }` while building media items, and `setQueue` maps over every track (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`).
-**Why it's wrong:** a Room query per track on the caller thread risks jank/ANR for large queues.
-**Do this instead:** resolve cached paths asynchronously before constructing the queue (e.g. in `PlaybackRepositoryImpl` on IO) and pass `Track`s that already carry a `file://` URL, as `LocalMusicProvider` does.
-
-### Cross-feature utility import
-
-**What happens:** `HomeScreen` and `PlaylistScreen` import `formatDuration` from `com.clibeats.presentation.search` (`app/src/main/java/com/clibeats/presentation/home/HomeScreen.kt`, `presentation/playlist/PlaylistScreen.kt`).
-**Why it's wrong:** creates a hidden dependency between sibling screens and makes `search` a de-facto util module.
-**Do this instead:** move formatting helpers into a shared location such as `presentation/component/` or a new `presentation/format/` package.
-
-### Constructor side effects in a singleton repository
-
-**What happens:** `PlaybackRepositoryImpl.init` starts three long-lived coroutines and performs queue restoration immediately on construction (`app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`).
-**Why it's wrong:** work begins at injection time (possibly before the UI/service is ready), and tests get unpredictable background activity.
-**Do this instead:** expose an idempotent `start()`/`initialize()` invoked from `CLIBeatsApp` or a lifecycle-aware component, or keep collectors but gate them behind an explicit call.
+**What happens:** Large files start with blanket suppressions, e.g. `PlayerAdapter.kt` (`ForbiddenImport, TooManyFunctions, ReturnCount, MagicNumber, LargeClass`), `YouTubeMusicProvider.kt` (`CyclomaticComplexMethod`, `LongMethod`, `LoopWithTooManyJumpStatements`), and nearly every data file suppresses `ForbiddenImport`.
+**Why it's wrong:** Suppressing a whole file hides new violations and defeats the `config/detekt/detekt.yml` gate; `ForbiddenImport` suppression at file scope also masks accidental UI/data imports.
+**Do this instead:** Use narrow `@Suppress` on the specific declaration and keep `ForbiddenImport` out of new files unless the import is genuinely layer-internal.
 
 ## Error Handling
 
-**Strategy:** returning result types at provider boundaries, swallowing-and-logging at repository/playback boundaries, and letting UI represent failures as UiState.
+**Strategy:** Recoverable catalog/stream failures are values (`ProviderResult.Error`); player failures are handled in `PlayerAdapter` with retry-then-skip; persistence failures are swallowed with diagnostics so playback is never blocked; UI receives short human-readable messages.
 
 **Patterns:**
-- Providers wrap calls in `runCatching { ... }.getOrElse { ProviderResult.Error(message, cause) }` — never throw to callers (e.g. `YouTubeMusicProvider`, `AudiusMusicProvider`, `JamendoMusicProvider`).
-- Repositories use `runCatching { }.onFailure { DiagnosticLogger.logError(...) }` without rethrowing (e.g. queue restore/persist in `PlaybackRepositoryImpl`).
-- `PlaybackException` (`StreamResolutionFailed`, etc.) is the only domain-level exception (`app/src/main/java/com/clibeats/domain/model/PlaybackException.kt`), thrown by `StreamResolver` and caught in `PlaybackRepositoryImpl`.
-- `ProviderResult.Loading` exists but is largely unused — UI loading states are emitted by explicit `Loading` UiState values.
-- `DiagnosticLogger` is failure-tolerant: `safeLog` falls back to `println` when `android.util.Log` is unavailable (unit tests).
-- Notification permission/opt-in failures are suppressed with `@SuppressLint` rather than handled (`PlaybackService`).
+- `ProviderResult<T>` sealed result for all `MusicProvider` methods (`app/src/main/java/com/clibeats/domain/provider/ProviderResult.kt`).
+- `runCatching { … }.getOrElse { ProviderResult.Error(...) }` in every provider implementation.
+- `PlaybackException` domain type for stream-resolution failures (`app/src/main/java/com/clibeats/domain/model/PlaybackException.kt`).
+- `PlayerAdapter.onPlayerError` → `retryAfterStreamError` (once per track, on HTTP/IO errors) → `skipAfterError` → stop after 5 consecutive failures (`PlayerAdapter.kt:134-139`, `:402-441`).
+- `_messages` (`SharedFlow<String>`) surfaces "Couldn't play …" above the player bar; `PlayerViewModel` clears it after 3 s.
+- Diagnostics: `DiagnosticLogger` (`util/DiagnosticLogger.kt`) with trace ids for search → resolve → play; `CrashReporter`/`TelemetryTracker` bound to Timber implementations in `di/TelemetryModule.kt`.
+- Startup restore failures are caught and logged (`QUEUE_RESTORE_FAILED`) rather than crashing (`PlaybackRepositoryImpl.kt:169-171`).
 
 ## Cross-Cutting Concerns
 
-**Logging:** `com.clibeats.util.DiagnosticLogger` (trace-id based: `SEARCH_REQUEST`, `STREAM_URL_RESOLVED`, `MEDIA_ERROR`, …). Telemetry interfaces (`TimberTelemetryTracker`, `TimberCrashReporter`) log via `android.util.Log` only — no remote sink.
+**Logging:** `DiagnosticLogger` (`app/src/main/java/com/clibeats/util/DiagnosticLogger.kt`) for structured playback/search traces; Media3 session logging with tag `CLIBeatsSession`; Timber-backed `TelemetryTracker`/`CrashReporter` (`telemetry/TimberTelemetryTracker.kt`, `telemetry/TimberCrashReporter.kt`).
 
-**Validation:** SQL LIKE wildcards escaped via `String.escapeForLike()` (`app/src/main/java/com/clibeats/data/local/dao/SongDao.kt`); provider responses filtered for required ids/stream URLs; `ProviderId.rawSourceId` guards provider prefixes; settings writes validated in ViewModels (blank playlist names rejected).
+**Validation:** Provider DTO → domain mappers drop incomplete records (`mapNotNull`, null-safe `JsonElement` navigation in `data/provider/mapper/TrackMapper.kt`); `ProviderId.rawSourceId` normalizes ids; DAO search uses `escapeForLike` (`data/local/dao/SongDao.kt`); signing URLs (`expire=`) are never persisted (`LibraryRepositoryImpl.toggleLike`).
 
-**Authentication:** no user accounts. Only an optional `auth_token` stored in `EncryptedSharedPreferences` with an Android Keystore `MasterKey` (`app/src/main/java/com/clibeats/di/StorageModule.kt`, `data/preferences/AppPreferences.kt`).
+**Authentication:** No account system. `AppPreferences.authToken` is the only credential, stored in `EncryptedSharedPreferences` with an Android Keystore `MasterKey` (`di/StorageModule.kt`), exposed as `Flow<String?>` and surfaced to Settings as `hasAuthToken`.
 
-**Network posture:** only unauthenticated public provider APIs (`music.youtube.com` InnerTube, `archive.org`, `discoveryprovider.audius.co`, `api.jamendo.com`). Jamendo requires a `JAMENDO_CLIENT_ID` Gradle property injected via `BuildConfig`.
+**Preferences:** `AppPreferences` (`data/preferences/AppPreferences.kt`) is the single settings facade over DataStore (`clibeats_prefs`) plus secure prefs; keys are private constants; defaults live in the getters (e.g. cache 512 MB, artwork 128 MB, provider `youtube_music`, theme `DARK`, accent `GREEN`).
 
-**Security:** release build is **not minified** (`isMinifyEnabled = false`) and is signed with the debug key; crash/telemetry output sanitizes `Bearer` tokens. See `docs/adr/ADR-007-caching-downloads-security.md`.
-
-**Accessibility:** content descriptions on nav icons and artwork; Compose test semantics (`semantics { contentDescription = "Search music" }`). See `docs/adr/ADR-008-performance-budgets-accessibility.md`.
+**Theming:** `presentation/theme/` defines `CliBeatsTheme`, `CliBeatsColors`, `CliBeatsTypography` (JetBrains Mono from `app/src/main/res/font/`), `CliBeatsShapes`, `AccentColor`, `CliBeatsThemeMode`; `ThemeViewModel` combines `theme_mode` + `accent_color_name` and defaults to null `onboardingDone` to avoid flashing the wrong screen.
 
 ---
 
-*Architecture analysis: 2026-11-17*
+*Architecture analysis: 2026-11-19*

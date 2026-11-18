@@ -1,116 +1,119 @@
 ---
-last_mapped_commit: 916a56379cbb0bf07eb302edd4489c7633418417
-last_mapped_at: 2026-11-17
+last_mapped_commit: a77dc37a72fa6a498fb1ac17a68d814fbe3770cb
+last_mapped_at: 2026-11-19
 ---
 # Technology Stack
 
-**Analysis Date:** 2026-11-17
+**Analysis Date:** 2026-11-19
 
 ## Languages
 
 **Primary:**
-- Kotlin 2.0.21 — 100% of application source (131 `.kt` files under `app/src/main/java/com/clibeats/`); zero Java sources
+- Kotlin 2.0.21 — all application code under `app/src/main/java/com/clibeats/`; Android Gradle Plugin 8.5.2; Kotlin Compose compiler plugin (`org.jetbrains.kotlin.plugin.compose`) and `kotlinx-serialization` plugin enabled in `app/build.gradle.kts`.
+- Java 17 language level — `compileOptions` / `jvmTarget` set to JVM 17 in `app/build.gradle.kts:57-78`.
 
 **Secondary:**
-- Kotlin DSL for build scripts — `build.gradle.kts`, `settings.gradle.kts`, `app/build.gradle.kts`
-- XML — `app/src/main/AndroidManifest.xml`, resources under `app/src/main/res/` (`xml/data_extraction_rules.xml`, drawables, mipmaps)
-- Shell — `scripts/check-quality-gates.sh`; YAML — `.github/workflows/ci.yml`; YAML — `config/detekt/detekt.yml`
+- XML — `app/src/main/AndroidManifest.xml`, `app/src/main/res/**` (drawables, fonts, backup/data-extraction rules).
+- Gradle Kotlin DSL — `build.gradle.kts`, `app/build.gradle.kts`, `settings.gradle.kts`.
+- TOML — version catalog `gradle/libs.versions.toml`.
+- JSON — Room schema export at `app/schemas/com.clibeats.data.local.CliBeatsDatabase/`, kotlinx.serialization DTOs in `app/src/main/java/com/clibeats/data/provider/dto/`.
 
 ## Runtime
 
 **Environment:**
-- Android, `minSdk = 26` (Android 8.0), `compileSdk = 34`, `targetSdk = 34` — declared in `app/build.gradle.kts:17-22`
-- JDK 17 (`sourceCompatibility`/`targetCompatibility = VERSION_17`, `jvmTarget = JVM_17`)
-- Gradle 8.9 (wrapper) — `gradle/wrapper/gradle-wrapper.properties`
-- Android Gradle Plugin 8.5.2 — `gradle/libs.versions.toml`
+- Android 8.0+ (`minSdk = 26`), `targetSdk = 34`, `compileSdk = 34` (`app/build.gradle.kts:17-22`).
+- Application ID / namespace: `com.clibeats` (`app/build.gradle.kts:16,20`).
+- JVM 17 is required to build; CI uses Temurin JDK 17 (`.github/workflows/ci.yml:23-27`, `.github/workflows/release.yml:32-36`).
+- `gradle.properties` sets `android.suppressUnsupportedCompileSdk=35` for libraries compiled against API 35.
 
 **Package Manager:**
-- Gradle with version catalog at `gradle/libs.versions.toml` (single source of truth for all versions)
-- Wrapper committed: `gradlew`, `gradlew.bat`, `gradle/wrapper/gradle-wrapper.jar`
-- Lockfile: not present (no `gradle.lockfile`, no dependency locking configured)
-- Repositories: `google()`, `mavenCentral()`, `jitpack.io` (JitPack required for NewPipeExtractor) — `settings.gradle.kts`
+- Gradle 8.9 via wrapper (`gradle/wrapper/gradle-wrapper.properties`).
+- Android Gradle Plugin 8.5.2 (`gradle/libs.versions.toml:2`).
+- Dependency repositories: `google()`, `mavenCentral()`, `https://jitpack.io` (`settings.gradle.kts:8-15`); JitPack is required for NewPipeExtractor.
+- Lockfile: not present. Versions are centralized in `gradle/libs.versions.toml`.
+- `local.properties` (SDK path) is gitignored (`.gitignore`).
 
 ## Frameworks
 
 **Core:**
-- Jetpack Compose (BOM `2024.09.03`) — all UI; `app/src/main/java/com/clibeats/presentation/`
-- Compose Material 3 — `compose-material3` via BOM; `material3-adaptive-navigation-suite` 1.3.1 for adaptive navigation (`app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt`)
-- Kotlin Compose Compiler plugin 2.0.21 (`org.jetbrains.kotlin.plugin.compose`)
-- Hilt 2.51.1 / Dagger — DI, via KSP; modules in `app/src/main/java/com/clibeats/di/` (11 modules)
-- KSP 2.0.21-1.0.27 — annotation processing for Hilt and Room (no KAPT)
-- Room 2.6.1 — local SQLite persistence, schema export to `app/schemas/com.clibeats.data.local.CliBeatsDatabase/` (versions 1-3)
-- DataStore Preferences 1.1.1 — non-sensitive user settings (`clibeats_prefs`)
-- AndroidX Security Crypto 1.1.0-alpha06 — EncryptedSharedPreferences for sensitive values (`clibeats_secure_prefs`); legacy API is deprecated, migration to Tink noted in `app/src/main/java/com/clibeats/di/StorageModule.kt`
-- AndroidX Media3 1.4.1 (`media3-exoplayer`, `media3-session`, `media3-common`) + `androidx.media` 1.7.0 — playback engine, `MediaSessionService`, notification controls
-- Retrofit 2.11.0 + OkHttp 4.12.0 — HTTP clients for all music providers
-- kotlinx.serialization JSON 1.7.1 with `retrofit2-kotlinx-serialization-converter` 1.0.0
-- Coil 2.7.0 (`coil-compose`) — artwork loading with custom `ImageLoader` (memory 25%, disk 2%)
-- NewPipeExtractor `v0.26.4` (JitPack `com.github.TeamNewPipe:NewPipeExtractor`) — YouTube stream extraction fallback
+- Jetpack Compose (BOM `2024.09.03`) — Material 3 UI, `androidx.compose.ui`, `material3`, `ui-tooling-preview`, `material-icons-extended` (`gradle/libs.versions.toml:38-53`).
+- `androidx.compose.material3:material3-adaptive-navigation-suite` 1.3.1 — navigation/layout (`app/src/main/java/com/clibeats/presentation/layout/MainLayout.kt`).
+- `androidx.activity:activity-compose` 1.9.2, `androidx.core:core-ktx` 1.13.1, `androidx.lifecycle:lifecycle-runtime-ktx` 2.8.6.
+- Hilt 2.51.1 + `hilt-navigation-compose` 1.2.0, processed with KSP 2.0.21-1.0.27 — DI modules in `app/src/main/java/com/clibeats/di/`, entry point `app/src/main/java/com/clibeats/CLIBeatsApp.kt`.
+- Room 2.6.1 (runtime, ktx, compiler via KSP) — database `app/src/main/java/com/clibeats/data/local/CliBeatsDatabase.kt`, DAOs in `app/src/main/java/com/clibeats/data/local/dao/`, schema export configured in `app/build.gradle.kts:80-82`.
+- DataStore Preferences 1.1.1 — settings and playback state (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`, wiring in `app/src/main/java/com/clibeats/di/StorageModule.kt`).
+- `androidx.security:security-crypto` 1.1.0-alpha06 — `EncryptedSharedPreferences` with AES256-GCM MasterKey (`app/src/main/java/com/clibeats/di/StorageModule.kt:34-50`).
+- AndroidX Media3 1.4.1 (`media3-exoplayer`, `media3-session`, `media3-common`) — playback engine, `MediaLibraryService`, notifications, `SimpleCache` (`app/src/main/java/com/clibeats/di/PlaybackModule.kt`, `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`, `app/src/main/java/com/clibeats/data/cache/MediaCaches.kt`).
+- `androidx.media:media` 1.7.0 — declared in `app/build.gradle.kts:122` but no `androidx.media.` package imports exist in main sources (only `androidx.media3`); effectively unused.
+- Retrofit 2.11.0 + `retrofit2-kotlinx-serialization-converter` 1.0.0 + kotlinx.serialization JSON 1.7.1 — typed provider APIs (`app/src/main/java/com/clibeats/di/NetworkModule.kt`).
+- OkHttp 4.12.0 + `logging-interceptor` (debug-only BASIC logging) — shared HTTP client, 20 s read / 15 s connect timeouts (`app/src/main/java/com/clibeats/di/NetworkModule.kt:45-61`).
+- Coil 2.7.0 (`coil-compose`) — artwork loading with custom memory/disk caches (`app/src/main/java/com/clibeats/di/ImageLoaderModule.kt`).
+- NewPipeExtractor `v0.27.1` (`com.github.TeamNewPipe:NewPipeExtractor`, JitPack) — primary YouTube stream extraction (`app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`).
+- Kotlin coroutines — used throughout; version is not pinned directly in the catalog, only `kotlinx-coroutines-test` 1.8.1 for tests.
 
 **Testing:**
-- JUnit 4.13.2 — all unit tests
-- Mockito Kotlin 5.4.0 + mockito-core 5.12.0
-- kotlinx-coroutines-test 1.8.1
-- OkHttp MockWebServer 4.12.0
-- Room testing 2.6.1 (JVM + instrumented)
-- Compose UI Test JUnit4 (via Compose BOM) + `ui-test-manifest` (debug)
-- Espresso 3.6.1, AndroidX Test Ext JUnit 1.2.1 (instrumented, `app/src/androidTest/`)
-- Paparazzi 1.3.4 (`app.cash.paparazzi`) — screenshot regression tests, snapshots in `app/src/test/snapshots/images/`
-- Media3 test-utils 1.4.1
-- No Truth, no Robolectric, no Turbine, no JUnit 5 (despite `docs/LICENSES.md` mentioning Truth)
+- JUnit 4.13.2, Mockito Kotlin 5.4.0, Mockito Core 5.12.0, kotlinx-coroutines-test 1.8.1.
+- Room testing 2.6.1 (instrumented DAO tests in `app/src/androidTest/java/com/clibeats/data/local/dao/`).
+- Media3 `media3-test-utils` 1.4.1, OkHttp `mockwebserver` 4.12.0.
+- Compose UI test (`ui-test-junit4`, manifest via debug), Espresso 3.6.1, `androidx.test.ext:junit` 1.2.1.
+- Paparazzi 1.3.4 — screenshot tests in `app/src/test/java/com/clibeats/theme/`.
+- Google Truth is used extensively (`com.google.common.truth.Truth`, 34 imports under `app/src/test/`) but is not declared in `gradle/libs.versions.toml`; it resolves transitively (e.g. via `room-testing`/AndroidX test). Consider declaring it explicitly.
 
 **Build/Dev:**
-- Detekt 1.23.6 with `detekt-formatting` plugin; config `config/detekt/detekt.yml` (custom `ForbiddenImport` rule blocking `com.clibeats.data.*` imports from presentation)
-- ktlint Gradle plugin 12.1.1 (`org.jlleitschuh.gradle.ktlint`)
-- Android Lint with `abortOnError = true`, `checkDependencies = true`, `warningsAsErrors = false`
-- GitHub Actions CI — `.github/workflows/ci.yml` (JDK 17 Temurin, ktlintCheck, detekt, lintDebug, assembleDebug, testDebugUnitTest, artifact upload)
-- Local gate script — `scripts/check-quality-gates.sh`
+- ktlint Gradle plugin 12.1.1 (`org.jlleitschuh.gradle.ktlint`) — `ktlintCheck`.
+- detekt 1.23.6 + `detekt-formatting`; config `config/detekt/detekt.yml`.
+- Android Lint with `abortOnError = true`, `checkDependencies = true` (`app/build.gradle.kts:67-71`).
+- Paparazzi 1.3.4 (applied only in `app/build.gradle.kts`).
+- Local quality gate script: `scripts/check-quality-gates.sh` (ktlint → detekt → lintDebug → testDebugUnitTest).
 
 ## Key Dependencies
 
 **Critical:**
-- `androidx.media3:media3-exoplayer:1.4.1` — single `ExoPlayer` singleton built in `app/src/main/java/com/clibeats/di/PlaybackModule.kt`
-- `androidx.media3:media3-session:1.4.1` — `PlaybackService` extends `MediaSessionService` (`app/src/main/java/com/clibeats/playback/service/PlaybackService.kt`)
-- `androidx.room:room-runtime:2.6.1` + `room-compiler` (KSP) — 9 entities, 8 DAOs in `app/src/main/java/com/clibeats/data/local/`
-- `com.google.dagger:hilt-android:2.51.1` + `hilt-compiler` (KSP) — every ViewModel/repository uses `@Inject`/`@HiltViewModel`
-- `com.github.TeamNewPipe:NewPipeExtractor:v0.26.4` — used only by `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`; NewPipe is initialized lazily with an OkHttp-backed `Downloader`
+- `com.github.TeamNewPipe:NewPipeExtractor:v0.27.1` — primary YouTube Music stream URL resolver. GPLv3; the distributed APK inherits GPLv3 (`docs/LICENSES.md`).
+- AndroidX Media3 1.4.1 — streaming + cached playback, background `MediaLibraryService`, media notification and resume card.
+- Hilt 2.51.1 — dependency graph for all repositories, providers, player, caches (`app/src/main/java/com/clibeats/di/`).
+- Room 2.6.1 — library, playlists, queue, history, cache index, saved albums/artists, liked songs.
+- Retrofit + OkHttp + kotlinx.serialization — all four online provider integrations.
+- Coil — artwork fetch through the shared OkHttp client with a resizable disk cache.
+- `androidx.security:security-crypto` — encrypted storage of the reserved auth token.
 
 **Infrastructure:**
-- `okhttp3:okhttp:4.12.0` + `logging-interceptor` (debug-only BODY logging in `NetworkModule`)
-- `retrofit2:retrofit:2.11.0` + `com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0`
-- `androidx.datastore:datastore-preferences:1.1.1`
-- `androidx.security:security-crypto:1.1.0-alpha06`
-- `io.coil-kt:coil-compose:2.7.0`
+- JitPack repository (`settings.gradle.kts:13`) — exclusively needed for NewPipeExtractor.
+- Guava is available transitively through Media3 and used directly in `app/src/main/java/com/clibeats/playback/service/PlaybackService.kt` (`ImmutableList`, `ListenableFuture`) without an explicit dependency declaration.
+- JetBrains Mono fonts bundled as resources (`app/src/main/res/font/`).
 
 ## Configuration
 
 **Environment:**
-- `JAMENDO_CLIENT_ID` — optional Gradle property read in `app/build.gradle.kts:26-28` and exposed as `BuildConfig.JAMENDO_CLIENT_ID`; empty by default. Injected into `JamendoMusicProvider` via `@Named("jamendo_client_id")` in `app/src/main/java/com/clibeats/di/ProviderModule.kt`. Build with `./gradlew -PJAMENDO_CLIENT_ID=<id> assembleDebug`.
-- `ANDROID_HOME` / `ANDROID_SDK_ROOT` — read by the `Test` task configuration in `app/build.gradle.kts` (falls back to `C:\Android\Sdk`)
-- No `.env` files present. No `local.properties` committed (ignored by `.gitignore`).
-- Gradle properties — `gradle.properties`: `org.gradle.jvmargs=-Xmx2048m`, `android.useAndroidX=true`, `android.nonTransitiveRClass=true`, `android.suppressUnsupportedCompileSdk=35`
+- Gradle build properties (`app/build.gradle.kts:23-29`):
+  - `-PversionName` (default `2.0.0`) and `-PversionCode` (default `20000`).
+  - `-PJAMENDO_CLIENT_ID` → `BuildConfig.JAMENDO_CLIENT_ID`; empty by default, Jamendo provider returns a configuration error until set.
+- Release signing environment variables (`app/build.gradle.kts:32-44`): `KEYSTORE_FILE`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; missing keystore falls back to debug signing.
+- `ANDROID_HOME` / `ANDROID_SDK_ROOT` are required by unit-test tasks and Paparazzi; fallback is `C:\Android\Sdk` (`app/build.gradle.kts:90-99`).
+- Runtime secrets: none hardcoded. No backend URL, API key, or token is compiled in except the public Audius `app_name=clibeats` and YouTube client identifiers.
+- No `.env`-style configuration is used for the app; configuration is Gradle properties + environment variables + GitHub secrets.
 
 **Build:**
-- Root plugin declarations: `build.gradle.kts`; module config: `app/build.gradle.kts`
-- `buildFeatures { compose = true; buildConfig = true }`
-- Room schema output: `ksp { arg("room.schemaLocation", "$projectDir/schemas") }`
-- Release build: `isMinifyEnabled = false`, ProGuard rules in `app/proguard-rules.pro`, `signingConfig = signingConfigs.getByName("debug")` (no release keystore configured)
-- Detekt config: `config/detekt/detekt.yml`
+- `app/build.gradle.kts` — `compose = true`, `buildConfig = true`, KSP `room.schemaLocation`, detekt, ktlint, Paparazzi.
+- `config/detekt/detekt.yml` — detekt ruleset.
+- `gradle/libs.versions.toml` — single source of dependency/plugin versions.
+- `.github/workflows/ci.yml` — build/lint/test pipeline.
+- `.github/workflows/release.yml` — tag-driven signed release.
 
 ## Platform Requirements
 
 **Development:**
-- JDK 17
-- Android SDK Platform 34
-- Gradle 8.5+ (wrapper 8.9)
-- Bash for `scripts/check-quality-gates.sh`; CI runs on `ubuntu-latest`
-- Paparazzi screenshots render on the JVM (no emulator required); instrumented DAO tests in `app/src/androidTest/java/com/clibeats/data/local/dao/` require a device/emulator
+- JDK 17 (Temurin in CI), Android SDK Platform 34 + build-tools, `ANDROID_HOME` exported.
+- Gradle 8.9 (wrapper handles download, `networkTimeout=10000`).
+- Linux, macOS, or Windows (gradlew.bat present; `CLIBeats` documented for both shells in `README.md`).
+- Screenshot tests require `./gradlew verifyPaparazziDebug` and a valid SDK location.
 
 **Production:**
-- Android 8.0 (API 26) or newer device
-- Distributed as an APK (`app/build/outputs/apk/`); no Play Store metadata, signing, or store-publishing integration in the repo
-- No backend service required — all stream resolution happens on-device
+- Android 8.0 (API 26) or newer device/tablet.
+- Distribution is APK-only through GitHub Releases; no Play Store or other store listing pipeline exists.
+- Runtime permissions requested: `INTERNET`, `WAKE_LOCK`, `POST_NOTIFICATIONS`, `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` (`app/src/main/AndroidManifest.xml:4-8`). No storage/media permissions — local library access uses SAF.
+- Foreground `mediaPlayback` service plus `MediaButtonReceiver` declared (`app/src/main/AndroidManifest.xml:30-49`).
 
 ---
 
-*Stack analysis: 2026-11-17*
+*Stack analysis: 2026-11-19*

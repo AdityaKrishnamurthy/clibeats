@@ -1,307 +1,209 @@
 ---
-last_mapped_commit: 916a56379cbb0bf07eb302edd4489c7633418417
-last_mapped_at: 2026-11-17
+last_mapped_commit: a77dc37a72fa6a498fb1ac17a68d814fbe3770cb
+last_mapped_at: 2026-11-19
 ---
 # Coding Conventions
 
-**Analysis Date:** 2026-11-17
-
-## Project Shape
-
-- Kotlin 2.0.21, Jetpack Compose (Material 3), Android app module only (`:app`).
-- Package root `com.clibeats` with Clean-Architecture layer packages under `app/src/main/java/com/clibeats/`:
-  `data/`, `domain/`, `presentation/`, `playback/`, `di/`, `telemetry/`, `util/`.
-- Everything is enforced by Gradle quality gates: `ktlintCheck`, `detekt`, `lintDebug`
-  (`app/build.gradle.kts`, `config/detekt/detekt.yml`, `scripts/check-quality-gates.sh`).
+**Analysis Date:** 2026-11-19
 
 ## Naming Patterns
 
 **Files:**
-- One public type per file, file name equals the type name: `Track.kt`, `HomeViewModel.kt`, `SongDao.kt`.
-- Exception — grouped DTO files: `app/src/main/java/com/clibeats/data/provider/dto/AudiusDtos.kt`,
-  `InternetArchiveDtos.kt`, `JamendoDtos.kt`, `PlayerRequest.kt`, `PlayerResponse.kt`, `SearchResponse.kt`.
-- Theme palette files group several top-level color vals: `presentation/theme/CliBeatsColors.kt`.
-- Test files: `<ClassUnderTest>Test.kt` mirroring the source path
-  (`app/src/test/java/com/clibeats/data/provider/AudiusMusicProviderTest.kt`).
-- Screenshot tests: `<Component>ScreenshotTest.kt` in package `com.clibeats.theme`
-  (`app/src/test/java/com/clibeats/theme/PlayerBarScreenshotTest.kt`).
-- A stray Compose source-set test is named with a `Kt` suffix: `SearchScreenKtTest.kt`.
+- One top-level declaration group per file; the filename is the PascalCase name of the primary class or of the concept the top-level functions operate on: `HomeViewModel.kt`, `HomeUiState.kt`, `HomeScreen.kt`, `PlaybackRepositoryImpl.kt`, `TrackMapper.kt`, `ArtworkUrl.kt`, `SongEntity.kt`.
+- UI state files are separate from the ViewModel file: `app/src/main/java/com/clibeats/presentation/*/XxxUiState.kt` (e.g. `app/src/main/java/com/clibeats/presentation/home/HomeUiState.kt`).
+- DI modules: `app/src/main/java/com/clibeats/di/XxxModule.kt` (`NetworkModule.kt`, `RepositoryModule.kt`, `DatabaseModule.kt`, `ProviderModule.kt`, `StorageModule.kt`, `TelemetryModule.kt`, `PlaybackModule.kt`, `DownloadModule.kt`, `CacheModule.kt`, `ImageLoaderModule.kt`, `AppModule.kt`).
+- Tests: `<ClassUnderTest>Test.kt` mirroring the main source path (see TESTING.md).
 
 **Packages:**
-- Lowercase, no underscores: `com.clibeats.data.local.dao`, `com.clibeats.presentation.search`.
-- Feature packages under `presentation/` hold the triple `FeatureScreen.kt`, `FeatureViewModel.kt`,
-  `FeatureUiState.kt` (e.g. `presentation/home/`, `presentation/queue/`, `presentation/library/`).
-- Mappers live in a dedicated `mapper` subpackage of the layer that owns them:
-  `data/local/mapper/SongMapper.kt`, `data/local/mapper/PlaylistMapper.kt`,
-  `data/provider/mapper/TrackMapper.kt`, `AudiusMapper.kt`, `InternetArchiveMapper.kt`, `JamendoMapper.kt`.
+- All lowercase, no underscores: `com.clibeats.data.provider.youtube`, `com.clibeats.presentation.layout`, `com.clibeats.domain.repository`.
+- Layer-first then feature: `com.clibeats.<layer>.<feature>` where layer is `data`, `domain`, `presentation`, `playback`, `di`, `telemetry`, `util`.
+- Data layer is split by mechanism: `data.local.{dao,entity,mapper}`, `data.provider.{api,dto,mapper,youtube}`, `data.network`, `data.cache`, `data.preferences`, `data.repository`, `data.scan`, `data.download`, `data.playlist`.
 
-**Classes / Interfaces:**
-- `PascalCase`. Interfaces have no `I` prefix (`MusicProvider`, `ProviderRegistry`, `TelemetryTracker`,
-  `CrashReporter`); implementations are suffixed `Impl` or named by mechanism
-  (`SongRepositoryImpl`, `MusicProviderRegistry`, `TimberTelemetryTracker`, `TimberCrashReporter`).
-- Layer suffixes are meaningful and consistent: `*Entity` (Room), `*Dto` / `*Dtos` / `*Response` / `*Request`
-  (network), `*Repository` (domain port) / `*RepositoryImpl` (data adapter), `*Dao`, `*ViewModel`,
-  `*UiState`, `*Screen`, `*Module` (Hilt).
-- Sealed hierarchies for result and state: `ProviderResult` (`domain/provider/ProviderResult.kt`),
-  `PlaybackException` (`domain/model/PlaybackException.kt`), `HomeUiState`, `SearchUiState`,
-  `QueueUiState`, `LibraryUiState`, `PlaylistUiState`, `SettingsUiState`.
-- UI state contracts are `sealed interface` with `data object Loading` / `data object Empty` /
-  `data class Success(...)` / `data class Error(val message: String)`. See
-  `app/src/main/java/com/clibeats/presentation/search/SearchUiState.kt`.
+**Classes/Interfaces:**
+- PascalCase, no `I` prefix on interfaces: `MusicProvider`, `PlaybackRepository`, `TelemetryTracker`.
+- Repository interface in `domain/repository`, implementation suffixed `Impl` in `data/repository`: `PlaylistRepository` → `PlaylistRepositoryImpl`.
+- Providers are suffixed `MusicProvider` and named after the source: `AudiusMusicProvider`, `YouTubeMusicProvider`, `InternetArchiveMusicProvider`, `JamendoMusicProvider`, `LocalMusicProvider` (all in `app/src/main/java/com/clibeats/data/provider/`).
+- ViewModels: `XxxViewModel` annotated `@HiltViewModel`, in the same feature package as their screen.
+- Screens/composables: PascalCase, suffix `Screen` for destinations (`HomeScreen`, `SearchScreen`, `NowPlayingScreen`, `MainLayout`).
+- Terminal-design system primitives use the `Tui` prefix: `TuiBlock`, `TuiTextField` in `app/src/main/java/com/clibeats/presentation/component/`.
+- State/results are sealed: `sealed class ProviderResult<out T>` (`app/src/main/java/com/clibeats/domain/provider/ProviderResult.kt`), `sealed interface HomeUiState`, `sealed interface SleepTimer` in `app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt`.
+- Entity suffix `Entity`, DTO suffix `Dto`, Room table names snake_case plural: `SongEntity` → `@Entity(tableName = "songs")` in `app/src/main/java/com/clibeats/data/local/entity/SongEntity.kt`.
 
 **Functions:**
-- `camelCase` for regular functions and methods.
-- Compose composables are `PascalCase` (Compose convention), which violates ktlint's standard naming rule;
-  every composable file therefore declares
-  `@file:Suppress("ktlint:standard:function-naming")` and/or `@Suppress("FunctionNaming")`.
-  Example: `app/src/main/java/com/clibeats/presentation/component/TuiBlock.kt`.
-- Mapper functions are extensions named `toDomain()`, `toEntity()`, `toDomainTrack()`, `toTrackList()`
-  (`app/src/main/java/com/clibeats/data/local/mapper/SongMapper.kt`).
-- Boolean accessors/properties use `is` / `has` prefixes: `isPlaying`, `isActive`, `isNowPlaying`,
-  `shuffleEnabled` (state noun form is also used).
-- Domain-facing suspend API: `suspend fun search(...)`, `suspend fun trending(...)`.
+- camelCase; boolean-returning functions read as predicates (`isLiked`, `isReadOnly`, `isLocalFilePlaylist`).
+- Mapping is done with top-level extension functions, **not** mapper classes: `toDomain()`, `toEntity()`, `toDomainTrack()`, `toTrackList()` in `app/src/main/java/com/clibeats/data/local/mapper/` and `app/src/main/java/com/clibeats/data/provider/mapper/`.
+- Compose UI event callbacks are prefixed `on` (`onPlay`, `onQueryChange`, `onSkipNextClick`, `onAddToQueue`, `playFromList`). Slot callbacks passed to composables are also `on*` (`onNavigate`, `onDismiss`).
+- Suspend functions for all IO/repository/provider work; `Flow`-returning functions are suffixed `AsFlow` when a suspend twin exists (`getAllAsFlow()`, `getAllPlaylistsAsFlow()`, `getSongsForPlaylistAsFlow()`).
 
-**Variables / Properties:**
-- `camelCase`. Backing-state pair convention for `StateFlow`:
-  `private val _playbackState = MutableStateFlow(...)` + `val playbackState: StateFlow<...> = _playbackState.asStateFlow()`
-  (`app/src/main/java/com/clibeats/playback/PlayerAdapter.kt`).
-- Injected constructor params are `private val` named after the collaborator in camelCase derived from the type:
-  `private val playlistDao: PlaylistDao`, `private val providerRegistry: ProviderRegistry`.
-- Constants: `private const val` at file top in `SCREAMING_SNAKE_CASE` —
-  `private const val TRENDING_LIMIT = 15` (`HomeViewModel.kt`),
-  `private const val READ_TIMEOUT_SECONDS = 20L` (`di/NetworkModule.kt`).
-- Named-string DI qualifiers are public `const val` on the module object:
-  `NetworkModule.INNERTUBE_OKHTTP_QUALIFIER`, `ProviderModule.JAMENDO_CLIENT_ID_QUALIFIER`.
-- Preference/secure key names are grouped in private objects `Keys` / `SecureKeys`
-  (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt`).
-- Numeric literals use underscores: `180_000L`, `1_700_000_000_000L`, `5_000L`.
-
-**Types / Data classes:**
-- Domain models are immutable `data class` with no Android or library types:
-  `Track(id, title, artist, album, durationMs, artworkUrl, streamUrl, providerId)` in
-  `app/src/main/java/com/clibeats/domain/model/Track.kt`.
-- Nullable `String?` is used for genuinely absent metadata (`artworkUrl`, `streamUrl`) rather than sentinels.
-- IDs are composite strings prefixed by provider: `"audius:95wro"`, `"internet_archive:wonderwall-1995"`,
-  parsed with `ProviderId.rawSourceId(providerId, id)` (`domain/provider/ProviderId.kt`).
-- Enum state values are `SCREAMING_SNAKE`: `RepeatMode { OFF, ONE, ALL }`
-  (`app/src/main/java/com/clibeats/domain/model/PlaybackState.kt`).
+**Variables/Constants:**
+- `val`/`var` camelCase. Backing state fields are prefixed `_` with a public read-only twin: `private val _query = MutableStateFlow("")` / `val query: StateFlow<String> = _query.asStateFlow()` (`app/src/main/java/com/clibeats/presentation/search/SearchViewModel.kt:40-41`).
+- File-private constants are `private const val UPPER_SNAKE_CASE` declared at the **top** of the file, above the class, with a unit/meaning suffix: `DEBOUNCE_MS = 300L`, `MIN_QUERY_LENGTH = 2`, `TRENDING_LIMIT = 15`, `READ_TIMEOUT_SECONDS = 20L`, `SECONDS_PER_MINUTE = 60L`.
+- Preference keys live in a `private object Keys` with `UPPER_SNAKE_CASE` properties (`app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:30-49`).
+- Theme color tokens are PascalCase vals prefixed `CliBeats`: `CliBeatsBackgroundDark`, `CliBeatsAccent`, `CliBeatsTextSecondary` (`app/src/main/java/com/clibeats/presentation/theme/CliBeatsColors.kt`).
 
 ## Code Style
 
 **Formatting:**
-- Enforced by `org.jlleitschuh.gradle.ktlint` 12.1.1 (`app/build.gradle.kts`). There is **no**
-  `.editorconfig` in the repository, so ktlint runs with its default `ktlint_official` code style.
-- 4-space indentation, no tabs, no semicolons, expression-bodied functions allowed.
-- Trailing commas are used in multi-line parameter/argument lists, including single-parameter ones:
-  ```kotlin
-  override suspend fun search(
-      query: String,
-      limit: Int,
-  ): ProviderResult<List<Track>> =
-  ```
-- Multi-line builder chains put the `.` at the start of the continuation line, and the whole
-  expression is often wrapped so the assignment `=` ends the line:
-  ```kotlin
-  val builder =
-      OkHttpClient.Builder()
-          .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-          .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-  ```
-- `@Inject`/`@Provides` annotation-on-own-line constructor style is used everywhere
-  (`ktlint_official` wrapping):
-  ```kotlin
-  @Singleton
-  class AudiusMusicProvider
-      @Inject
-      constructor(
-          private val api: AudiusApi,
-      ) : MusicProvider {
-  ```
-- CSV of numeric UI dimensions always carry units explicitly in Compose: `8.dp`, `48.dp`, `labelSmall`.
-- Compose `Modifier` is the last parameter for components that accept one, with a default of `Modifier`:
-  `fun TrackArtwork(artworkUrl: String?, size: Int = 40, modifier: Modifier = Modifier)`
-  (`presentation/component/TrackArtwork.kt`). Callback lambdas default to `{}`.
+- ktlint via `org.jlleitschuh.gradle.ktlint` 12.1.1, declared in `app/build.gradle.kts` (`alias(libs.plugins.ktlint)`), version pinned in `gradle/libs.versions.toml`.
+- **There is no `.editorconfig` in the repo.** ktlint runs with its plugin defaults (`ktlint_official` code style). Consequences to follow:
+  - 4-space indentation, no tabs.
+  - Trailing commas on every multi-line parameter/argument list (see `app/src/main/java/com/clibeats/domain/model/Track.kt`, `app/src/main/java/com/clibeats/data/repository/PlaylistRepositoryImpl.kt`).
+  - Continuation lines are indented 4 spaces past the opening construct; chained calls break with `.` at line start (see `app/src/main/java/com/clibeats/presentation/home/HomeViewModel.kt:106-110`).
+  - `= runTest {` bodies put the `{` on the same line and the body indented (`fun x() =\n    runTest {`).
+- Long lines are permitted: 360 lines exceed 100 chars and 33 exceed 120 in `app/src/main`. Detekt's `MaxLineLength` is suppressed per file when needed (`app/src/main/java/com/clibeats/util/DiagnosticLogger.kt:1`).
 
 **Linting:**
-- detekt 1.23.6 with `buildUponDefaultConfig = true`, `allRules = false`, `maxIssues: 0`
-  (`config/detekt/detekt.yml`, `app/build.gradle.kts`). CI fails on any issue.
-- Key thresholds: `LongMethod` 60 lines, `LargeClass` 300 lines, `TooManyFunctions` 15 per
-  file/class (10 per interface), `MagicNumber` active with `-1, 0, 1, 2, 100, 1000` ignored and
-  property declarations/hashCode exempt.
-- `ForbiddenImport` bans `com.clibeats.data.*` to protect the layer boundary. The rule is far broader
-  than intended (it also matches data-layer files importing their own siblings), so data-layer and
-  test files open with `@file:Suppress("ForbiddenImport")`.
-- `formatting` ruleset is active, but `Indentation` and `ImportOrdering` are **disabled** with the
-  in-file rationale that detekt 1.23.6 misparses the ktlint_official `@Inject constructor()` layout and
-  that ktlint owns import ordering. Do not re-enable them.
-- Android Lint: `abortOnError = true`, `checkDependencies = true`, `warningsAsErrors = false`
-  (`app/build.gradle.kts`).
+- Detekt 1.23.6 with `buildUponDefaultConfig = true`, `allRules = false`, `maxIssues: 0` — config at `config/detekt/detekt.yml`, wired in `app/build.gradle.kts`.
+- Key enforced thresholds (`config/detekt/detekt.yml`):
+  - `TooManyFunctions`: 15 per file/class, 10 per interface.
+  - `LongMethod`: 60 lines.
+  - `LargeClass`: 300 lines.
+  - `MagicNumber`: active; `-1, 0, 1, 2, 100, 1000` ignored, property declarations ignored. Introduce a named `private const val` instead of a literal.
+  - `ForbiddenImport` for `com.clibeats.data.*` — clean-architecture boundary; see "Clean Architecture Boundary" below.
+  - `Indentation` and `ImportOrdering` are **disabled** in detekt because ktlint owns them (`config/detekt/detekt.yml:7-16`).
+- Android Lint: `lint { abortOnError = true; checkDependencies = true; warningsAsErrors = false }` in `app/build.gradle.kts`.
 
-**Suppression policy (important for new code):**
-76 of 131 main-source Kotlin files start with at least one `@file:Suppress(...)`. The recurring set is:
-- `"ForbiddenImport"` — mandatory in `data/` and `playback/` files that import their own layer
-  (`data/repository/PlaylistRepositoryImpl.kt`, `playback/PlayerAdapter.kt`).
-- `"ktlint:standard:function-naming"` (and detekt's `"FunctionNaming"`) — every composable file.
-- `"ktlint:standard:multiline-expression-wrapping"` — Compose layout expressions.
-- `"MaxLineLength"` / `"MaximumLineLength"` — dense one-liners and DAO `@Query` SQL.
-- `"MagicNumber"`, `"LongMethod"`, `"LongParameterList"`, `"TooManyFunctions"`, `"Indentation"`,
-  `"UnusedParameter"` — narrow, per-file exceptions.
-Each suppression in the codebase is accompanied by a comment explaining why it is legitimate;
-follow that pattern rather than suppressing silently.
+**Suppressions are first-class and must be justified:**
+- Use `@file:Suppress("Rule")` at the very top, before `package`, and only for a specific rule.
+- Add a one-to-two-line comment stating *why* the suppression exists (see `app/src/main/java/com/clibeats/data/repository/PlaylistRepositoryImpl.kt:21-23` and `app/src/main/java/com/clibeats/data/preferences/AppPreferences.kt:20-21`).
+- ktlint rule ids are namespaced: `"ktlint:standard:function-naming"`, `"ktlint:standard:multiline-expression-wrapping"` (used for `@Composable` PascalCase functions and compiler-plugin style).
+- Common suppressions in this codebase: `ForbiddenImport` (61), `FunctionNaming` (43), `MaxLineLength` (24), `MagicNumber` (20), `LongMethod` (20), `TooManyFunctions` (11), `ReturnCount` (11), `LongParameterList` (11).
 
 ## Import Organization
 
-**Order (ktlint_official layout — `*, java.**, javax.**, kotlin.**, aliases`):**
-1. Android/AndroidX (`androidx.*`), KotlinX (`kotlinx.*`), third-party (`com.google.*`, `dagger.*`,
-   `okhttp3.*`, `retrofit2.*`, `coil.*`, `app.cash.*`) — one block, ASCII-sorted.
-2. `java.*` (e.g. `java.util.concurrent.TimeUnit`).
-3. `javax.*` (`javax.inject.Inject`, `javax.inject.Singleton`).
-4. `kotlin.*` (e.g. `kotlin.coroutines.cancellation.CancellationException`).
-5. Aliased imports last, alphabetically by alias:
-   `import okhttp3.Request as OkHttpRequest`
-   (`app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`).
+**Order:**
+1. Single alphabetical block, no blank lines between groups (ktlint_official). Observed order: `androidx.*` → `app.cash.*` → `com.*` → `dagger.*` → `kotlinx.*` → `java.*`/`javax.*` → `org.*`.
+2. No wildcard imports, ever.
+3. `javax.inject.Inject` / `javax.inject.Singleton` sort toward the end (see `app/src/main/java/com/clibeats/data/provider/AudiusMusicProvider.kt:12-13`).
+4. `@file:Suppress(...)` precedes `package`; blank line after `package`; blank line after imports.
 
 **Path Aliases:**
-- None. No Gradle `import` aliases or Kotlin type aliases in use; all imports are fully qualified.
-- Wildcard imports are not used.
-- Test files import sibling `data.*` packages legitimately — they need
-  `@file:Suppress("ForbiddenImport")` at the top (see `SearchViewModelTest.kt`).
+- None. Use fully qualified imports; Gradle's `libs.` version catalog is only for build scripts (`gradle/libs.versions.toml`).
+
+## Clean Architecture Boundary
+
+The detekt `ForbiddenImport` rule forbids `com.clibeats.data.*` imports outside the data layer. Real-world exceptions exist and each must be suppressed at file level with a comment:
+
+- DI modules binding data implementations: `app/src/main/java/com/clibeats/di/RepositoryModule.kt:1-2`.
+- Data-layer files importing sibling data packages: `app/src/main/java/com/clibeats/data/repository/PlaylistRepositoryImpl.kt:1-2`, `app/src/main/java/com/clibeats/data/local/dao/PlaylistDao.kt:1-2`.
+- Presentation ViewModels that depend on `AppPreferences` (data layer): `app/src/main/java/com/clibeats/presentation/home/HomeViewModel.kt:1`, `app/src/main/java/com/clibeats/presentation/search/SearchViewModel.kt:1`, `app/src/main/java/com/clibeats/presentation/settings/SettingsViewModel.kt`.
+- Tests that interact with data packages: `app/src/test/java/com/clibeats/presentation/home/HomeViewModelTest.kt:1`.
+
+**Rule for new code:** domain packages (`domain/model`, `domain/repository`, `domain/provider`) must not import `com.clibeats.data.*` or `android.*`. Prefer moving new behavior behind a `domain` interface over suppressing the rule.
+
+## Dependency Injection Conventions
+
+- Hilt throughout. Modules in `app/src/main/java/com/clibeats/di/`.
+- Interface bindings: `abstract class XxxModule` with `@Binds` and `@Singleton` on each binding (`app/src/main/java/com/clibeats/di/RepositoryModule.kt`).
+- Construction: `object XxxModule` with `@Provides @Singleton` functions (`app/src/main/java/com/clibeats/di/NetworkModule.kt`).
+- All modules annotated `@Module @InstallIn(SingletonComponent::class)`.
+- Multiple instances of the same type use `@Named("qualifier")` with a `const val` qualifier name declared in the module (`NetworkModule.kt:132` `INNERTUBE_OKHTTP_QUALIFIER`).
+- Every injectable implementation is `@Singleton` + `@Inject constructor`.
+- Base URLs, timeouts and model names are file-private constants at the top of the module (`NetworkModule.kt:28-32`).
+- Constructor style (ktlint_official):
+  ```kotlin
+  @Singleton
+  class PlaylistRepositoryImpl
+      @Inject
+      constructor(
+          private val playlistDao: PlaylistDao,
+          private val songDao: SongDao? = null,
+      ) : PlaylistRepository {
+  ```
+  Optional collaborators are nullable with a default (`null`) so tests and older call sites keep compiling (`HomeViewModel.kt:36-37`, `PlayerViewModel.kt:44-45`).
+
+## Compose Conventions
+
+- Screens are stateless-ish containers: they call `hiltViewModel()` themselves and `collectAsState()` on `StateFlow`s:
+  ```kotlin
+  @Composable
+  fun HomeScreen(
+      onNavigate: (NavDestination) -> Unit = {},
+      homeViewModel: HomeViewModel = hiltViewModel(),
+  ) {
+      val uiState by homeViewModel.uiState.collectAsState()
+  ```
+  (`app/src/main/java/com/clibeats/presentation/home/HomeScreen.kt:59-69`).
+- Pure presentational components live in `app/src/main/java/com/clibeats/presentation/component/` and take primitive parameters, not ViewModels (`PlayerBar(trackTitle, artist, isPlaying, progress)`, `SongTableRow(trackTitle, artist, duration, index, isNowPlaying)`).
+- Ephemeral UI state (dialogs, selection) uses `remember { mutableStateOf<Track?>(null) }` inside the screen (`HomeScreen.kt:70`).
+- Styling always flows through theme tokens: `MaterialTheme.colorScheme.*`, `MaterialTheme.typography.*`, and the `CliBeats*` color vals from `app/src/main/java/com/clibeats/presentation/theme/CliBeatsColors.kt`. Do not hardcode `Color(0x...)` outside the theme files.
+- Composables are PascalCase, which ktlint's `function-naming` rule rejects — put `"ktlint:standard:function-naming"` (and `"FunctionNaming"` for detekt) in the file-level suppression list.
+- No `@Preview` composables exist; visual review is done with Paparazzi snapshot tests (see TESTING.md). Add Paparazzi coverage rather than `@Preview`.
+- Modifier chains break one call per line with `.` leading (`HomeScreen.kt:76-80`).
 
 ## Error Handling
 
-**Strategy:** recoverable failures are values, not exceptions.
-
-- Boundaries return `ProviderResult<T>` (`Success` / `Error` / `Loading`) and never throw to callers:
+**Patterns:**
+- Provider/repository boundaries return a sealed result instead of throwing: `ProviderResult.Success<T>`, `ProviderResult.Error(message, cause)`, `ProviderResult.Loading` (`app/src/main/java/com/clibeats/domain/provider/ProviderResult.kt`).
+- Providers wrap all IO in `runCatching { ... }.getOrElse { e -> ProviderResult.Error(e.message ?: "Human readable fallback", e) }`:
   ```kotlin
   override suspend fun search(query: String, limit: Int): ProviderResult<List<Track>> =
       runCatching {
-          ...
-          ProviderResult.Success(tracks)
+          val response = api.searchTracks(query = query, limit = limit)
+          ProviderResult.Success(response.data.mapNotNull { it.toDomainTrack() })
       }.getOrElse { e ->
           ProviderResult.Error(message = e.message ?: "Search failed", cause = e)
       }
   ```
-  (`app/src/main/java/com/clibeats/data/provider/AudiusMusicProvider.kt`, same shape in
-  `InternetArchiveMusicProvider.kt`, `JamendoMusicProvider.kt`, `LocalMusicProvider.kt`,
-  `YouTubeMusicProvider.kt`).
-- ViewModels translate results into sealed UI states with `when (val result = ...)` over every branch;
-  `Error` carries a human-readable `message` string (no exception leaking to UI):
-  `app/src/main/java/com/clibeats/presentation/home/HomeViewModel.kt`.
-- Playback-domain failures use typed exceptions with stable codes:
-  `PlaybackException` subclasses with `code` strings such as `"STREAM_RESOLUTION_FAILED"`
-  (`app/src/main/java/com/clibeats/domain/model/PlaybackException.kt`).
-- Non-critical best-effort work (logging, JSON navigation, cookie extraction) uses `runCatching { }.getOrNull()`
-  / `.onFailure { }` (`data/provider/mapper/TrackMapper.kt`, `util/DiagnosticLogger.kt`).
-- Cancellation is preserved explicitly where `runCatching` would swallow it:
-  `catch (e: CancellationException) { throw e }` (`data/provider/InternetArchiveMusicProvider.kt`).
-- `try/catch` is reserved for Android framework edges (only 8 occurrences in `app/src/main`).
-- No `!!` force-unwraps are used in main code; prefer `?: return`, `?.let`, `requireNotNull`-free flows.
+  (`app/src/main/java/com/clibeats/data/provider/AudiusMusicProvider.kt:35-48`).
+- Exhaustive `when` over `ProviderResult` in ViewModels maps to UI state (`HomeViewModel.kt:98-104`, `SearchViewModel.kt:88-95`). Keep the `Loading` branch when adding cases.
+- `try/catch` is reserved for cases where a typed exception must be handled distinctly (`SecurityException`, JSON parse, Media3 `IOException`) — see `app/src/main/java/com/clibeats/data/provider/youtube/PoTokenGenerator.kt`, `app/src/main/java/com/clibeats/data/provider/youtube/NewPipeExtractorResolver.kt`, `app/src/main/java/com/clibeats/data/repository/PlaybackRepositoryImpl.kt`.
+- Fire-and-forget convenience APIs swallow failure deliberately and say so in a comment (`playbackRepository?.addToQueue(track)`, `clearRecentlyPlayed()` in `HomeViewModel.kt`).
+- UI-visible failures become a `XxxUiState.Error(message)` or a transient message flow (`playerMessage` in `PlayerViewModel.kt:75-82`). Never surface a raw stack trace to UI.
+- Never `catch (Throwable)` without a suppression + reason; `TooGenericExceptionCaught` is active in detekt.
 
 ## Logging
 
-**Framework:** Android `android.util.Log` wrapped by a single object — no Timber tree is planted.
+**Framework:** `android.util.Log`, wrapped in two abstractions.
 
-- Structured, trace-scoped diagnostics go through
-  `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt`:
-  `DiagnosticLogger.logSearchRequest(traceId, query)`, `logPlayerResponse(traceId, client, status)`,
-  `logError(traceId, errorCode, message)`. Message format is `[$traceId] EVENT_NAME: key=value, key=value`.
-- Trace IDs come from `DiagnosticLogger.generateTraceId()` (8-char UUID prefix) and are threaded through
-  search → resolve → prepare → playing.
-- `safeLog` wraps `Log.*` in `runCatching` and falls back to `println` under JVM unit tests.
-- Never call `Log.d`/`println` directly from feature code; add a named `logXxx` function to `DiagnosticLogger`.
-- Telemetry is event-based, not log-based: implement `TelemetryTracker.trackEvent(AnalyticsEvent)`
-  (`app/src/main/java/com/clibeats/telemetry/`). Adding an event means adding a subclass of
-  `AnalyticsEvent(name, params)` with snake_case `name` and snake_case param keys.
+- Diagnostics: `app/src/main/java/com/clibeats/util/DiagnosticLogger.kt` — tag `CliBeatsDiagnostic`, trace ids (`generateTraceId()`), structured event methods (`logSearchRequest`, `logStreamUrlResolved`, `logError`), fallback to `println` if `Log` throws. Use this for playback/search pipeline tracing.
+- Telemetry/crash: `app/src/main/java/com/clibeats/telemetry/TimberTelemetryTracker.kt` (`Log.d`, tag `CLIBeatsTelemetry`) and `app/src/main/java/com/clibeats/telemetry/TimberCrashReporter.kt` (`Log.e`, tag `CLIBeatsCrash`). Despite the "Timber" names, **there is no Timber dependency**; do not add `Timber.*` calls.
+- Secrets must be redacted before logging: `TimberCrashReporter` strips `Bearer <token>` (`app/src/main/java/com/clibeats/telemetry/TimberCrashReporter.kt:15`).
+- Do not add bare `Log.d(...)` in feature code; go through a tested telemetry/diagnostic seam so `app/src/test/java/com/clibeats/telemetry/` stays meaningful.
 
 ## Comments
 
 **When to Comment:**
-- KDoc on every public class/composable that owns behavior or has non-obvious contract
-  (`AudiusMusicProvider`, `PlayerBar`, `TuiBlock`, `SongTableRow`, `CacheManager`).
-- KDoc lists `@param` entries for component parameters and documents visual/behavioural states.
-- Section banners inside large files / drawable-style code use box-drawing characters:
-  `// ── Navigation helpers ─────`, `// ── Static fallback colours ─────`.
-- Workarounds are documented inline immediately above the suppression they justify
-  (`// Indentation: detekt 1.23.6 misparses ktlint_official @Inject constructor() style (false positive).`).
-- `// TODO` / `// FIXME` are absent from `app/src/main`; do not introduce them — track work in `.planning/`.
+- Explain *why*, especially for non-obvious platform/workaround decisions: `@Upsert // not REPLACE: that cascades and deletes the playlist's songs on every edit` (`app/src/main/java/com/clibeats/data/local/dao/PlaylistDao.kt:18`); `// BODY buffered + logged every image: big lag` (`NetworkModule.kt:56`).
+- Comment deliberately disabled paths and their rationale (`// Local M3U/PLS playlists are read-only…` in `PlayerViewModel.kt:66`).
+- Every detekt/ktlint suppression needs an adjacent explanatory comment.
 
-**JSDoc/TSDoc (KDoc):**
-- KDoc blocks are prose-first, then bullet lists for states/behaviour, then `@param` tags.
-- Link referenced types with brackets: ``See [TuiBlock]``, ``[LocalAccentColor]``.
+**KDoc/TSDoc:**
+- KDoc on public classes and non-trivial public functions, using `[Symbol]` references: `app/src/main/java/com/clibeats/data/provider/AudiusMusicProvider.kt:15-25`, `app/src/main/java/com/clibeats/presentation/player/PlayerViewModel.kt:30`, `app/src/main/java/com/clibeats/presentation/theme/AccentColor.kt:7-13`.
+- Property-level KDoc for non-obvious `StateFlow`s (`/** Whether the current track is in Favorites (liked songs). */`).
+- No `@param`/`@return` boilerplate; one-line intent first.
 
 ## Function Design
 
-**Size:** detekt caps methods at 60 lines and classes at 300 lines. Composables are the usual
-offenders and are split into private sub-composables (`ArtworkPlaceholder` inside `TrackArtwork.kt`).
+**Size:** Target under 60 lines (detekt `LongMethod`). Larger composables are acceptable only with `@Suppress("LongMethod", "FunctionNaming")` at the function or file level (`HomeScreen.kt:1-5`).
 
 **Parameters:**
-- One parameter per line with trailing comma once there is more than one parameter.
-- Compose components take plain display values + callbacks (`trackTitle: String`, `artist: String`,
-  `onPlayPauseClick: () -> Unit = {}`) and content slots (`artworkContent: (@Composable () -> Unit)? = null`),
-  never a ViewModel or domain object — parents unwrap state. See
-  `app/src/main/java/com/clibeats/presentation/component/PlayerBar.kt`.
-- Screens take `viewModel: XViewModel = hiltViewModel()` as a defaulted last parameter plus navigation
-  callbacks before it: `fun SearchScreen(onTrackClick: (Track) -> Unit = {}, viewModel: SearchViewModel = hiltViewModel())`.
-- UI-state-mutating ViewModel entry points are `onXxx(...)`: `onQueryChange`, `onTrackClick`, `onMove`,
-  `onRemove`, `onClear`, `onPlayPauseClick`, `onSeek`.
+- Named arguments at call sites once a call has more than ~2 arguments (`PlaylistEntity(id = ..., name = ...)`, `Track(...)` in tests).
+- Trailing lambda for the last lambda parameter; Compose slot APIs use trailing lambdas (`TuiBlock(title = "System Status", isActive = true) { ... }`).
+- Defaults for optional collaborators and UI parameters rather than overloads (`limit: Int = 20` in `MusicProvider`, `onNavigate: (NavDestination) -> Unit = {}`).
+- Group 3+ related parameters into a data class instead of suppressing `LongParameterList`.
 
 **Return Values:**
-- Collections returned from repositories as `Flow<List<T>>` (never `LiveData`); one-shot reads are `suspend`.
-- ViewModel exposure is always `val uiState: StateFlow<XUiState>` built with `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), initialValue = ...)`.
-  Always use `5_000L` — every ViewModel does.
-- Boolean-returning helpers use `is*`/`can*` naming.
+- Public suspend APIs return `ProviderResult<T>` or domain models; never `Boolean` success flags.
+- Flows are cold where possible; expose `StateFlow` from ViewModels via `stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), initialValue)` (`HomeViewModel.kt:46-49`, `PlayerViewModel.kt:51-57`).
+- Use `SharingStarted.Eagerly` only for tiny preference-derived flows (`activeProviderId`).
 
 ## Module Design
 
-**Exports:**
-- Keep visibility minimal: `private` for helpers (`private fun JsonElement.nav(...)`,
-  `private fun startPositionTicker()`), `internal` only for test-visible helpers
-  (`internal fun parseDurationMs(duration: String): Long` in `TrackMapper.kt`).
-- Public API of a package is its interfaces + data classes; implementations are `@Singleton`
-  and bound via Hilt modules.
+**Exports:** No barrel/re-export files. Import the declaring file directly. Keep helpers `private` at the bottom of the file.
 
-**Barrel Files:** none. No `index`/`Exports.kt` aggregators — import the concrete file.
+**Visibility:** Default to `private` for helpers/constants, `internal` only when a test genuinely needs it, `public` only for the API surface (screens, ViewModels, interfaces, DI modules).
 
-**Dependency Injection:**
-- Hilt with KSP. Constructor injection everywhere (`@Inject constructor`), `@Singleton` on stateful
-  components, `@HiltViewModel` + `@Inject constructor` for ViewModels.
-- Modules are `object` with `@Module @InstallIn(SingletonComponent::class)` + `@Provides @Singleton`
-  (`app/src/main/java/com/clibeats/di/`); interface bindings use `abstract class ... { @Binds ... }`
-  (`di/TelemetryModule.kt`).
-- `@Named("...")` string qualifiers for same-typed providers; qualifier constants live on the module.
-- Repositories with a swappable dispatcher expose a secondary `@Inject` constructor that delegates
-  to the injectable one with `Dispatchers.IO` (`data/repository/PlaybackRepositoryImpl.kt`).
+**Immutability:**
+- Domain models are `data class` with all-`val` fields (`app/src/main/java/com/clibeats/domain/model/Track.kt`).
+- Mutate via `copy(...)`; never expose mutable collections from repositories (`.map`, `.toList()`).
+- Room entities mirror domain models but add persistence-only nullable columns with defaults (`localPath`, `cachedAt` in `SongEntity.kt`).
 
-**Layer Boundaries (do not violate):**
-- `presentation/` → `domain/` only. It must not import `data.*`; the few exceptions carry
-  `@file:Suppress("ForbiddenImport")` and should not be copied (e.g. `HomeViewModel` importing
-  `com.clibeats.data.preferences.AppPreferences` is a known accepted leak driven by the pre-existing
-  `ForbiddenImport` bug).
-- `domain/` has zero Android imports.
-- `data/` may import `domain/`; never `presentation/`.
-- Provider-specific code stays inside `data/provider/<provider>/` and always maps to domain `Track`
-  before leaving the data layer.
+## Credit / Reference
 
-## Android / Compose Specifics
-
-- Entry points: `app/src/main/java/com/clibeats/MainActivity.kt` (`setContent { ... }`) and
-  `CLIBeatsApp.kt` (`@HiltAndroidApp`).
-- Theme colors are raw top-level vals in `presentation/theme/CliBeatsColors.kt`
-  (`CliBeatsBackground`, `CliBeatsSurface`, `CliBeatsTextPrimary`, …) plus a CompositionLocal
-  `LocalAccentColor`. Never hardcode `Color(0x…)` in screens — use the theme vals.
-- Spacing/typography constants come from `presentation/theme/` (`CliBeatsTypography.kt`,
-  `CliBeatsShapes.kt`); TUI aesthetic: 48dp rows, 1dp borders, monospace, no elevation.
-- Accessibility: interactive/visual elements set `contentDescription` via
-  `Modifier.semantics { contentDescription = "..." }` or the Compose parameter.
-- No `@Preview` composables exist in the repo today.
-
-## Documentation Conventions
-
-- Architecture decisions are recorded as ADRs in `docs/adr/ADR-0NN-<topic>.md` following
-  `ADR-000-template.md`; add a new ADR rather than editing history.
-- Release/user docs live in `docs/LICENSES.md`, `docs/RELEASE_NOTES.md`, `docs/USER_GUIDE.md`.
-- Planning artifacts (plans, verification, UAT) live under `.planning/`; do not put delivery notes in code.
+- Contributor rules: `README.md` "Contributing" section and `.agents/AGENTS.md`.
+- Architecture rationale: `docs/adr/ADR-001-architecture-and-di-strategy.md`, `docs/adr/ADR-009-comprehensive-testing-hardening.md`.
 
 ---
 
-*Convention analysis: 2026-11-17*
+*Convention analysis: 2026-11-19*
