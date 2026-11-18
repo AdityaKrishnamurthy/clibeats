@@ -80,11 +80,13 @@ fun PlayerBar(
     onSkipPreviousClick: () -> Unit = {},
     repeatMode: RepeatMode = RepeatMode.OFF,
     onRepeatClick: () -> Unit = {},
+    repeatHint: String? = null,
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
     onExpandClick: () -> Unit = {},
 ) {
     val accent = LocalAccentColor.current
+    val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
 
     // Track bar width in pixels for seek calculation
@@ -181,17 +183,19 @@ fun PlayerBar(
                         )
                     }
 
-                    IconButton(
-                        onClick = onRepeatClick,
-                        modifier = Modifier.semantics { contentDescription = "Repeat: ${repeatMode.name.lowercase()}" },
-                    ) {
-                        Icon(
-                            imageVector =
-                                if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
-                            contentDescription = null,
-                            tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
-                            modifier = Modifier.size(20.dp),
-                        )
+                    HintedControl(hint = repeatHint) {
+                        IconButton(
+                            onClick = onRepeatClick,
+                            modifier =
+                                Modifier.semantics { contentDescription = "Repeat: ${repeatMode.name.lowercase()}" },
+                        ) {
+                            Icon(
+                                imageVector = repeatIcon,
+                                contentDescription = null,
+                                tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }

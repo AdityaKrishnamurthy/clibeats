@@ -75,6 +75,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
+import com.clibeats.presentation.component.HintedControl
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -92,6 +93,7 @@ fun NowPlayingScreen(
     onOpenQueue: () -> Unit,
 ) {
     val state by viewModel.playbackState.collectAsState()
+    val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
@@ -254,13 +256,15 @@ fun NowPlayingScreen(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = viewModel::onRepeatClick) {
-                Icon(
-                    imageVector =
-                        if (state.repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
-                    contentDescription = "Repeat: ${state.repeatMode.name.lowercase()}",
-                    tint = if (state.repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
-                )
+            HintedControl(hint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text) {
+                IconButton(onClick = viewModel::onRepeatClick) {
+                    Icon(
+                        imageVector =
+                            if (state.repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
+                        contentDescription = "Repeat: ${state.repeatMode.name.lowercase()}",
+                        tint = if (state.repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
+                    )
+                }
             }
             IconButton(onClick = viewModel::onSkipPreviousClick, modifier = Modifier.size(56.dp)) {
                 Icon(
@@ -288,12 +292,14 @@ fun NowPlayingScreen(
             IconButton(onClick = viewModel::onSkipNextClick, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Outlined.SkipNext, "Next", tint = CliBeatsTextPrimary, modifier = Modifier.size(32.dp))
             }
-            IconButton(onClick = viewModel::onShuffleClick) {
-                Icon(
-                    Icons.Outlined.Shuffle,
-                    contentDescription = if (state.shuffleEnabled) "Shuffle: on" else "Shuffle: off",
-                    tint = if (state.shuffleEnabled) CliBeatsAccent else CliBeatsTextSecondary,
-                )
+            HintedControl(hint = hint?.takeIf { it.target == HintTarget.SHUFFLE }?.text) {
+                IconButton(onClick = viewModel::onShuffleClick) {
+                    Icon(
+                        Icons.Outlined.Shuffle,
+                        contentDescription = if (state.shuffleEnabled) "Shuffle: on" else "Shuffle: off",
+                        tint = if (state.shuffleEnabled) CliBeatsAccent else CliBeatsTextSecondary,
+                    )
+                }
             }
         }
 

@@ -56,9 +56,9 @@ class PlayerViewModel
                     if (id == null || libraryRepository == null) flowOf(false) else libraryRepository.isLiked(id)
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
 
-        /** Short-lived feedback ("REPEAT: ONE", "SHUFFLE: ON"); null when hidden. */
-        private val _toast = MutableStateFlow<String?>(null)
-        val toast: StateFlow<String?> = _toast.asStateFlow()
+        /** Short label shown just above the pressed button ("ONE" / "ALL" / "OFF", "ON" / "OFF"). */
+        private val _hint = MutableStateFlow<ButtonHint?>(null)
+        val hint: StateFlow<ButtonHint?> = _hint.asStateFlow()
         private var toastJob: Job? = null
 
         val playlists: StateFlow<List<Playlist>> =
@@ -108,13 +108,13 @@ class PlayerViewModel
                     RepeatMode.ONE -> RepeatMode.OFF
                 }
             playbackRepository.setRepeatMode(next)
-            showToast("REPEAT: ${next.name}")
+            showHint(HintTarget.REPEAT, next.name)
         }
 
         fun onShuffleClick() {
             val enabling = !playbackState.value.shuffleEnabled
             playbackRepository.toggleShuffle()
-            showToast(if (enabling) "SHUFFLE: ON" else "SHUFFLE: OFF")
+            showHint(HintTarget.SHUFFLE, if (enabling) "ON" else "OFF")
         }
 
         fun toggleLike() {
@@ -122,14 +122,17 @@ class PlayerViewModel
             viewModelScope.launch { runCatching { libraryRepository?.toggleLike(track) } }
         }
 
-        private fun showToast(message: String) {
-            // Replace any visible toast instantly; hide after TOAST_MS.
+        private fun showHint(
+            target: HintTarget,
+            text: String,
+        ) {
+            // Replace any visible hint instantly; hide after TOAST_MS.
             toastJob?.cancel()
-            _toast.value = message
+            _hint.value = ButtonHint(target, text)
             toastJob =
                 viewModelScope.launch {
                     delay(TOAST_MS)
-                    _toast.value = null
+                    _hint.value = null
                 }
         }
 
@@ -180,3 +183,10 @@ class PlayerViewModel
             const val TOAST_MS = 1_500L
         }
     }
+
+enum class HintTarget { REPEAT, SHUFFLE }
+
+data class ButtonHint(
+    val target: HintTarget,
+    val text: String,
+)

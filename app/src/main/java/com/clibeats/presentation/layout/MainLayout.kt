@@ -8,17 +8,13 @@ package com.clibeats.presentation.layout
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
@@ -38,15 +34,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.imageLoader
@@ -55,9 +46,9 @@ import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.presentation.player.HintTarget
 import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
-import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
@@ -141,48 +132,10 @@ fun MainLayout(
                 },
             )
         }
-
-        // ── Repeat/shuffle feedback, above the mini player and over Now Playing ──
-        PlayerToast(
-            playerViewModel = playerViewModel,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = TOAST_BOTTOM_DP.dp),
-        )
-    }
-}
-
-@Suppress("FunctionNaming")
-@Composable
-private fun PlayerToast(
-    playerViewModel: PlayerViewModel,
-    modifier: Modifier = Modifier,
-) {
-    val message by playerViewModel.toast.collectAsState()
-    // Keep the last text while fading out so the box doesn't empty mid-animation.
-    val last = remember { arrayOf("") }
-    message?.let { last[0] = it }
-    val shown = last[0]
-    AnimatedVisibility(
-        visible = message != null,
-        enter = fadeIn(tween(TOAST_FADE_MS)),
-        exit = fadeOut(tween(TOAST_FADE_MS)),
-        modifier = modifier,
-    ) {
-        Text(
-            text = "[ $shown ]",
-            style = MaterialTheme.typography.labelMedium,
-            color = CliBeatsAccent,
-            modifier = Modifier
-                .semantics { liveRegion = LiveRegionMode.Polite }
-                .background(CliBeatsSurface)
-                .border(1.dp, CliBeatsAccent)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-        )
     }
 }
 
 private const val NOW_PLAYING_ANIM_MS = 250
-private const val TOAST_FADE_MS = 120
-private const val TOAST_BOTTOM_DP = 160
 
 @Suppress("FunctionNaming")
 @Composable
@@ -191,6 +144,7 @@ private fun PlayerBarHost(
     onExpandClick: () -> Unit,
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
+    val hint by playerViewModel.hint.collectAsState()
     // Prefetch the high-res cover as soon as a track starts, so Now Playing opens with it ready.
     val context = LocalContext.current
     val artworkUrl = playbackState.currentTrack?.artworkUrl
@@ -224,6 +178,7 @@ private fun PlayerBarHost(
         onSeek = playerViewModel::seekTo,
         repeatMode = playbackState.repeatMode,
         onRepeatClick = playerViewModel::onRepeatClick,
+        repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
         onExpandClick = onExpandClick,
     )
 }
