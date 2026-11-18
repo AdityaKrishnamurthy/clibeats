@@ -56,7 +56,10 @@ class PlaylistRepositoryImpl
         override suspend fun removeSongFromPlaylist(
             playlistId: String,
             songId: String,
-        ) = playlistDao.removeSongFromPlaylist(playlistId, songId)
+        ) {
+            playlistDao.removeSongFromPlaylist(playlistId, songId)
+            playlistDao.refreshTrackCount(playlistId)
+        }
 
         override suspend fun reorderPlaylistSongs(
             playlistId: String,
@@ -74,5 +77,6 @@ class PlaylistRepositoryImpl
             playlistDao.addSongToPlaylist(
                 PlaylistSongCrossRef(playlistId, track.id, playlistDao.nextPosition(playlistId)),
             )
+            playlistDao.refreshTrackCount(playlistId)
         }
     }

@@ -54,6 +54,12 @@ interface PlaylistDao {
     )
     fun getSongsForPlaylistAsFlow(playlistId: String): Flow<List<SongEntity>>
 
+    @Query(
+        "UPDATE playlists SET track_count = " +
+            "(SELECT COUNT(*) FROM playlist_song_cross_ref WHERE playlist_id = :playlistId) WHERE id = :playlistId",
+    )
+    suspend fun refreshTrackCount(playlistId: String)
+
     @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_song_cross_ref WHERE playlist_id = :playlistId")
     suspend fun nextPosition(playlistId: String): Int
 
