@@ -4,18 +4,19 @@
 package com.clibeats.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.clibeats.data.local.entity.SongEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SongDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // @Upsert updates in place. REPLACE deletes + re-inserts, which fired ON DELETE CASCADE
+    // and silently removed the song from every playlist / liked list on each queue save.
+    @Upsert
     suspend fun upsert(song: SongEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(songs: List<SongEntity>)
 
     @Query("SELECT * FROM songs WHERE id = :id")

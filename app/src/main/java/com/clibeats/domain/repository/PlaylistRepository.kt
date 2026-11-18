@@ -30,4 +30,10 @@ interface PlaylistRepository {
         playlistId: String,
         songIds: List<String>,
     )
+
+    /** Saves [track] to the library (if needed) and appends it to the end of the playlist. */
+    suspend fun addTrackToPlaylist(
+        playlistId: String,
+        track: Track,
+    )
 }

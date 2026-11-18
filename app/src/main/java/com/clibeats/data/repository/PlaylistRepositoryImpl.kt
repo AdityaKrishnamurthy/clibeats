@@ -4,6 +4,7 @@
 package com.clibeats.data.repository
 
 import com.clibeats.data.local.dao.PlaylistDao
+import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.PlaylistSongCrossRef
 import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
@@ -23,6 +24,7 @@ class PlaylistRepositoryImpl
     @Inject
     constructor(
         private val playlistDao: PlaylistDao,
+        private val songDao: SongDao? = null,
     ) : PlaylistRepository {
         override fun getAllPlaylistsAsFlow(): Flow<List<Playlist>> = playlistDao.getAllAsFlow().map { list -> list.map { it.toDomain() } }
 
@@ -60,4 +62,17 @@ class PlaylistRepositoryImpl
             playlistId: String,
             songIds: List<String>,
         ) = playlistDao.reorderPlaylistSongs(playlistId, songIds)
+    
+        override suspend fun addTrackToPlaylist(
+            playlistId: String,
+            track: Track,
+        ) {
+            // The cross-ref has a FK on songs.id; search results aren't in the songs table yet.
+            // Persist without the (expiring) stream URL; it is re-resolved at playback.
+            val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track
+            songDao?.upsertAll(listOf(storable.toEntity()))
+            playlistDao.addSongToPlaylist(
+                PlaylistSongCrossRef(playlistId, track.id, playlistDao.nextPosition(playlistId)),
+            )
+        }
     }

@@ -7,6 +7,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.clibeats.data.local.entity.PlaylistEntity
 import com.clibeats.data.local.entity.PlaylistSongCrossRef
 import com.clibeats.data.local.entity.SongEntity
@@ -14,7 +15,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface PlaylistDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert // not REPLACE: that cascades and deletes the playlist's songs on every edit
     suspend fun upsert(playlist: PlaylistEntity)
 
     @Query("SELECT * FROM playlists WHERE id = :id")
@@ -52,6 +53,9 @@ interface PlaylistDao {
         """,
     )
     fun getSongsForPlaylistAsFlow(playlistId: String): Flow<List<SongEntity>>
+
+    @Query("SELECT COALESCE(MAX(position), -1) + 1 FROM playlist_song_cross_ref WHERE playlist_id = :playlistId")
+    suspend fun nextPosition(playlistId: String): Int
 
     @Query("DELETE FROM playlist_song_cross_ref WHERE playlist_id = :playlistId")
     suspend fun clearPlaylistSongs(playlistId: String)
