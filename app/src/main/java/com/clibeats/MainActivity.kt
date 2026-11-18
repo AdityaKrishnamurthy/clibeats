@@ -11,12 +11,16 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,6 +38,8 @@ import com.clibeats.presentation.theme.CliBeatsTheme
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.ThemeViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -73,24 +79,44 @@ class MainActivity : ComponentActivity() {
 @Suppress("FunctionNaming")
 @Composable
 private fun AppContent() {
-    // Saveable route: tab survives rotation/process death. Back returns to Home before exiting.
-    var route by rememberSaveable { mutableStateOf(NavDestination.Home.route) }
-    val selectedDestination =
-        NavDestination.all.firstOrNull { it.route == route } ?: NavDestination.Home
-    val navigate: (NavDestination) -> Unit = { route = it.route }
-    BackHandler(enabled = selectedDestination != NavDestination.Home) { navigate(NavDestination.Home) }
+    val tabs = NavDestination.mainTabs
+    // Saveable page: tab survives rotation/process death.
+    var savedPage by rememberSaveable { mutableIntStateOf(0) }
+    val pagerState = rememberPagerState(initialPage = savedPage) { tabs.size }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(pagerState.currentPage) { savedPage = pagerState.currentPage }
+
+    val navigate: (NavDestination) -> Unit = { destination ->
+        val target = tabs.indexOf(destination).coerceAtLeast(0)
+        scope.launch {
+            // Neighbours slide; far jumps snap so we don't compose every page in between.
+            if (abs(target - pagerState.currentPage) == 1) {
+                pagerState.animateScrollToPage(target)
+            } else {
+                pagerState.scrollToPage(target)
+            }
+        }
+    }
+    BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
     MainLayout(
-        selectedDestination = selectedDestination,
+        selectedDestination = tabs[pagerState.currentPage],
         onDestinationSelected = navigate,
     ) {
-        when (selectedDestination) {
-            NavDestination.Home -> HomeScreen(onNavigate = navigate)
-            NavDestination.Search -> SearchScreen()
-            NavDestination.Queue -> QueueScreen()
-            NavDestination.Library -> LibraryScreen()
-            NavDestination.Playlists -> PlaylistScreen()
-            NavDestination.Settings -> SettingsScreen()
+        // Swipe left/right between tabs in bottom-bar order.
+        HorizontalPager(
+            state = pagerState,
+            key = { tabs[it].route },
+            modifier = Modifier.fillMaxSize(),
+        ) { page ->
+            when (tabs[page]) {
+                NavDestination.Home -> HomeScreen(onNavigate = navigate)
+                NavDestination.Search -> SearchScreen()
+                NavDestination.Queue -> QueueScreen()
+                NavDestination.Library -> LibraryScreen()
+                NavDestination.Playlists -> PlaylistScreen()
+                NavDestination.Settings -> SettingsScreen()
+            }
         }
     }
 }

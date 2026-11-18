@@ -34,6 +34,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaul
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,13 +43,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.theme.CliBeatsAccent
@@ -185,6 +191,13 @@ private fun PlayerBarHost(
     onExpandClick: () -> Unit,
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
+    // Prefetch the high-res cover as soon as a track starts, so Now Playing opens with it ready.
+    val context = LocalContext.current
+    val artworkUrl = playbackState.currentTrack?.artworkUrl
+    LaunchedEffect(artworkUrl) {
+        val hiRes = artworkUrlFor(artworkUrl, ARTWORK_FULL_PX) ?: return@LaunchedEffect
+        context.imageLoader.enqueue(ImageRequest.Builder(context).data(hiRes).build())
+    }
     // Player-reported duration first: local files may have no duration in metadata.
     val trackDuration = playbackState.durationMs.takeIf { it > 0 } ?: playbackState.currentTrack?.durationMs ?: 0L
     val progress =
