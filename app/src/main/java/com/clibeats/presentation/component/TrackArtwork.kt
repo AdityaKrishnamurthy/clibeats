@@ -51,7 +51,8 @@ fun TrackArtwork(
     // AsyncImage + painter placeholder: SubcomposeAsyncImage subcomposed every list row (scroll jank).
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
     AsyncImage(
-        model = artworkUrl,
+        // ~3x dp covers xxhdpi without decoding full-size covers in lists.
+        model = artworkUrlFor(artworkUrl, size * ARTWORK_PX_PER_DP),
         contentDescription = "Track artwork",
         contentScale = ContentScale.Crop,
         placeholder = placeholder,
@@ -83,3 +84,5 @@ private fun ArtworkPlaceholder(
         )
     }
 }
+
+private const val ARTWORK_PX_PER_DP = 3
