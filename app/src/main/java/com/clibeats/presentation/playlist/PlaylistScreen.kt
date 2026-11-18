@@ -45,6 +45,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -78,7 +79,18 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
 @Suppress("CyclomaticComplexMethod")
 @Composable
-fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
+fun PlaylistScreen(
+    showGridRequested: Boolean = false,
+    onShowGridHandled: () -> Unit = {},
+    viewModel: PlaylistViewModel = hiltViewModel(),
+) {
+    // Re-tapping the Playlists tab while inside a playlist goes back to the grid.
+    LaunchedEffect(showGridRequested) {
+        if (showGridRequested) {
+            viewModel.selectPlaylist(null)
+            onShowGridHandled()
+        }
+    }
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }

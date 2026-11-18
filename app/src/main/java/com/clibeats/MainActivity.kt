@@ -3,6 +3,7 @@
 package com.clibeats
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -20,6 +21,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -99,9 +103,26 @@ private fun AppContent() {
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
+    // Bottom-bar gestures: double-tap Search = focus the search box; re-tap Playlists = back to grid.
+    var focusSearch by remember { mutableStateOf(false) }
+    var showPlaylistGrid by remember { mutableStateOf(false) }
+    var lastTab by remember { mutableStateOf<NavDestination?>(null) }
+    var lastTabAt by remember { mutableLongStateOf(0L) }
+    val onTabClick: (NavDestination) -> Unit = { destination ->
+        val now = SystemClock.uptimeMillis()
+        val current = tabs[pagerState.currentPage]
+        val searchDoubleTap =
+            destination == NavDestination.Search && lastTab == NavDestination.Search && now - lastTabAt < DOUBLE_TAP_MS
+        if (searchDoubleTap) focusSearch = true
+        if (destination == NavDestination.Playlists && current == NavDestination.Playlists) showPlaylistGrid = true
+        lastTab = destination
+        lastTabAt = now
+        navigate(destination)
+    }
+
     MainLayout(
         selectedDestination = tabs[pagerState.currentPage],
-        onDestinationSelected = navigate,
+        onDestinationSelected = onTabClick,
     ) {
         // Swipe left/right between tabs in bottom-bar order.
         HorizontalPager(
@@ -111,12 +132,19 @@ private fun AppContent() {
         ) { page ->
             when (tabs[page]) {
                 NavDestination.Home -> HomeScreen(onNavigate = navigate)
-                NavDestination.Search -> SearchScreen()
+                NavDestination.Search ->
+                    SearchScreen(focusRequested = focusSearch, onFocusHandled = { focusSearch = false })
                 NavDestination.Queue -> QueueScreen()
                 NavDestination.Library -> LibraryScreen()
-                NavDestination.Playlists -> PlaylistScreen()
+                NavDestination.Playlists ->
+                    PlaylistScreen(
+                        showGridRequested = showPlaylistGrid,
+                        onShowGridHandled = { showPlaylistGrid = false },
+                    )
                 NavDestination.Settings -> SettingsScreen()
             }
         }
     }
 }
+
+private const val DOUBLE_TAP_MS = 400L
