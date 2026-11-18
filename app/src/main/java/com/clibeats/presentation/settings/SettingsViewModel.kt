@@ -2,11 +2,14 @@
 
 package com.clibeats.presentation.settings
 
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.data.scan.LocalMusicScanner
+import com.clibeats.data.scan.ScanStatus
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -28,7 +32,37 @@ class SettingsViewModel
         private val cacheManager: CacheManager,
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
+        private val localMusicScanner: LocalMusicScanner? = null,
     ) : ViewModel() {
+        val autoQueueRelated: StateFlow<Boolean> =
+            appPreferences.autoQueueRelated
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+
+        val localMusicFolder: StateFlow<String?> =
+            appPreferences.localMusicTreeUri
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+
+        val scanStatus: StateFlow<ScanStatus> = localMusicScanner?.status ?: MutableStateFlow(ScanStatus.Idle)
+
+        fun setAutoQueueRelated(enabled: Boolean) {
+            viewModelScope.launch { appPreferences.setAutoQueueRelated(enabled) }
+        }
+
+        /** Saves the picked folder (permission already persisted by the screen) and scans it. */
+        fun onLocalFolderPicked(treeUri: Uri) {
+            viewModelScope.launch {
+                appPreferences.setLocalMusicTreeUri(treeUri.toString())
+                runCatching { localMusicScanner?.scan(treeUri) }
+            }
+        }
+
+        fun rescanLocalMusic() {
+            viewModelScope.launch {
+                val uri = appPreferences.localMusicTreeUri.first() ?: return@launch
+                runCatching { localMusicScanner?.scan(Uri.parse(uri)) }
+            }
+        }
+
         val uiState: StateFlow<SettingsUiState> =
             combine(
                 appPreferences.activeProviderId,
@@ -120,21 +154,21 @@ class SettingsViewModel
             }
         }
 
-        fun exportPlaylists() {
+        fun exportPlaylists(target: Uri) {
             viewModelScope.launch {
                 _exchangeMessage.value =
-                    playlistExchangeManager.export().fold(
-                        onSuccess = { file -> "Exported ${file.absolutePath}" },
+                    playlistExchangeManager.export(target).fold(
+                        onSuccess = { count -> "Exported $count playlist(s)" },
                         onFailure = { e -> "Export failed: ${e.message}" },
                     )
             }
         }
 
-        fun importPlaylists() {
+        fun importPlaylists(source: Uri) {
             viewModelScope.launch {
                 _exchangeMessage.value =
-                    playlistExchangeManager.import().fold(
-                        onSuccess = { count -> "Imported $count track(s) from clibeats.json" },
+                    playlistExchangeManager.import(source).fold(
+                        onSuccess = { count -> "Imported $count track(s)" },
                         onFailure = { e -> "Import failed: ${e.message}" },
                     )
             }

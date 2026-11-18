@@ -1,7 +1,13 @@
-@file:Suppress("ktlint:standard:function-naming", "MagicNumber")
+// ForbiddenImport: ScanStatus is a plain UI-facing status type from the scanner.
+@file:Suppress("ktlint:standard:function-naming", "MagicNumber", "ForbiddenImport")
 
 package com.clibeats.presentation.settings
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,23 +36,57 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
 
 private const val BYTES_PER_MB = 1048576L
+private const val PLAYLIST_FILE_NAME = "clibeats.json"
+private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
+private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
 
-@Suppress("FunctionNaming", "LongMethod")
+/** "primary:Music/FLAC" -> "Music/FLAC" for display. */
+private fun folderLabel(treeUri: String): String =
+    runCatching { DocumentsContract.getTreeDocumentId(Uri.parse(treeUri)).substringAfter(':').ifBlank { "/" } }
+        .getOrDefault(treeUri)
+
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val exchangeMessage by viewModel.exchangeMessage.collectAsState()
+    val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
+    val localFolder by viewModel.localMusicFolder.collectAsState()
+    val scanStatus by viewModel.scanStatus.collectAsState()
     val accent = LocalAccentColor.current
+    val context = LocalContext.current
+
+    val pickFolder =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                // Keep read access across reboots so rescans and playback keep working.
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                viewModel.onLocalFolderPicked(uri)
+            }
+        }
+    val exportLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+            if (uri != null) viewModel.exportPlaylists(uri)
+        }
+    val importLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) viewModel.importPlaylists(uri)
+        }
 
     Column(
         modifier =
@@ -91,6 +131,80 @@ fun SettingsScreen(
                 selected = uiState.accentColor,
                 onSelect = viewModel::setAccentColor,
             )
+        }
+
+        // ── Section: Local Music ────────────────────────────────────────────
+        TuiBlock(title = "Local Music", isActive = true) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = "FOLDER : ${localFolder?.let(::folderLabel) ?: "not chosen"}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text =
+                        when (val status = scanStatus) {
+                            is ScanStatus.Idle -> LOCAL_HINT
+                            is ScanStatus.Scanning ->
+                                if (status.total == 0) {
+                                    "Scanning..."
+                                } else {
+                                    "Scanning ${status.processed}/${status.total}..."
+                                }
+                            is ScanStatus.Done -> "${status.trackCount} track(s) in library"
+                            is ScanStatus.Failed -> "Scan failed: ${status.message}"
+                        },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (scanStatus is ScanStatus.Failed) MaterialTheme.colorScheme.error else accent,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { pickFolder.launch(null) },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                    ) {
+                        Text("CHOOSE FOLDER")
+                    }
+                    Button(
+                        onClick = viewModel::rescanLocalMusic,
+                        enabled = localFolder != null && scanStatus !is ScanStatus.Scanning,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                    ) {
+                        Text("RESCAN")
+                    }
+                }
+            }
+        }
+
+        // ── Section: Playback ───────────────────────────────────────────────
+        TuiBlock(title = "Playback") {
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { viewModel.setAutoQueueRelated(!autoQueueRelated) },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "AUTO-QUEUE RELATED SONGS",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = accent,
+                    )
+                    Text(
+                        text = "When off, tapping a song plays only that song (no suggestions queued after it)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Text(
+                    text = if (autoQueueRelated) "[ ON ]" else "[ OFF ]",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (autoQueueRelated) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         // ── Section: Active Music Provider ──────────────────────────────────
@@ -190,21 +304,21 @@ fun SettingsScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
-                        onClick = { viewModel.exportPlaylists() },
+                        onClick = { exportLauncher.launch(PLAYLIST_FILE_NAME) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
                     ) {
-                        Text("EXPORT clibeats.json")
+                        Text("EXPORT")
                     }
                     Button(
-                        onClick = { viewModel.importPlaylists() },
+                        onClick = { importLauncher.launch(IMPORT_MIME_TYPES) },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
                     ) {
-                        Text("IMPORT clibeats.json")
+                        Text("IMPORT")
                     }
                 }
-                uiState.exchangeMessage?.let { message ->
+                exchangeMessage?.let { message ->
                     Text(
                         text = message,
                         style = MaterialTheme.typography.labelSmall,
