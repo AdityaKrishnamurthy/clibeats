@@ -79,14 +79,14 @@ class NewPipeExtractorResolver
             withContext(Dispatchers.IO) {
                 ensureInitialized()
                 try {
-                    DiagnosticLogger.logPlayerRequest(traceId, "NEWPIPE_EXTRACTOR_V26", rawId)
+                    DiagnosticLogger.logPlayerRequest(traceId, "NEWPIPE_EXTRACTOR", rawId)
                     val watchUrl = "https://www.youtube.com/watch?v=$rawId"
                     val extractor = ServiceList.YouTube.getStreamExtractor(watchUrl) as YoutubeStreamExtractor
                     extractor.fetchPage()
 
                     val audioStreams = extractor.audioStreams
                     if (audioStreams.isEmpty()) {
-                        DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR_V26", "NO_AUDIO_STREAMS")
+                        DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "NO_AUDIO_STREAMS")
                         return@withContext null
                     }
 
@@ -94,11 +94,11 @@ class NewPipeExtractorResolver
                     val selectedStream = audioStreams.maxByOrNull { it.averageBitrate } ?: audioStreams.first()
                     val streamUrl = selectedStream.content
                     if (streamUrl.isBlank()) {
-                        DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR_V26", "EMPTY_STREAM_URL")
+                        DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "EMPTY_STREAM_URL")
                         return@withContext null
                     }
 
-                    DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR_V26", "OK")
+                    DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "OK")
 
                     val formatName = selectedStream.getFormat()?.name?.lowercase() ?: "m4a"
                     val mimeType =
@@ -120,7 +120,7 @@ class NewPipeExtractorResolver
                         expiresAtMs = expiresAtMs,
                     )
                 } catch (e: Exception) {
-                    DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR_V26", "ERROR: ${e.message}")
+                    DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "ERROR: ${e.message}")
                     null
                 }
             }
