@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
@@ -58,7 +57,7 @@ import com.clibeats.presentation.theme.LocalAccentColor
  *
  * Terminal-style panel:
  * - Rendered as a [TuiBlock] titled "Playing" that highlights when active
- * - Controls: SkipPrevious · PlayArrow/Pause (accent) · SkipNext · QueueMusic
+ * - Controls: SkipPrevious · PlayArrow/Pause (accent) · SkipNext · Repeat
  * - Seekable progress bar with `m:ss / m:ss` timestamp (Spotify TUI style)
  *
  * @param progress     0.0 – 1.0 progress fraction (for display)
@@ -79,7 +78,6 @@ fun PlayerBar(
     onPlayPauseClick: () -> Unit = {},
     onSkipNextClick: () -> Unit = {},
     onSkipPreviousClick: () -> Unit = {},
-    onQueueClick: () -> Unit = {},
     repeatMode: RepeatMode = RepeatMode.OFF,
     onRepeatClick: () -> Unit = {},
     onSeek: (positionMs: Long) -> Unit = {},
@@ -192,18 +190,6 @@ fun PlayerBar(
                                 if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat,
                             contentDescription = null,
                             tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onQueueClick,
-                        modifier = Modifier.semantics { contentDescription = "Open queue" },
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                            contentDescription = null,
-                            tint = CliBeatsTextPrimary,
                             modifier = Modifier.size(20.dp),
                         )
                     }
