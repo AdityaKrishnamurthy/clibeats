@@ -9,7 +9,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
@@ -25,7 +24,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -34,7 +32,7 @@ class PlayerAdapter
     @Inject
     constructor(
         private val player: ExoPlayer,
-        private val cacheManager: CacheManager,
+        private val streamResolver: StreamResolver,
         @ApplicationContext private val context: Context,
     ) {
         /**
@@ -105,6 +103,7 @@ class PlayerAdapter
 
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         DiagnosticLogger.logError("player", "MEDIA_ERROR", error.message ?: "ExoPlayer error")
+                        if (retryAfterStreamError(error)) return
                         updateState()
                     }
 
@@ -112,6 +111,7 @@ class PlayerAdapter
                         mediaItem: MediaItem?,
                         reason: Int,
                     ) {
+                        retriedMediaId = null
                         updateState()
                     }
 
@@ -297,14 +297,39 @@ class PlayerAdapter
                 )
         }
 
+        private var retriedMediaId: String? = null
+
+        /**
+         * Expired/forbidden stream (HTTP 403/410) or a failed resolve: invalidate the cached
+         * URL and re-prepare once. The resolving data source fetches a fresh URL.
+         */
+        private fun retryAfterStreamError(error: androidx.media3.common.PlaybackException): Boolean {
+            val retryable =
+                error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+            val index = player.currentMediaItemIndex
+            val track = trackList.getOrNull(index) ?: return false
+            if (!retryable || retriedMediaId == track.id) return false
+            retriedMediaId = track.id
+            streamResolver.invalidate(track.providerId, track.id)
+            val position = player.currentPosition.coerceAtLeast(0L)
+            // Drop any stale direct URL so the placeholder resolver runs again.
+            val fresh = track.copy(streamUrl = track.streamUrl?.takeUnless { it.startsWith("http") })
+            trackList[index] = fresh
+            player.replaceMediaItem(index, fresh.toMediaItem())
+            player.seekTo(index, position)
+            player.prepare()
+            player.play()
+            return true
+        }
+
         private fun Track.toMediaItem(): MediaItem {
-            val cachedFile = runCatching { runBlocking { cacheManager.getCachedFile(id) } }.getOrNull()
-            val uri =
-                if (cachedFile != null && cachedFile.exists()) {
-                    android.net.Uri.fromFile(cachedFile)
-                } else {
-                    streamUrl?.let { android.net.Uri.parse(it) } ?: android.net.Uri.EMPTY
-                }
+            // Local files and non-expiring provider URLs play directly. Remote tracks get a placeholder URI that
+            // TrackUriResolver resolves (cache file -> fresh stream URL) when ExoPlayer opens it,
+            // so queued tracks are playable and expired URLs never reach the network.
+            // Signed (expiring) URLs, e.g. googlevideo `expire=`, always go through the resolver.
+            val direct = streamUrl?.takeIf { it.isNotBlank() && !it.contains("expire") }
+            val uri = direct?.let { android.net.Uri.parse(it) } ?: TrackUriResolver.placeholderUri(this)
 
             return MediaItem.Builder()
                 .setMediaId(id)

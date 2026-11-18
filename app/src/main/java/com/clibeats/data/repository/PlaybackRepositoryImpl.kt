@@ -11,6 +11,7 @@ import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
@@ -20,6 +21,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,6 +39,7 @@ class PlaybackRepositoryImpl
         private val songDao: SongDao,
         private val appPreferences: AppPreferences,
         private val ioDispatcher: CoroutineDispatcher,
+        private val historyRepository: HistoryRepository? = null,
     ) : PlaybackRepository {
         @Inject
         constructor(
@@ -43,6 +48,7 @@ class PlaybackRepositoryImpl
             queueDao: QueueDao,
             songDao: SongDao,
             appPreferences: AppPreferences,
+            historyRepository: HistoryRepository,
         ) : this(
             playerAdapter,
             streamResolver,
@@ -50,6 +56,7 @@ class PlaybackRepositoryImpl
             songDao,
             appPreferences,
             Dispatchers.IO,
+            historyRepository,
         )
 
         private val repositoryScope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -68,7 +75,26 @@ class PlaybackRepositoryImpl
                 }
             }
             repositoryScope.launch {
-                playerAdapter.playbackState.collect { state ->
+                // On each new track: record history and warm stream URLs for the next tracks
+                // so skip / auto-advance starts without waiting on extraction.
+                playerAdapter.playbackState
+                    .map { it.currentTrack }
+                    .distinctUntilChanged { a, b -> a?.id == b?.id }
+                    .collectLatest { current ->
+                        if (current == null) return@collectLatest
+                        runCatching { historyRepository?.recordPlay(current.id, current.providerId) }
+                        prefetchAfter(current)
+                    }
+            }
+            repositoryScope.launch {
+                // Persist only on meaningful changes (track/mode/play-pause), not every 500ms tick.
+                playerAdapter.playbackState
+                    .distinctUntilChanged { old, new ->
+                        old.currentTrack?.id == new.currentTrack?.id &&
+                            old.isPlaying == new.isPlaying &&
+                            old.repeatMode == new.repeatMode &&
+                            old.shuffleEnabled == new.shuffleEnabled
+                    }.collect { state ->
                     val tracks = playerAdapter.queueFlow.value
                     val currentIndex =
                         state.currentTrack?.let { current ->
@@ -131,64 +157,22 @@ class PlaybackRepositoryImpl
         override fun playTrack(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.playTrack(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for playTrack",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.playTrack(track) }
         }
 
         override fun addToQueue(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.addToQueue(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for addToQueue",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.addToQueue(track) }
         }
 
         override fun playNext(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.playNext(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for playNext",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.playNext(track) }
         }
 
         override fun setQueue(
@@ -198,26 +182,20 @@ class PlaybackRepositoryImpl
             if (tracks.isEmpty()) return
             val traceId = DiagnosticLogger.generateTraceId()
 
-            repositoryScope.launch {
-                runCatching {
-                    val targetIndex = startIndex.coerceIn(tracks.indices)
-                    val targetTrack = tracks[targetIndex]
-                    DiagnosticLogger.logTrackSelected(traceId, targetTrack.id, targetTrack.title)
+            repositoryScope.launch(Dispatchers.Main) {
+                val targetIndex = startIndex.coerceIn(tracks.indices)
+                DiagnosticLogger.logTrackSelected(traceId, tracks[targetIndex].id, tracks[targetIndex].title)
+                playerAdapter.setQueue(tracks, targetIndex)
+            }
+        }
 
-                    val resolvedTarget = streamResolver.resolve(targetTrack, traceId)
-                    val mutableQueue = tracks.toMutableList()
-                    mutableQueue[targetIndex] = resolvedTarget
-
-                    DiagnosticLogger.logMediaPrepare(traceId, resolvedTarget.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.setQueue(mutableQueue, targetIndex)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve queue start track",
-                    )
+        private suspend fun prefetchAfter(current: Track) {
+            val queue = playerAdapter.queueFlow.value
+            val idx = queue.indexOfFirst { it.id == current.id }
+            if (idx < 0) return
+            queue.drop(idx + 1).take(PREFETCH_COUNT).forEach { next ->
+                if (next.streamUrl.isNullOrBlank() || next.streamUrl.contains("expire")) {
+                    runCatching { streamResolver.resolve(next) }
                 }
             }
         }
@@ -244,4 +222,8 @@ class PlaybackRepositoryImpl
         override fun setRepeatMode(mode: RepeatMode) = playerAdapter.setRepeatMode(mode)
 
         override fun toggleShuffle() = playerAdapter.toggleShuffle()
+
+        private companion object {
+            const val PREFETCH_COUNT = 2
+        }
     }
