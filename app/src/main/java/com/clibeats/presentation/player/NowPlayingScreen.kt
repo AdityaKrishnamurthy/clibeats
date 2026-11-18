@@ -57,13 +57,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -168,40 +168,50 @@ fun NowPlayingScreen(
         Spacer(Modifier.height(12.dp))
 
         // ── Artwork ──
-        val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
-        // High-res cover; if the large variant doesn't exist (e.g. ytimg maxres), fall back to 480px.
+        // Two layers: the small thumbnail (already cached by the lists, so near-instant) underneath,
+        // and the high-res cover on top, transparent until loaded, then crossfading in. Never blank;
+        // a failed hi-res attempt (e.g. missing ytimg maxres) just keeps the thumbnail showing.
+        // (Don't pass AsyncImage(placeholder=...) here: it replaces the cached-thumbnail placeholder.)
         var artFallback by remember(track?.artworkUrl) { mutableStateOf(false) }
         val artSize = if (artFallback) FALLBACK_ART_PX else ARTWORK_FULL_PX
         val context = LocalContext.current
         val artUrl = artworkUrlFor(track?.artworkUrl, artSize)
         val thumbUrl = artworkUrlFor(track?.artworkUrl, ARTWORK_THUMB_PX)
-        // Show the already-cached thumbnail instantly, then fade to the high-res cover.
-        val artRequest =
-            remember(artUrl, thumbUrl) {
-                ImageRequest.Builder(context)
-                    .data(artUrl)
-                    .placeholderMemoryCacheKey(thumbUrl)
-                    .crossfade(ART_CROSSFADE_MS)
-                    .build()
+        val hiResRequest =
+            remember(artUrl) {
+                ImageRequest.Builder(context).data(artUrl).crossfade(ART_CROSSFADE_MS).build()
             }
-        AsyncImage(
-            model = artRequest,
-            onError = { if (!artFallback) artFallback = true },
-            contentDescription = track?.let { "Artwork for ${it.title}" },
-            contentScale = ContentScale.Crop,
-            placeholder = placeholder,
-            error = placeholder,
-            fallback = placeholder,
+        Box(
             modifier =
                 Modifier
                     .weight(1f, fill = false)
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
                     .then(dragToDismiss)
-                    .then(closeAction),
-        )
+                    .then(closeAction)
+                    .semantics { contentDescription = track?.let { "Artwork for ${it.title}" } ?: "No artwork" },
+        ) {
+            if (thumbUrl != null) {
+                AsyncImage(
+                    model = thumbUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+            if (artUrl != null && artUrl != thumbUrl) {
+                AsyncImage(
+                    model = hiResRequest,
+                    onError = { if (!artFallback) artFallback = true },
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
 
         Spacer(Modifier.height(20.dp))
 
@@ -457,7 +467,7 @@ private fun providerLabel(id: String): String =
 private const val DISMISS_DRAG_DP = 120
 private const val DISMISS_VELOCITY_PX_S = 1_500f
 private const val SNAP_BACK_MS = 200
-private const val ART_CROSSFADE_MS = 150
+private const val ART_CROSSFADE_MS = 450
 private const val FALLBACK_ART_PX = 480
 
 private val SLEEP_OPTIONS =

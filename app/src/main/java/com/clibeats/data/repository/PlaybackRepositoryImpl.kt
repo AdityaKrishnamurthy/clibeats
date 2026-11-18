@@ -2,6 +2,9 @@
 
 package com.clibeats.data.repository
 
+import android.content.Context
+import coil.ImageLoader
+import coil.request.ImageRequest
 import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.QueueEntity
@@ -15,7 +18,10 @@ import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.util.DiagnosticLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -41,6 +47,8 @@ class PlaybackRepositoryImpl
         private val appPreferences: AppPreferences,
         private val ioDispatcher: CoroutineDispatcher,
         private val historyRepository: HistoryRepository? = null,
+        private val imageLoader: dagger.Lazy<ImageLoader>? = null,
+        private val appContext: Context? = null,
     ) : PlaybackRepository {
         @Inject
         constructor(
@@ -50,6 +58,8 @@ class PlaybackRepositoryImpl
             songDao: SongDao,
             appPreferences: AppPreferences,
             historyRepository: HistoryRepository,
+            imageLoader: dagger.Lazy<ImageLoader>,
+            @ApplicationContext appContext: Context,
         ) : this(
             playerAdapter,
             streamResolver,
@@ -58,6 +68,8 @@ class PlaybackRepositoryImpl
             appPreferences,
             Dispatchers.IO,
             historyRepository,
+            imageLoader,
+            appContext,
         )
 
         private val repositoryScope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -200,10 +212,18 @@ class PlaybackRepositoryImpl
             val idx = queue.indexOfFirst { it.id == current.id }
             if (idx < 0) return
             queue.drop(idx + 1).take(PREFETCH_COUNT).forEach { next ->
+                prefetchArtwork(next)
                 if (next.streamUrl.isNullOrBlank() || next.streamUrl.contains("expire")) {
                     runCatching { streamResolver.resolve(next) }
                 }
             }
+        }
+
+        /** Warms the disk cache with the next tracks' high-res covers so Now Playing shows them instantly. */
+        private fun prefetchArtwork(track: Track) {
+            val context = appContext ?: return
+            val url = artworkUrlFor(track.artworkUrl, ARTWORK_FULL_PX) ?: return
+            runCatching { imageLoader?.get()?.enqueue(ImageRequest.Builder(context).data(url).build()) }
         }
 
         override fun moveTrackInQueue(
