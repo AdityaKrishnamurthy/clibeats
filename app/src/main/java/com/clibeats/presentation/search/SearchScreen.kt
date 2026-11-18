@@ -275,6 +275,7 @@ private fun SearchResultsList(
                 index = index + 1,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
+                onSwipeRight = { onAddToQueue(track) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(

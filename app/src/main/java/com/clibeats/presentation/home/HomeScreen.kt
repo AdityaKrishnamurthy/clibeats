@@ -39,7 +39,6 @@ import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.layout.NavDestination
-import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
@@ -57,7 +56,6 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 fun HomeScreen(
     onNavigate: (NavDestination) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel(),
 ) {
     val uiState by homeViewModel.uiState.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
@@ -145,7 +143,8 @@ fun HomeScreen(
                     artist = track.artist,
                     duration = formatDuration(track.durationMs),
                     artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                    onClick = { playerViewModel.playQueue(recentlyPlayed, index) },
+                    onClick = { homeViewModel.playFromList(recentlyPlayed, index) },
+                    onSwipeRight = { homeViewModel.addToQueue(track) },
                 )
             }
             item { Spacer(modifier = Modifier.height(12.dp)) }
@@ -204,7 +203,8 @@ fun HomeScreen(
                                         )
                                     }
                                 },
-                            onClick = { playerViewModel.playQueue(state.tracks, index) },
+                            onClick = { homeViewModel.playFromList(state.tracks, index) },
+                            onSwipeRight = { homeViewModel.addToQueue(track) },
                         )
                     }
                 }

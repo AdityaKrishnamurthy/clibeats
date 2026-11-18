@@ -90,6 +90,7 @@ fun PlaylistScreen(viewModel: PlaylistViewModel = hiltViewModel()) {
                         onRemoveClick = { track ->
                             viewModel.removeSongFromPlaylist(currentState.selectedPlaylist.id, track.id)
                         },
+                        onSwipeRight = viewModel::addToQueue,
                     )
                 } else {
                     PlaylistListView(
@@ -200,7 +201,7 @@ private fun PlaylistListView(
 
 private fun String?.isNullOrBlankCompat(): Boolean = this == null || this.trim().isEmpty()
 
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongParameterList")
 @Composable
 private fun PlaylistDetailView(
     playlist: Playlist,
@@ -208,6 +209,7 @@ private fun PlaylistDetailView(
     onBackClick: () -> Unit,
     onTrackClick: (Track, Int) -> Unit,
     onRemoveClick: (Track) -> Unit,
+    onSwipeRight: (Track) -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -253,6 +255,7 @@ private fun PlaylistDetailView(
                         index = index + 1,
                         artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                         onClick = { onTrackClick(track, index) },
+                        onSwipeRight = { onSwipeRight(track) },
                         actions = {
                             IconButton(onClick = { onRemoveClick(track) }) {
                                 Icon(

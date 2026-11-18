@@ -22,7 +22,6 @@ import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
 import com.clibeats.presentation.more.MoreScreen
-import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
@@ -48,7 +47,6 @@ class MainActivity : ComponentActivity() {
                     NavDestination.all.firstOrNull { it.route == route } ?: NavDestination.Home
                 val navigate: (NavDestination) -> Unit = { route = it.route }
                 BackHandler(enabled = selectedDestination != NavDestination.Home) { navigate(NavDestination.Home) }
-                val playerViewModel: PlayerViewModel = hiltViewModel()
 
                 MainLayout(
                     selectedDestination = selectedDestination,
@@ -56,10 +54,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when (selectedDestination) {
                         NavDestination.Home ->
-                            HomeScreen(
-                                onNavigate = navigate,
-                                playerViewModel = playerViewModel,
-                            )
+                            HomeScreen(onNavigate = navigate)
                         NavDestination.Search -> SearchScreen()
                         NavDestination.Queue -> QueueScreen()
                         NavDestination.Library -> LibraryScreen()

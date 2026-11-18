@@ -10,9 +10,11 @@ import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.HistoryRepository
+import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -32,6 +34,7 @@ class HomeViewModel
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
         private val historyRepository: HistoryRepository? = null,
+        private val playbackRepository: PlaybackRepository? = null,
     ) : ViewModel() {
         val providers: List<MusicProvider> = providerRegistry.providers
 
@@ -47,6 +50,25 @@ class HomeViewModel
 
         fun setActiveProvider(id: String) {
             viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Plays [tracks] from [index]; queues the rest only if "auto-queue related" is on. */
+        fun playFromList(
+            tracks: List<Track>,
+            index: Int,
+        ) {
+            val repo = playbackRepository ?: return
+            viewModelScope.launch {
+                if (appPreferences.autoQueueRelated.first()) {
+                    repo.setQueue(tracks, index)
+                } else {
+                    repo.setQueue(listOf(tracks[index]), 0)
+                }
+            }
+        }
+
+        fun addToQueue(track: Track) {
+            playbackRepository?.addToQueue(track)
         }
 
         fun clearRecentlyPlayed() {

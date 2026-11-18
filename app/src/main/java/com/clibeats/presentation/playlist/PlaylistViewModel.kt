@@ -87,6 +87,10 @@ class PlaylistViewModel
             _selectedPlaylistId.value = playlistId
         }
 
+        fun addToQueue(track: Track) {
+            playbackRepository.addToQueue(track)
+        }
+
         fun removeSongFromPlaylist(
             playlistId: String,
             songId: String,

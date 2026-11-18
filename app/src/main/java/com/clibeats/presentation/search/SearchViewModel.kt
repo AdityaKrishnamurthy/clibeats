@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -72,7 +73,14 @@ class SearchViewModel
             tracks: List<Track>,
             index: Int,
         ) {
-            playbackRepository.setQueue(tracks, index)
+            viewModelScope.launch {
+                // "Auto-queue related" off: play only the tapped song, no suggestions after it.
+                if (appPreferences.autoQueueRelated.first()) {
+                    playbackRepository.setQueue(tracks, index)
+                } else {
+                    playbackRepository.setQueue(listOf(tracks[index]), 0)
+                }
+            }
         }
 
         val activeProviderName: StateFlow<String> =

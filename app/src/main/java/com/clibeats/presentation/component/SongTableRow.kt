@@ -7,6 +7,7 @@ package com.clibeats.presentation.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,8 +21,14 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -57,6 +64,7 @@ fun SongTableRow(
     actions: (@Composable () -> Unit)? = null,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onSwipeRight: (() -> Unit)? = null,
 ) {
     val semanticsDescription = "$trackTitle by $artist"
     val rowBackground = when {
@@ -64,7 +72,34 @@ fun SongTableRow(
         else -> CliBeatsBackground
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
+    // Swipe right past the threshold to add to queue (row follows the finger, snaps back).
+    var dragX by remember { mutableFloatStateOf(0f) }
+    val swipeModifier =
+        if (onSwipeRight == null) {
+            Modifier
+        } else {
+            Modifier.pointerInput(onSwipeRight) {
+                val threshold = SWIPE_THRESHOLD_DP.dp.toPx()
+                detectHorizontalDragGestures(
+                    onDragEnd = {
+                        if (dragX > threshold) onSwipeRight()
+                        dragX = 0f
+                    },
+                    onDragCancel = { dragX = 0f },
+                    onHorizontalDrag = { change, delta ->
+                        change.consume()
+                        dragX = (dragX + delta).coerceIn(0f, threshold * SWIPE_MAX_FACTOR)
+                    },
+                )
+            }
+        }
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(swipeModifier)
+            .graphicsLayer { translationX = dragX },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -187,3 +222,6 @@ fun SongTableHeader(modifier: Modifier = Modifier) {
         HorizontalDivider(thickness = 1.dp, color = CliBeatsDivider)
     }
 }
+
+private const val SWIPE_THRESHOLD_DP = 72
+private const val SWIPE_MAX_FACTOR = 1.5f
