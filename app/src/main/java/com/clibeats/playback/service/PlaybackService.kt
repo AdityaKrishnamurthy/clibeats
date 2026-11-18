@@ -4,6 +4,7 @@ package com.clibeats.playback.service
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -68,9 +69,15 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
 
-    /** Swiped away from recents: keep playing if music is on; otherwise stop (the resume card remains). */
+    /**
+     * Swiped away from recents: keep the service and session alive (playing or paused) so the media
+     * card's play button talks to a live player and resumes the same song. Only stop when there's
+     * nothing to play. If Android later kills the process, the resume card restores via
+     * [LibraryCallback.onPlaybackResumption].
+     */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()
+        Log.i(TAG, "taskRemoved playing=${player.isPlaying} items=${player.mediaItemCount}")
+        if (player.mediaItemCount == 0) stopSelf()
     }
 
     override fun onDestroy() {
@@ -120,12 +127,21 @@ class PlaybackService : MediaLibraryService() {
     }
 
     private inner class LibraryCallback : MediaLibrarySession.Callback {
+        override fun onConnect(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): MediaSession.ConnectionResult {
+            Log.i(TAG, "connect from ${controller.packageName} items=${player.mediaItemCount}")
+            return super.onConnect(session, controller)
+        }
+
         override fun onGetLibraryRoot(
             session: MediaLibrarySession,
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<MediaItem>> {
             val rootId = if (params?.isRecent == true) RECENT_ROOT else ROOT
+            Log.i(TAG, "libraryRoot recent=${params?.isRecent} from ${browser.packageName}")
             val root =
                 MediaItem.Builder()
                     .setMediaId(rootId)
@@ -173,7 +189,12 @@ class PlaybackService : MediaLibraryService() {
         override fun onPlaybackResumption(
             mediaSession: MediaSession,
             controller: MediaSession.ControllerInfo,
-        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> = afterRestore { currentQueue() }
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            Log.i(TAG, "playbackResumption from ${controller.packageName}")
+            return afterRestore {
+                currentQueue().also { Log.i(TAG, "resuming ${it.mediaItems.size} items at ${it.startIndex}") }
+            }
+        }
 
         /**
          * A controller asked to play a browsed item by id (items from the browser have no URI).
@@ -211,6 +232,7 @@ class PlaybackService : MediaLibraryService() {
             .build()
 
     private companion object {
+        const val TAG = "CLIBeatsSession"
         const val ROOT = "clibeats_root"
         const val RECENT_ROOT = "clibeats_recent"
     }
