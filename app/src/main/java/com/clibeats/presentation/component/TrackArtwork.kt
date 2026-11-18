@@ -51,8 +51,8 @@ fun TrackArtwork(
     // AsyncImage + painter placeholder: SubcomposeAsyncImage subcomposed every list row (scroll jank).
     val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
     AsyncImage(
-        // ~3x dp covers xxhdpi without decoding full-size covers in lists.
-        model = artworkUrlFor(artworkUrl, size * ARTWORK_PX_PER_DP),
+        // Shared thumbnail size: one download per cover across all lists and the mini player.
+        model = artworkUrlFor(artworkUrl, if (size <= THUMB_MAX_DP) ARTWORK_THUMB_PX else ARTWORK_FULL_PX),
         contentDescription = "Track artwork",
         contentScale = ContentScale.Crop,
         placeholder = placeholder,
@@ -85,4 +85,4 @@ private fun ArtworkPlaceholder(
     }
 }
 
-private const val ARTWORK_PX_PER_DP = 3
+private const val THUMB_MAX_DP = 64

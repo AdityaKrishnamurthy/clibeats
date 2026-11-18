@@ -30,3 +30,12 @@ fun artworkUrlFor(
         else -> url
     }
 }
+
+/**
+ * One thumbnail size for every small artwork (lists, mini player, dialogs) so each cover is
+ * downloaded and cached once, and Now Playing can show it instantly as a placeholder.
+ */
+const val ARTWORK_THUMB_PX = 128
+
+/** Now Playing / large artwork size. */
+const val ARTWORK_FULL_PX = 1080

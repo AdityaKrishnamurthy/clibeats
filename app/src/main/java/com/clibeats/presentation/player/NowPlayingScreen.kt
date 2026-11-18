@@ -61,6 +61,7 @@ import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
@@ -69,8 +70,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
+import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -167,9 +171,21 @@ fun NowPlayingScreen(
         val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
         // High-res cover; if the large variant doesn't exist (e.g. ytimg maxres), fall back to 480px.
         var artFallback by remember(track?.artworkUrl) { mutableStateOf(false) }
-        val artSize = if (artFallback) FALLBACK_ART_PX else LARGE_ART_PX
+        val artSize = if (artFallback) FALLBACK_ART_PX else ARTWORK_FULL_PX
+        val context = LocalContext.current
+        val artUrl = artworkUrlFor(track?.artworkUrl, artSize)
+        val thumbUrl = artworkUrlFor(track?.artworkUrl, ARTWORK_THUMB_PX)
+        // Show the already-cached thumbnail instantly, then fade to the high-res cover.
+        val artRequest =
+            remember(artUrl, thumbUrl) {
+                ImageRequest.Builder(context)
+                    .data(artUrl)
+                    .placeholderMemoryCacheKey(thumbUrl)
+                    .crossfade(ART_CROSSFADE_MS)
+                    .build()
+            }
         AsyncImage(
-            model = artworkUrlFor(track?.artworkUrl, artSize),
+            model = artRequest,
             onError = { if (!artFallback) artFallback = true },
             contentDescription = track?.let { "Artwork for ${it.title}" },
             contentScale = ContentScale.Crop,
@@ -441,7 +457,7 @@ private fun providerLabel(id: String): String =
 private const val DISMISS_DRAG_DP = 120
 private const val DISMISS_VELOCITY_PX_S = 1_500f
 private const val SNAP_BACK_MS = 200
-private const val LARGE_ART_PX = 1080
+private const val ART_CROSSFADE_MS = 150
 private const val FALLBACK_ART_PX = 480
 
 private val SLEEP_OPTIONS =

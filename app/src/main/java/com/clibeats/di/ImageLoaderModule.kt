@@ -45,5 +45,7 @@ object ImageLoaderModule {
                     .build()
             }
             .crossfade(false)
+            // Covers never change for a URL: always serve from disk without revalidating over the network.
+            .respectCacheHeaders(false)
             .build()
 }
