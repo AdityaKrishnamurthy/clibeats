@@ -16,10 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurface
 
@@ -47,15 +48,17 @@ fun TrackArtwork(
         return
     }
 
-    SubcomposeAsyncImage(
+    // AsyncImage + painter placeholder: SubcomposeAsyncImage subcomposed every list row (scroll jank).
+    val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
+    AsyncImage(
         model = artworkUrl,
         contentDescription = "Track artwork",
         contentScale = ContentScale.Crop,
+        placeholder = placeholder,
+        error = placeholder,
         modifier = modifier
             .size(size.dp)
             .clip(shape),
-        error = { ArtworkPlaceholder(size = size) },
-        loading = { ArtworkPlaceholder(size = size) },
     )
 }
 
