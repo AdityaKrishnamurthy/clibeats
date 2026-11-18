@@ -9,6 +9,7 @@ import com.clibeats.data.local.CliBeatsDatabase
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.ProviderId
+import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import com.clibeats.domain.repository.SongRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -34,18 +35,29 @@ class PlaylistExchangeManager
         private val playlistRepository: PlaylistRepository,
         private val songRepository: SongRepository,
         private val database: CliBeatsDatabase? = null,
+        private val libraryRepository: LibraryRepository? = null,
     ) {
-        /** Writes all playlists to [target]; returns the number of playlists exported. */
+        /**
+         * Writes the app's own playlists plus ♥ Favorites to [target]; returns the number exported.
+         * Local M3U/PLS mirrors are skipped: their source of truth is the file in the music folder.
+         */
         suspend fun export(target: Uri): Result<Int> =
             runCatching {
-                val playlists = playlistRepository.getAllPlaylistsAsFlow().first()
+                val appPlaylists =
+                    playlistRepository.getAllPlaylistsAsFlow().first().filterNot { it.id.startsWith(LOCAL_FILE_PREFIX) }
+                val named =
+                    appPlaylists.map { it.name to playlistRepository.getSongsForPlaylistAsFlow(it.id).first() } +
+                        listOfNotNull(
+                            libraryRepository?.getLikedSongs()?.first()?.takeIf { it.isNotEmpty() }?.let {
+                                FAVORITES_NAME to it
+                            },
+                        )
                 val file =
                     CliBeatsFile(
                         playlists =
-                            playlists.map { playlist ->
-                                val songs = playlistRepository.getSongsForPlaylistAsFlow(playlist.id).first()
+                            named.map { (name, songs) ->
                                 CliBeatsPlaylist(
-                                    name = playlist.name,
+                                    name = name,
                                     tracks =
                                         songs.map { song ->
                                             CliBeatsTrack(
@@ -67,7 +79,7 @@ class PlaylistExchangeManager
                         context.contentResolver.openOutputStream(target, "wt") ?: error("Cannot open file for writing")
                     out.bufferedWriter().use { it.write(CliBeatsFileCodec.encode(file)) }
                 }
-                playlists.size
+                named.size
             }
 
         /** Reads playlists from [source]; returns the number of tracks imported. */
@@ -82,7 +94,7 @@ class PlaylistExchangeManager
                 var importedTracks = 0
                 val write: suspend () -> Unit = {
                     cliBeatsFile.playlists.forEach { playlistData ->
-                        if (playlistData.name.isBlank() || playlistData.tracks.isEmpty()) return@forEach
+                        if (playlistData.name.isBlank()) return@forEach
                         // Stable per name (re-import merges) and collision-free, unlike String.hashCode().
                         val playlistId = "imported_" + UUID.nameUUIDFromBytes(playlistData.name.toByteArray())
                         val tracks =
@@ -99,6 +111,11 @@ class PlaylistExchangeManager
                                 )
                             }.distinctBy { it.id }
                         songRepository.upsertTracks(tracks)
+                        importedTracks += tracks.size
+                        if (playlistData.name == FAVORITES_NAME && libraryRepository != null) {
+                            tracks.forEach { libraryRepository.addToFavorites(it) }
+                            return@forEach
+                        }
                         playlistRepository.upsertPlaylist(
                             Playlist(
                                 id = playlistId,
@@ -110,10 +127,8 @@ class PlaylistExchangeManager
                                 providerId = "local",
                             ),
                         )
-                        tracks.forEachIndexed { index, track ->
-                            playlistRepository.addSongToPlaylist(playlistId, track.id, index)
-                        }
-                        importedTracks += tracks.size
+                        // Replace (not append): re-importing an updated file must not leave stale songs.
+                        playlistRepository.reorderPlaylistSongs(playlistId, tracks.map { it.id })
                     }
                 }
                 // All-or-nothing: a malformed entry must not leave half-imported playlists.
@@ -123,6 +138,8 @@ class PlaylistExchangeManager
 
         companion object {
             const val FILE_NAME = "clibeats.json"
+            const val FAVORITES_NAME = "♥ Favorites"
+            private const val LOCAL_FILE_PREFIX = "localpl:"
 
             /**
              * Online URLs expire and must be re-resolved; only SAF content:// URIs are kept for
