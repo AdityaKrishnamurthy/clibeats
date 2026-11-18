@@ -1,71 +1,74 @@
-// ForbiddenImport: data/playback imports are legitimate
-@file:Suppress("ForbiddenImport", "MagicNumber")
+@file:Suppress("ForbiddenImport")
 
 package com.clibeats.playback.service
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import androidx.annotation.OptIn
-import androidx.core.app.NotificationCompat
-import androidx.media.app.NotificationCompat.MediaStyle
-import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
-import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.clibeats.R
+import com.clibeats.domain.repository.PlaybackRepository
+import com.google.common.util.concurrent.ListenableFuture
+import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Foreground media session service. Started by [com.clibeats.playback.PlayerAdapter]
- * whenever playback begins so audio keeps running in the background and media
- * controls appear in the notification shade / lock screen.
+ * Background playback + system media controls (notification shade, lock screen, Bluetooth).
  *
- * The media notification is built and posted manually here because the app
- * drives the player through its own [PlayerAdapter] (no MediaController
- * connects to the session), which would otherwise leave MediaSessionService
- * without an active session to auto-post a notification — and never calling
- * [startForeground] crashes the app within seconds.
+ * Media3 owns the notification: it shows the current track's artwork (from MediaItem.artworkUri),
+ * keeps the service in the foreground while playing, and taps open the app via the session activity.
+ * Playback resumption: after the app is closed, Android 13+ can show a "resume" card; tapping it
+ * restores the last saved queue through [MediaSession.Callback.onPlaybackResumption].
  */
+@OptIn(UnstableApi::class)
 @AndroidEntryPoint
 class PlaybackService : MediaSessionService() {
-    @Inject
-    lateinit var player: ExoPlayer
+    @Inject lateinit var player: ExoPlayer
+
+    @Inject lateinit var playbackRepository: PlaybackRepository
 
     private var mediaSession: MediaSession? = null
-
-    private val notificationManager: NotificationManager by lazy {
-        getSystemService(NotificationManager::class.java)
-    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
-        mediaSession = MediaSession.Builder(this, player).build()
-        player.addListener(notificationUpdater)
-    }
-
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int,
-    ): Int {
-        handleAction(intent)
-        startForeground(NOTIFICATION_ID, buildMediaNotification())
-        return super.onStartCommand(intent, flags, startId)
+        setMediaNotificationProvider(
+            DefaultMediaNotificationProvider.Builder(this).build().apply {
+                setSmallIcon(R.drawable.ic_stat_music_note)
+            },
+        )
+        val session =
+            MediaSession.Builder(this, player)
+                .setCallback(ResumptionCallback())
+                .apply { sessionActivity()?.let(::setSessionActivity) }
+                .build()
+        mediaSession = session
+        // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
+        // otherwise Media3 never posts the media notification.
+        addSession(session)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
+    /** Swiped away from recents: keep playing if music is on; otherwise stop (resume card remains). */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (!player.playWhenReady || player.mediaItemCount == 0) stopSelf()
+    }
+
     override fun onDestroy() {
-        player.removeListener(notificationUpdater)
-        // The ExoPlayer is a DI singleton owned by the app (PlayerAdapter), not
-        // by this service — releasing it here would kill playback permanently.
+        scope.cancel()
+        // The ExoPlayer is a DI singleton owned by the app (PlayerAdapter), not by this service:
+        // releasing it here would kill playback permanently.
         mediaSession?.run {
             release()
             mediaSession = null
@@ -73,102 +76,37 @@ class PlaybackService : MediaSessionService() {
         super.onDestroy()
     }
 
-    private fun handleAction(intent: Intent?) {
-        when (intent?.action) {
-            ACTION_PLAY_PAUSE -> if (player.isPlaying) player.pause() else player.play()
-            ACTION_NEXT -> player.seekToNextMediaItem()
-            ACTION_PREVIOUS -> player.seekToPreviousMediaItem()
-        }
-    }
-
-    private fun createChannel() {
-        val channel =
-            NotificationChannel(
-                CHANNEL_ID,
-                "Playback",
-                NotificationManager.IMPORTANCE_LOW,
-            )
-        notificationManager.createNotificationChannel(channel)
-    }
-
-    private val notificationUpdater =
-        object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                refreshNotification()
-            }
-
-            override fun onMediaItemTransition(
-                mediaItem: MediaItem?,
-                reason: Int,
-            ) {
-                refreshNotification()
-            }
-        }
-
-    @android.annotation.SuppressLint("MissingPermission", "NotificationPermission")
-    private fun refreshNotification() {
-        notificationManager.notify(NOTIFICATION_ID, buildMediaNotification())
-    }
-
-    @OptIn(androidx.media3.common.util.UnstableApi::class)
-    @android.annotation.SuppressLint("UnsafeOptInUsageError")
-    private fun buildMediaNotification(): Notification {
-        val session = mediaSession
-        val sessionPlayer = session?.player ?: player
-        val metadata: MediaMetadata =
-            sessionPlayer.currentMediaItem?.mediaMetadata ?: MediaMetadata.EMPTY
-        val title = metadata.title?.toString()?.ifBlank { null } ?: "CLIBeats"
-        val artist = metadata.artist?.toString().orEmpty()
-        val isPlaying = sessionPlayer.isPlaying
-
-        val playPauseIcon =
-            if (isPlaying) {
-                android.R.drawable.ic_media_pause
-            } else {
-                android.R.drawable.ic_media_play
-            }
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_music_note)
-            .setContentTitle(title)
-            .setContentText(artist)
-            .setOngoing(isPlaying)
-            .setShowWhen(false)
-            .setOnlyAlertOnce(true)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_TRANSPORT)
-            .setStyle(
-                MediaStyle()
-                    .setMediaSession(session?.sessionCompatToken)
-                    .setShowActionsInCompactView(1),
-            )
-            .addAction(action(android.R.drawable.ic_media_previous, ACTION_PREVIOUS, "Previous"))
-            .addAction(action(playPauseIcon, ACTION_PLAY_PAUSE, if (isPlaying) "Pause" else "Play"))
-            .addAction(action(android.R.drawable.ic_media_next, ACTION_NEXT, "Next"))
-            .build()
-    }
-
-    private fun action(
-        iconRes: Int,
-        action: String,
-        label: String,
-    ): NotificationCompat.Action {
-        val intent = Intent(this, PlaybackService::class.java).setAction(action)
-        val pendingIntent =
-            PendingIntent.getService(
+    /** Tapping the notification / lock-screen card brings the existing app task to the front. */
+    private fun sessionActivity(): PendingIntent? =
+        packageManager.getLaunchIntentForPackage(packageName)?.let { launch ->
+            launch.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            PendingIntent.getActivity(
                 this,
-                action.hashCode(),
-                intent,
+                0,
+                launch,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
-        return NotificationCompat.Action.Builder(iconRes, label, pendingIntent).build()
-    }
+        }
 
-    companion object {
-        private const val NOTIFICATION_ID = 1001
-        private const val CHANNEL_ID = "playback"
-        private const val ACTION_PLAY_PAUSE = "com.clibeats.action.PLAY_PAUSE"
-        private const val ACTION_NEXT = "com.clibeats.action.NEXT"
-        private const val ACTION_PREVIOUS = "com.clibeats.action.PREVIOUS"
+    private inner class ResumptionCallback : MediaSession.Callback {
+        override fun onPlaybackResumption(
+            mediaSession: MediaSession,
+            controller: MediaSession.ControllerInfo,
+        ): ListenableFuture<MediaSession.MediaItemsWithStartPosition> {
+            val result = SettableFuture.create<MediaSession.MediaItemsWithStartPosition>()
+            scope.launch {
+                runCatching {
+                    // Restores the saved queue into the shared player (keeps the app UI in sync).
+                    playbackRepository.awaitRestored()
+                    val items = (0 until player.mediaItemCount).map(player::getMediaItemAt)
+                    MediaSession.MediaItemsWithStartPosition(
+                        items,
+                        player.currentMediaItemIndex.coerceAtLeast(0),
+                        player.currentPosition.coerceAtLeast(0L),
+                    )
+                }.fold(result::set, result::setException)
+            }
+            return result
+        }
     }
 }

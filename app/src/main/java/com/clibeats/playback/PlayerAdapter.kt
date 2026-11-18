@@ -13,6 +13,8 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.playback.service.PlaybackService
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.util.DiagnosticLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -42,8 +44,9 @@ class PlayerAdapter
          * shade / lock screen. The service wraps the same singleton [ExoPlayer].
          */
         private fun startPlaybackService() {
-            val intent = Intent(context, PlaybackService::class.java)
-            context.startForegroundService(intent)
+            // Plain start: Media3 promotes the service to foreground itself once playback starts.
+            // (startForegroundService would crash if Media3 hadn't posted its notification within 5s.)
+            runCatching { context.startService(Intent(context, PlaybackService::class.java)) }
         }
 
         private val _playbackState =
@@ -396,7 +399,8 @@ class PlayerAdapter
                         .setTitle(title)
                         .setArtist(artist)
                         .setAlbumTitle(album)
-                        .setArtworkUri(artworkUrl?.let { android.net.Uri.parse(it) })
+                        // High-res cover for the notification, lock screen and Bluetooth displays.
+                        .setArtworkUri(artworkUrlFor(artworkUrl, ARTWORK_FULL_PX)?.let { android.net.Uri.parse(it) })
                         .build(),
                 )
                 .build()

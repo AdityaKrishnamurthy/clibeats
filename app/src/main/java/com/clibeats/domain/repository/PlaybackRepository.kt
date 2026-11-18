@@ -40,6 +40,9 @@ interface PlaybackRepository {
 
     fun skipToIndex(index: Int)
 
+    /** Suspends until the saved queue has been restored into the player (used for playback resumption). */
+    suspend fun awaitRestored()
+
     fun skipToNext()
 
     fun skipToPrevious()

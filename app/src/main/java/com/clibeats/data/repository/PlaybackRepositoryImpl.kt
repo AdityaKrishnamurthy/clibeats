@@ -16,6 +16,7 @@ import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
 import com.clibeats.util.DiagnosticLogger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,9 +66,14 @@ class PlaybackRepositoryImpl
 
         override val queueState: StateFlow<List<Track>> = playerAdapter.queueFlow
 
+        private val restored = CompletableDeferred<Unit>()
+
+        override suspend fun awaitRestored() = restored.await()
+
         init {
             repositoryScope.launch {
                 restorePersistentQueue()
+                restored.complete(Unit)
             }
             repositoryScope.launch {
                 playerAdapter.queueFlow.collect { tracks ->
