@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="logo/clibeats-logo.svg" width="112" alt="CLIBeats logo">
+
 # CLIBeats
 
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
@@ -67,10 +69,11 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Queue playback that just works** — every queued song resolves when it's reached (skip, auto-advance, repeat).
 - **Fast start** — playback begins after ~0.5 s of buffer; next 2 songs are pre-resolved and their covers prefetched.
 - **Repeat** (off → all → one) and **shuffle**, with a tiny `ONE` / `ALL` / `OFF` label above the button.
-- **Sleep timer** — 15 / 30 / 45 / 60 min or end of track.
+- **Sleep timer** — 15 / 30 / 45 / 60 min or end of track (also with repeat-one).
 - **Auto-queue related songs** (optional) — tapping a song queues the rest of that list after it.
 - **Clear upcoming** keeps the song that's playing.
 - Expired YouTube links are refreshed automatically; one silent retry on stream errors.
+- **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
 
 ### Sources
 - **Online:** YouTube Music, Internet Archive, Jamendo, Audius — pick from the `ONLINE ▾` drop-down.
@@ -99,10 +102,11 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 ### System integration
 - **Background playback** and lock-screen / notification controls with **high-res artwork**.
 - Tapping the notification opens the app; the session survives swiping the app away.
-- **Resume card** in Quick Settings after the app is closed (Android 11+), restoring your last queue.
+- **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
 
 ### Storage & performance
-- **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB).
+- **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);
+  limit changes apply immediately.
 - **Song cache:** streamed songs replay instantly without using data; local files are never duplicated.
 - One shared thumbnail per cover, disk-cached images, lightweight list rendering.
 
@@ -110,6 +114,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - Terminal-style UI (JetBrains Mono, bracketed controls, bordered blocks).
 - **Themes:** Dark · AMOLED · **Light**, with six accent colours; dialogs and menus follow the theme.
 - **First-run setup** (new installs): theme → music folder → default source (Online / Local).
+- **App icon:** terminal window with a prompt and spectrum bars, with a themed (monochrome) variant on Android 13+.
 
 ---
 
@@ -194,10 +199,14 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 ### Releases
 
-Pushing a tag like `v2.0.0` runs `.github/workflows/release.yml`, which builds a signed APK and publishes a
-GitHub Release with SHA-256 checksums. Signing uses the repository secrets `KEYSTORE_BASE64`,
+Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
+`CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
+`Get-FileHash CLIBeats-v2.0.0.apk` on Windows).
+
+Pushing a tag like `v2.0.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` (falls back to the debug key if they're missing).
-Version name/code come from the tag (`-PversionName` / `-PversionCode`); local builds default to 2.0.0.
+The version comes from the tag (`2.0.0` → versionCode `20000`); local builds default to 2.0.0.
 
 ---
 
@@ -211,7 +220,8 @@ app/src/main/java/com/clibeats/
 ├── playback/      # PlayerAdapter, StreamResolver, TrackUriResolver, PlaybackService
 ├── presentation/  # home, search, library, queue, playlist, player, settings, onboarding, theme, components
 └── di/            # Hilt modules
-docs/              # screenshots, ADRs, user guide, licenses
+docs/              # screenshots, ADRs, user guide, release notes, licenses
+logo/              # app logo (SVG source of the launcher icon + PNG)
 ```
 
 ---

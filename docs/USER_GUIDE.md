@@ -1,16 +1,59 @@
-# CLIBeats — User Manual & Keyboard Guide
+# CLIBeats — User Guide
 
-Welcome to CLIBeats, the terminal-styled audio player for Android.
+Welcome to CLIBeats, the terminal-styled music player for Android.
 
-## Navigation Layout
-- **[1] Home**: Displays recent activity, recommendations, and active provider status.
-- **[2] Search**: Debounced search across active audio providers with dense song tables.
-- **[3] Library**: Unified view for local tracks, saved playlists, and favorite artists.
-- **[4] Playlists**: Create, view, and manage custom playlists.
-- **[5] Queue**: Reorder, clear, or remove items from the playback queue.
-- **[6] Settings**: Configure provider selection, disk cache limits, and streaming quality.
+## First run
 
-## Playback Bar Controls
-- **Skip Previous / Next**: Jump between tracks in the active queue.
-- **Play / Pause**: Toggle playback state.
-- **Queue Button**: Quick access to the active playback queue.
+New installs open a short setup: pick a theme, optionally choose your music folder, and choose the default
+source (Online or Local). Everything can be changed later in Settings.
+
+## Tabs
+
+Swipe left / right anywhere outside a song row to move between tabs.
+
+| Tab | What it does |
+|---|---|
+| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (with `[ CLEAR ]`), trending songs. |
+| **Search** | Search the active source. Double-tap the tab to jump straight into the search box. |
+| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device. Tracks / Artists / Albums. |
+| **Queue** | Reorder, remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
+| **Playlists** | ♥ Favorites, Most Played, your playlists, a **+** tile and local M3U playlists. Tap the tab again to go back to the grid. |
+| **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
+
+## Song gestures
+
+- **Tap** — play (with "Auto-queue related songs" on, the rest of the list is queued after it).
+- **Swipe right** — add to queue.
+- **Swipe left** — add to ♥ Favorites.
+- **Long-press** — add to a playlist (or create a new one).
+
+## Player
+
+- **Mini player** — tap the song to open Now Playing.
+- **Now Playing** — seek bar, repeat (off → all → one), previous, play/pause, next, shuffle, sleep timer,
+  queue, add to playlist, ♥. Drag the artwork down to close.
+- **Sleep timer** — 15 / 30 / 45 / 60 minutes or end of the current song (works with repeat-one too).
+- If a song can't be played, CLIBeats skips to the next one and shows a short notice above the player.
+
+## Local music
+
+Settings → Local music → add one or more folders. Titles, artists, albums and covers come from the file tags.
+Use **Rescan** after adding files. Playlist files (`.m3u`, `.m3u8`, `.pls`) in your folders appear as
+read-only `[LOCAL]` playlists; use **Save as app playlist** to get an editable copy.
+
+## Storage
+
+Settings → Storage has two caches, each with a size limit and `[ CLEAR ]`:
+
+- **Songs** — streamed songs replay instantly without using data (local files are never copied).
+- **Artwork** — cover images. Changing the limit applies immediately.
+
+## Controls outside the app
+
+Playback continues in the background with notification and lock-screen controls. After the app is closed,
+the media card in Quick Settings resumes the last song from where you left off.
+
+## Playlist exchange
+
+Settings → Playlist exchange exports your playlists and Favorites to a `clibeats.json` file anywhere you
+choose, and imports them back (for example on a new phone or after reinstalling).
