@@ -9,6 +9,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
+import com.clibeats.presentation.component.isLocalFilePlaylist
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -62,6 +63,8 @@ class PlayerViewModel
 
         val playlists: StateFlow<List<Playlist>> =
             (playlistRepository?.getAllPlaylistsAsFlow() ?: flowOf(emptyList()))
+                // Local M3U/PLS playlists are read-only, so they aren't add-to targets.
+                .map { all -> all.filterNot { it.isLocalFilePlaylist() } }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         private val _sleepTimer = MutableStateFlow<SleepTimer>(SleepTimer.Off)

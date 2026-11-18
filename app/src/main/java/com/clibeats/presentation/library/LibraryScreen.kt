@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -59,6 +60,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
+    val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val mode by viewModel.mode.collectAsState()
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
@@ -149,6 +151,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
                                         viewModel.onTrackClick(track, currentState.tracks, index)
                                     },
                                     onSwipeRight = viewModel::onSwipeAddToQueue,
+                                    onSwipeLeft = favorites::add,
                                     onLongPress = { addToPlaylistTrack = it },
                                 )
                             1 -> ArtistsList(artists = currentState.artists)
@@ -168,6 +171,7 @@ private fun TracksList(
     onTrackClick: (Track, Int) -> Unit,
     onSwipeRight: (Track) -> Unit,
     onLongPress: (Track) -> Unit,
+    onSwipeLeft: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -183,6 +187,7 @@ private fun TracksList(
                 onClick = { onTrackClick(track, index) },
                 onSwipeRight = { onSwipeRight(track) },
                 onLongPress = { onLongPress(track) },
+                onSwipeLeft = { onSwipeLeft(track) },
             )
         }
     }

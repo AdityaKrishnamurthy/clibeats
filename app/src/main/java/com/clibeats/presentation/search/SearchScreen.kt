@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
@@ -59,6 +60,7 @@ import com.clibeats.presentation.theme.LocalAccentColor
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
+    val favorites: FavoritesViewModel = hiltViewModel()
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
@@ -121,6 +123,7 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
                             tracks = currentState.tracks,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = viewModel::onAddToQueue,
+                            onFavorite = favorites::add,
                             onPlayNext = viewModel::onPlayNext,
                             onAddToPlaylist = { playlistPickerTrack = it },
                         )
@@ -207,12 +210,13 @@ private fun SearchNoResultsState() {
     }
 }
 
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongParameterList", "LongMethod")
 @Composable
 private fun SearchResultsList(
     tracks: List<Track>,
     onTrackClick: (Int) -> Unit,
     onAddToQueue: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
     onPlayNext: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
 ) {
@@ -232,6 +236,7 @@ private fun SearchResultsList(
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
+                onSwipeLeft = { onFavorite(track) },
                 onLongPress = { onAddToPlaylist(track) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {

@@ -35,9 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
@@ -62,6 +62,7 @@ fun HomeScreen(
     onNavigate: (NavDestination) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
 ) {
+    val favorites: FavoritesViewModel = hiltViewModel()
     val uiState by homeViewModel.uiState.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
     val activeProviderId by homeViewModel.activeProviderId.collectAsState()
@@ -154,6 +155,7 @@ fun HomeScreen(
                     artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                     onClick = { homeViewModel.playFromList(recentlyPlayed, index) },
                     onSwipeRight = { homeViewModel.addToQueue(track) },
+                    onSwipeLeft = { favorites.add(track) },
                     onLongPress = { addToPlaylistTrack = track },
                 )
             }
@@ -203,18 +205,10 @@ fun HomeScreen(
                             trackTitle = track.title,
                             artist = track.artist,
                             duration = formatDuration(track.durationMs),
-                            artworkContent =
-                                track.artworkUrl?.let { url ->
-                                    {
-                                        AsyncImage(
-                                            model = url,
-                                            contentDescription = "Artwork for ${track.title}",
-                                            modifier = Modifier.size(32.dp),
-                                        )
-                                    }
-                                },
+                            artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                             onClick = { homeViewModel.playFromList(state.tracks, index) },
                             onSwipeRight = { homeViewModel.addToQueue(track) },
+                            onSwipeLeft = { favorites.add(track) },
                             onLongPress = { addToPlaylistTrack = track },
                         )
                     }
