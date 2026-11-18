@@ -62,7 +62,8 @@ class YouTubeMusicProvider
         }
 
         override suspend fun trending(limit: Int): ProviderResult<List<Track>> {
-            return search("trending music", limit)
+            val country = com.clibeats.data.provider.dto.UserLocale.countryName
+            return search(if (country.isBlank()) "trending music" else "top songs $country", limit)
         }
 
         override suspend fun getTrack(trackId: String): ProviderResult<Track> {

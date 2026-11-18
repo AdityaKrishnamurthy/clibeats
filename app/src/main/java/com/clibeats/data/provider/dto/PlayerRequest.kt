@@ -43,8 +43,8 @@ data class InnerTubeContext(
                     InnerTubeClient(
                         clientName = "WEB_REMIX",
                         clientVersion = "1.20240618.01.00",
-                        hl = "en",
-                        gl = "US",
+                        hl = UserLocale.hl,
+                        gl = UserLocale.gl,
                     ),
             )
 
@@ -63,8 +63,8 @@ data class InnerTubeContext(
                         deviceModel = config.deviceModel,
                         userAgent = config.userAgent,
                         visitorData = visitorData,
-                        hl = "en",
-                        gl = "US",
+                        hl = UserLocale.hl,
+                        gl = UserLocale.gl,
                     ),
                 serviceIntegrityDimensions = poToken?.let { ServiceIntegrityDimensions(poToken = it) },
             )
@@ -80,8 +80,8 @@ data class InnerTubeClient(
     val deviceModel: String? = null,
     val userAgent: String? = null,
     val visitorData: String? = null,
-    val hl: String = "en",
-    val gl: String = "US",
+    val hl: String = UserLocale.hl,
+    val gl: String = UserLocale.gl,
 )
 
 @Serializable
@@ -103,3 +103,13 @@ data class PlaybackContext(
 data class ContentPlaybackContext(
     val signatureTimestamp: Int = 0,
 )
+
+/** Device region/language for InnerTube `gl`/`hl`, so results and trending are regional. */
+object UserLocale {
+    val gl: String
+        get() = java.util.Locale.getDefault().country.uppercase().takeIf { it.length == 2 } ?: "US"
+    val hl: String
+        get() = java.util.Locale.getDefault().language.ifBlank { "en" }
+    val countryName: String
+        get() = java.util.Locale.getDefault().getDisplayCountry(java.util.Locale.ENGLISH)
+}

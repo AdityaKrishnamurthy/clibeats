@@ -25,7 +25,10 @@ class InnerTubeHeaderInterceptor
                 builder.header("Content-Type", "application/json")
             }
             if (original.header("Accept-Language") == null) {
-                builder.header("Accept-Language", "en-US,en;q=0.9")
+                builder.header(
+                    "Accept-Language",
+                    "${com.clibeats.data.provider.dto.UserLocale.hl}-${com.clibeats.data.provider.dto.UserLocale.gl},${com.clibeats.data.provider.dto.UserLocale.hl};q=0.9,en;q=0.8",
+                )
             }
             if (original.header("Origin") == null) {
                 builder.header("Origin", "https://music.youtube.com")
