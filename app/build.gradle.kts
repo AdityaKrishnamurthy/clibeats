@@ -20,12 +20,27 @@ android {
         applicationId = "com.clibeats"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI passes -PversionName=1.2.3 -PversionCode=N from the git tag / run number.
+        versionCode = providers.gradleProperty("versionCode").orElse("1").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("0.1.0").get()
 
         // Optional free Jamendo API key (developer.jamendo.com). Empty by default.
         val jamendoClientId = providers.gradleProperty("JAMENDO_CLIENT_ID").orElse("").get()
         buildConfigField("String", "JAMENDO_CLIENT_ID", "\"${jamendoClientId.replace("\"", "\\\"")}\"")
+    }
+
+    // Release signing from env (set by .github/workflows/release.yml). Falls back to the
+    // debug key locally so `assembleRelease` still works without secrets.
+    val releaseKeystore = System.getenv("KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = releaseKeystore
+                storePassword = System.getenv("KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("KEY_ALIAS")
+                keyPassword = System.getenv("KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
@@ -35,7 +50,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
