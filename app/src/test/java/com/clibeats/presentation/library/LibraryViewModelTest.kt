@@ -33,7 +33,8 @@ class LibraryViewModelTest {
         Dispatchers.setMain(testDispatcher)
         songRepository = mock()
         playbackRepository = mock()
-        whenever(songRepository.getAllTracksAsFlow()).thenReturn(fakeTracksFlow)
+        whenever(songRepository.getPlayedOnlineTracksAsFlow()).thenReturn(fakeTracksFlow)
+        whenever(songRepository.getLocalTracksAsFlow()).thenReturn(MutableStateFlow(emptyList()))
         viewModel = LibraryViewModel(songRepository, playbackRepository)
     }
 

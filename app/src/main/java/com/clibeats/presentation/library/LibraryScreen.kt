@@ -7,9 +7,13 @@
 package com.clibeats.presentation.library
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -32,6 +36,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
@@ -51,6 +58,8 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 @Composable
 fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
     val state by viewModel.uiState.collectAsState()
+    val mode by viewModel.mode.collectAsState()
+    val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     val tabs = listOf("Tracks", "Artists", "Albums")
 
@@ -60,7 +69,15 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
             .background(CliBeatsBackground)
             .padding(12.dp),
     ) {
-        TuiBlock(title = "Library (${tabs[selectedTabIndex]})", isActive = true, modifier = Modifier.weight(1f)) {
+        LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        val modeLabel = if (mode == LibraryMode.ONLINE) "Online · played" else "Offline · device"
+        TuiBlock(
+            title = "Library — $modeLabel (${tabs[selectedTabIndex]})",
+            isActive = true,
+            modifier = Modifier.weight(1f),
+        ) {
             Column(modifier = Modifier.fillMaxSize()) {
                 TabRow(
                     selectedTabIndex = selectedTabIndex,
@@ -104,18 +121,29 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(
-                                text = "> library --empty",
+                                text =
+                                    when {
+                                        mode == LibraryMode.ONLINE -> NOTHING_PLAYED
+                                        !localFolderChosen -> NO_FOLDER
+                                        else -> NO_FILES
+                                    },
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = CliBeatsTextSecondary,
+                                modifier = Modifier.padding(16.dp),
                             )
                         }
                     }
 
                     is LibraryUiState.Success -> {
                         when (selectedTabIndex) {
-                            0 -> TracksList(tracks = currentState.tracks, onTrackClick = { track, index ->
-                                viewModel.onTrackClick(track, currentState.tracks, index)
-                            })
+                            0 ->
+                                TracksList(
+                                    tracks = currentState.tracks,
+                                    onTrackClick = { track, index ->
+                                        viewModel.onTrackClick(track, currentState.tracks, index)
+                                    },
+                                    onSwipeRight = viewModel::onSwipeAddToQueue,
+                                )
                             1 -> ArtistsList(artists = currentState.artists)
                             2 -> AlbumsList(albums = currentState.albums)
                         }
@@ -131,6 +159,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
 private fun TracksList(
     tracks: List<Track>,
     onTrackClick: (Track, Int) -> Unit,
+    onSwipeRight: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -144,6 +173,34 @@ private fun TracksList(
                 index = index + 1,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(track, index) },
+                onSwipeRight = { onSwipeRight(track) },
+            )
+        }
+    }
+}
+
+private const val NOTHING_PLAYED = "> Nothing played yet. Songs you play show up here."
+private const val NO_FOLDER = "> No local folder. Settings → Local Music → Choose folder"
+private const val NO_FILES = "> No audio files found. Settings → Local Music → Rescan"
+
+@Suppress("FunctionNaming")
+@Composable
+private fun LibraryModeToggle(
+    mode: LibraryMode,
+    onSelect: (LibraryMode) -> Unit,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LibraryMode.entries.forEach { option ->
+            val selected = option == mode
+            Text(
+                text = if (selected) "[● ${option.name}]" else "[ ${option.name} ]",
+                style = MaterialTheme.typography.labelMedium,
+                color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
+                modifier = Modifier
+                    .semantics { this.selected = selected }
+                    .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
+                    .clickable(role = Role.Tab) { onSelect(option) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
             )
         }
     }

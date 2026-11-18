@@ -1,16 +1,29 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.presentation.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.SongRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** ONLINE = songs you actually played from online providers; OFFLINE = scanned device music. */
+enum class LibraryMode { ONLINE, OFFLINE }
 
 @HiltViewModel
 class LibraryViewModel
@@ -18,22 +31,37 @@ class LibraryViewModel
     constructor(
         private val songRepository: SongRepository,
         private val playbackRepository: PlaybackRepository,
+        private val appPreferences: AppPreferences? = null,
     ) : ViewModel() {
+        private val _mode = MutableStateFlow(LibraryMode.ONLINE)
+        val mode: StateFlow<LibraryMode> = _mode.asStateFlow()
+
+        val localFolderChosen: StateFlow<Boolean> =
+            (appPreferences?.localMusicTreeUri ?: flowOf(null))
+                .map { !it.isNullOrBlank() }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+
+        @OptIn(ExperimentalCoroutinesApi::class)
         val uiState: StateFlow<LibraryUiState> =
-            songRepository.getAllTracksAsFlow()
-                .map { tracks ->
+            _mode
+                .flatMapLatest { mode ->
+                    when (mode) {
+                        LibraryMode.ONLINE -> songRepository.getPlayedOnlineTracksAsFlow()
+                        LibraryMode.OFFLINE -> songRepository.getLocalTracksAsFlow()
+                    }
+                }.map { tracks ->
                     if (tracks.isEmpty()) {
                         LibraryUiState.Empty
                     } else {
                         val artists =
                             tracks.groupBy { it.artist.ifBlank { "Unknown Artist" } }
                                 .map { (artist, list) -> ArtistGroup(artist, list.size) }
-                                .sortedBy { it.name }
+                                .sortedBy { it.name.lowercase() }
 
                         val albums =
                             tracks.groupBy { (it.album.ifBlank { "Unknown Album" }) to it.artist }
                                 .map { (key, list) -> AlbumGroup(key.first, key.second, list.size) }
-                                .sortedBy { it.title }
+                                .sortedBy { it.title.lowercase() }
 
                         LibraryUiState.Success(
                             tracks = tracks,
@@ -47,12 +75,27 @@ class LibraryViewModel
                     initialValue = LibraryUiState.Loading,
                 )
 
+        fun setMode(mode: LibraryMode) {
+            _mode.value = mode
+        }
+
         @Suppress("UnusedParameter")
         fun onTrackClick(
             track: Track,
             tracks: List<Track>,
             index: Int,
         ) {
-            playbackRepository.setQueue(tracks, index)
+            viewModelScope.launch {
+                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: true
+                if (autoQueue) {
+                    playbackRepository.setQueue(tracks, index)
+                } else {
+                    playbackRepository.setQueue(listOf(track), 0)
+                }
+            }
+        }
+
+        fun onSwipeAddToQueue(track: Track) {
+            playbackRepository.addToQueue(track)
         }
     }
