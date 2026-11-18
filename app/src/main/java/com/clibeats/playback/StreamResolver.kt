@@ -2,6 +2,7 @@
 
 package com.clibeats.playback
 
+import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.provider.YouTubeMusicProvider
 import com.clibeats.domain.model.PlaybackException
 import com.clibeats.domain.model.Track
@@ -16,6 +17,7 @@ class StreamResolver
     @Inject
     constructor(
         private val providerRegistry: ProviderRegistry,
+        private val mediaCaches: dagger.Lazy<MediaCaches>,
     ) {
         suspend fun resolve(
             track: Track,
@@ -33,7 +35,13 @@ class StreamResolver
             if (forceRefresh) (provider as? YouTubeMusicProvider)?.invalidateCache(track.id)
 
             return when (val result = provider.stream(track.id)) {
-                is ProviderResult.Success -> track.copy(streamUrl = result.data)
+                is ProviderResult.Success -> {
+                    // Keep the extracted bitrate with the song cache entry (key = placeholder URI).
+                    extractedBitrateKbps(track)?.let { kbps ->
+                        mediaCaches.get().rememberBitrate(TrackUriResolver.placeholderUri(track).toString(), kbps)
+                    }
+                    track.copy(streamUrl = result.data)
+                }
                 is ProviderResult.Error -> {
                     DiagnosticLogger.logError(traceId, "STREAM_RESOLUTION_FAILED", result.message)
                     throw PlaybackException.StreamResolutionFailed(result.message, result.cause)
@@ -50,7 +58,14 @@ class StreamResolver
          * Bitrate known from stream extraction (YouTube streams often carry none in the container,
          * so the player can't report it). Cheap map lookup; null if unknown.
          */
-        fun knownBitrateKbps(track: Track): Int? =
+        fun knownBitrateKbps(
+            track: Track,
+            durationMs: Long = 0L,
+        ): Int? =
+            extractedBitrateKbps(track)
+                ?: mediaCaches.get().cachedBitrateKbps(TrackUriResolver.placeholderUri(track).toString(), durationMs)
+
+        private fun extractedBitrateKbps(track: Track): Int? =
             (providerRegistry.getProvider(track.providerId) as? YouTubeMusicProvider)?.cachedBitrateKbps(track.id)
 
         /** Drops any cached URL so the next resolve hits the provider (used after HTTP 403). */

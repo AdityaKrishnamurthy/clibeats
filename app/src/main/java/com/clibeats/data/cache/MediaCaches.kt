@@ -10,6 +10,8 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheEvictor
 import androidx.media3.datasource.cache.CacheSpan
+import androidx.media3.datasource.cache.ContentMetadata
+import androidx.media3.datasource.cache.ContentMetadataMutations
 import androidx.media3.datasource.cache.SimpleCache
 import coil.ImageLoader
 import com.clibeats.data.preferences.AppPreferences
@@ -54,6 +56,32 @@ class MediaCaches
         private val _usage = MutableStateFlow(CacheUsage())
         val usage: StateFlow<CacheUsage> = _usage.asStateFlow()
 
+        /** Stores a stream's bitrate with its cached audio, so it's known on cached replays too. */
+        fun rememberBitrate(
+            cacheKey: String,
+            kbps: Int,
+        ) {
+            runCatching {
+                val mutations = ContentMetadataMutations().set(KEY_KBPS, kbps.toLong())
+                songCache.applyContentMetadataMutations(cacheKey, mutations)
+            }
+        }
+
+        /**
+         * Bitrate for a cached song: the stored value, else estimated from the cached file's length
+         * and the track duration (covers songs cached before bitrates were stored).
+         */
+        fun cachedBitrateKbps(
+            cacheKey: String,
+            durationMs: Long,
+        ): Int? {
+            val metadata = runCatching { songCache.getContentMetadata(cacheKey) }.getOrNull()
+            val stored = metadata?.get(KEY_KBPS, -1L)?.takeIf { it > 0 }?.toInt()
+            val bytes = metadata?.let(ContentMetadata::getContentLength) ?: -1L
+            val estimated = if (bytes > 0 && durationMs > 0) (bytes * BITS_PER_BYTE / durationMs).toInt() else null
+            return stored ?: estimated
+        }
+
         suspend fun refreshUsage() =
             withContext(Dispatchers.IO) {
                 _usage.value =
@@ -85,6 +113,8 @@ class MediaCaches
 
         companion object {
             const val BYTES_IN_MB = 1_048_576L
+            private const val KEY_KBPS = "clibeats_kbps"
+            private const val BITS_PER_BYTE = 8
         }
     }
 

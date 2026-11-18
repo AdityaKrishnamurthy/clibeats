@@ -219,6 +219,9 @@ class PlayerAdapter
         }
 
         fun play() {
+            // Resuming a restored queue must also start the media service; otherwise there's no
+            // notification / lock-screen card and Android may kill background playback.
+            if (player.mediaItemCount > 0) startPlaybackService()
             player.play()
         }
 
@@ -352,7 +355,9 @@ class PlayerAdapter
                     codec = format?.sampleMimeType?.let(::codecLabel),
                     bitrateKbps =
                         formatBitrate
-                            ?: currentTrack?.let { localBitrateKbps[it.id] ?: streamResolver.knownBitrateKbps(it) },
+                            ?: currentTrack?.let { track ->
+                                localBitrateKbps[track.id] ?: streamResolver.knownBitrateKbps(track, player.duration)
+                            },
                     sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
                     bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
                     durationMs = player.duration.takeIf { it > 0 } ?: (currentTrack?.durationMs ?: 0L),
