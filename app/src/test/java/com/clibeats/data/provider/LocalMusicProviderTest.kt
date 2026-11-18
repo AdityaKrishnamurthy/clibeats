@@ -39,7 +39,7 @@ class LocalMusicProviderTest {
     @Test
     fun `search maps bare local paths to file uris`() =
         runTest {
-            whenever(songRepository.searchTracksAsFlow("song")).thenReturn(flowOf(listOf(localTrack())))
+            whenever(songRepository.searchLocalTracksAsFlow("song")).thenReturn(flowOf(listOf(localTrack())))
 
             val result = provider.search("song")
 
@@ -54,7 +54,7 @@ class LocalMusicProviderTest {
     fun `search keeps http stream urls untouched`() =
         runTest {
             val remote = localTrack().copy(streamUrl = "https://cdn.example/stream")
-            whenever(songRepository.searchTracksAsFlow("song")).thenReturn(flowOf(listOf(remote)))
+            whenever(songRepository.searchLocalTracksAsFlow("song")).thenReturn(flowOf(listOf(remote)))
 
             val result = provider.search("song")
 
@@ -64,7 +64,7 @@ class LocalMusicProviderTest {
     @Test
     fun `trending returns library tracks`() =
         runTest {
-            whenever(songRepository.getAllTracksAsFlow()).thenReturn(flowOf(listOf(localTrack())))
+            whenever(songRepository.getLocalTracksAsFlow()).thenReturn(flowOf(listOf(localTrack())))
 
             val result = provider.trending(10)
 
@@ -83,9 +83,20 @@ class LocalMusicProviderTest {
         }
 
     @Test
+    fun `stream returns content uri untouched for SAF tracks`() =
+        runTest {
+            val saf = localTrack().copy(streamUrl = "content://com.android.externalstorage.documents/document/x.flac")
+            whenever(songRepository.getTrackById("local:x")).thenReturn(saf)
+
+            val result = provider.stream("local:x")
+
+            assertThat((result as ProviderResult.Success).data).isEqualTo(saf.streamUrl)
+        }
+
+    @Test
     fun `search returns Error when repository throws`() =
         runTest {
-            whenever(songRepository.searchTracksAsFlow(any())).thenThrow(RuntimeException("db error"))
+            whenever(songRepository.searchLocalTracksAsFlow(any())).thenThrow(RuntimeException("db error"))
 
             val result = provider.search("song")
 

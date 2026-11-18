@@ -36,6 +36,8 @@ class AppPreferences
             val SAVED_SHUFFLE_ENABLED = booleanPreferencesKey("saved_shuffle_enabled")
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
+            val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
+            val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri")
         }
 
         private object SecureKeys {
@@ -56,6 +58,14 @@ class AppPreferences
             dataStore.data.map { prefs ->
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
             }
+
+        /** When true, tapping a song in a list queues the rest of that list after it. */
+        val autoQueueRelated: Flow<Boolean> =
+            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: true }
+
+        /** SAF tree URI of the folder scanned for local music (null = not chosen). */
+        val localMusicTreeUri: Flow<String?> =
+            dataStore.data.map { prefs -> prefs[Keys.LOCAL_MUSIC_TREE_URI] }
 
         val lastQueueIndex: Flow<Int> =
             dataStore.data.map { prefs ->
@@ -108,6 +118,14 @@ class AppPreferences
 
         suspend fun setCacheMaxMb(maxMb: Int) {
             dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb }
+        }
+
+        suspend fun setAutoQueueRelated(enabled: Boolean) {
+            dataStore.edit { it[Keys.AUTO_QUEUE_RELATED] = enabled }
+        }
+
+        suspend fun setLocalMusicTreeUri(uri: String) {
+            dataStore.edit { it[Keys.LOCAL_MUSIC_TREE_URI] = uri }
         }
 
         suspend fun setHighQualityStreaming(enabled: Boolean) {

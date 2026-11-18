@@ -31,6 +31,14 @@ class SongRepositoryImpl
         override fun searchTracksAsFlow(query: String): Flow<List<Track>> =
             songDao.searchAsFlow(query.escapeForLike()).map { entities -> entities.map { it.toDomain() } }
 
+        override fun getLocalTracksAsFlow(): Flow<List<Track>> = songDao.getLocalAsFlow().map { entities -> entities.map { it.toDomain() } }
+
+        override fun searchLocalTracksAsFlow(query: String): Flow<List<Track>> =
+            songDao.searchLocalAsFlow(query.escapeForLike()).map { entities -> entities.map { it.toDomain() } }
+
+        override fun getPlayedOnlineTracksAsFlow(): Flow<List<Track>> =
+            songDao.getPlayedOnlineAsFlow().map { entities -> entities.map { it.toDomain() } }
+
         override suspend fun getTrackById(id: String): Track? = songDao.getById(id)?.toDomain()
 
         override suspend fun upsertTrack(track: Track) {
