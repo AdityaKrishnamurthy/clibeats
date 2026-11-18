@@ -281,9 +281,19 @@ class PlayerAdapter
             }
         }
 
+        /** Clears everything except the song that's playing, so playback continues. */
         fun clearQueue() {
-            trackList.clear()
-            player.clearMediaItems()
+            val current = player.currentMediaItemIndex
+            if (current !in trackList.indices) {
+                trackList.clear()
+                player.clearMediaItems()
+            } else {
+                if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
+                if (current > 0) player.removeMediaItems(0, current)
+                val keep = trackList[current]
+                trackList.clear()
+                trackList.add(keep)
+            }
             updateState()
         }
 

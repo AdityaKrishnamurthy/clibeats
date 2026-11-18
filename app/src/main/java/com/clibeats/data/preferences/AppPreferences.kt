@@ -37,6 +37,8 @@ class AppPreferences
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
+            val ARTWORK_CACHE_MB = intPreferencesKey("artwork_cache_mb")
+            val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
             val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri")
         }
 
@@ -58,6 +60,21 @@ class AppPreferences
             dataStore.data.map { prefs ->
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
             }
+
+        val artworkCacheMb: Flow<Int> =
+            dataStore.data.map { prefs -> prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB }
+
+        /** False until the first-run onboarding is finished (new installs only). */
+        val onboardingDone: Flow<Boolean> =
+            dataStore.data.map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
+
+        suspend fun setArtworkCacheMb(mb: Int) {
+            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb }
+        }
+
+        suspend fun setOnboardingDone() {
+            dataStore.edit { it[Keys.ONBOARDING_DONE] = true }
+        }
 
         /** When true, tapping a song in a list queues the rest of that list after it. */
         val autoQueueRelated: Flow<Boolean> =
@@ -164,3 +181,5 @@ class AppPreferences
             _authToken.value = null
         }
     }
+
+private const val DEFAULT_ARTWORK_CACHE_MB = 128

@@ -1,0 +1,148 @@
+@file:Suppress("ForbiddenImport")
+@file:OptIn(UnstableApi::class)
+
+package com.clibeats.data.cache
+
+import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
+import androidx.media3.database.StandaloneDatabaseProvider
+import androidx.media3.datasource.cache.Cache
+import androidx.media3.datasource.cache.CacheEvictor
+import androidx.media3.datasource.cache.CacheSpan
+import androidx.media3.datasource.cache.SimpleCache
+import coil.ImageLoader
+import com.clibeats.data.preferences.AppPreferences
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.util.TreeSet
+import javax.inject.Inject
+import javax.inject.Singleton
+
+data class CacheUsage(
+    val songBytes: Long = 0L,
+    val artworkBytes: Long = 0L,
+)
+
+/**
+ * Two independent caches with user-set limits:
+ * - songs: Media3 [SimpleCache] used by ExoPlayer for streamed audio (keyed per track, see PlaybackModule)
+ * - artwork: Coil's disk cache (limit applied when the ImageLoader is built, i.e. next app start)
+ */
+@Singleton
+class MediaCaches
+    @Inject
+    constructor(
+        @ApplicationContext context: Context,
+        appPreferences: AppPreferences,
+        private val imageLoader: dagger.Lazy<ImageLoader>,
+    ) {
+        // Read once at startup; later changes go through setSongLimitMb.
+        private val evictor =
+            AdjustableLruEvictor(runBlocking { appPreferences.cacheMaxMb.first() }.toLong() * BYTES_IN_MB)
+
+        val songCache: SimpleCache =
+            SimpleCache(File(context.cacheDir, "song_cache"), evictor, StandaloneDatabaseProvider(context))
+
+        private val _usage = MutableStateFlow(CacheUsage())
+        val usage: StateFlow<CacheUsage> = _usage.asStateFlow()
+
+        suspend fun refreshUsage() =
+            withContext(Dispatchers.IO) {
+                _usage.value =
+                    CacheUsage(
+                        songBytes = songCache.cacheSpace,
+                        artworkBytes = imageLoader.get().diskCache?.size ?: 0L,
+                    )
+            }
+
+        suspend fun setSongLimitMb(mb: Int) =
+            withContext(Dispatchers.IO) {
+                evictor.maxBytes = mb.toLong() * BYTES_IN_MB
+                evictor.trim(songCache)
+                refreshUsage()
+            }
+
+        suspend fun clearSongs() =
+            withContext(Dispatchers.IO) {
+                songCache.keys.toList().forEach { runCatching { songCache.removeResource(it) } }
+                refreshUsage()
+            }
+
+        suspend fun clearArtwork() =
+            withContext(Dispatchers.IO) {
+                imageLoader.get().diskCache?.clear()
+                imageLoader.get().memoryCache?.clear()
+                refreshUsage()
+            }
+
+        companion object {
+            const val BYTES_IN_MB = 1_048_576L
+        }
+    }
+
+/** LRU evictor like Media3's, but the limit can change at runtime. */
+internal class AdjustableLruEvictor(
+    @Volatile var maxBytes: Long,
+) : CacheEvictor {
+    private val spans = TreeSet<CacheSpan>(compareBy<CacheSpan>({ it.lastTouchTimestamp }, { it.key }, { it.position }))
+    private var currentSize = 0L
+
+    override fun requiresCacheSpanTouches() = true
+
+    override fun onCacheInitialized() = Unit
+
+    override fun onStartFile(
+        cache: Cache,
+        key: String,
+        position: Long,
+        length: Long,
+    ) {
+        if (length != androidx.media3.common.C.LENGTH_UNSET.toLong()) evict(cache, length)
+    }
+
+    override fun onSpanAdded(
+        cache: Cache,
+        span: CacheSpan,
+    ) {
+        spans.add(span)
+        currentSize += span.length
+        evict(cache, 0)
+    }
+
+    override fun onSpanRemoved(
+        cache: Cache,
+        span: CacheSpan,
+    ) {
+        spans.remove(span)
+        currentSize -= span.length
+    }
+
+    override fun onSpanTouched(
+        cache: Cache,
+        oldSpan: CacheSpan,
+        newSpan: CacheSpan,
+    ) {
+        onSpanRemoved(cache, oldSpan)
+        onSpanAdded(cache, newSpan)
+    }
+
+    // SimpleCache invokes evictor callbacks while holding its own monitor; take the same one here.
+    fun trim(cache: Cache) = synchronized(cache) { evict(cache, 0) }
+
+    private fun evict(
+        cache: Cache,
+        requiredSpace: Long,
+    ) {
+        while (currentSize + requiredSpace > maxBytes && spans.isNotEmpty()) {
+            cache.removeSpan(spans.first())
+        }
+    }
+}
