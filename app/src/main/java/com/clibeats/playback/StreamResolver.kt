@@ -46,6 +46,13 @@ class StreamResolver
             }
         }
 
+        /**
+         * Bitrate known from stream extraction (YouTube streams often carry none in the container,
+         * so the player can't report it). Cheap map lookup; null if unknown.
+         */
+        fun knownBitrateKbps(track: Track): Int? =
+            (providerRegistry.getProvider(track.providerId) as? YouTubeMusicProvider)?.cachedBitrateKbps(track.id)
+
         /** Drops any cached URL so the next resolve hits the provider (used after HTTP 403). */
         fun invalidate(
             providerId: String,

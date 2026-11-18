@@ -187,6 +187,13 @@ class YouTubeMusicProvider
             )
         }
 
+        /** Bitrate (kbps) of the stream extracted for [trackId], if it's still cached. */
+        fun cachedBitrateKbps(trackId: String): Int? =
+            streamCacheManager.get(providerId, ProviderId.rawSourceId(providerId, trackId))
+                ?.bitrate
+                ?.takeIf { it > 0 }
+                ?.div(BITS_PER_KBIT)
+
         fun invalidateCache(trackId: String) {
             val rawId = ProviderId.rawSourceId(providerId, trackId)
             streamCacheManager.invalidate(providerId, rawId)
@@ -200,3 +207,5 @@ class YouTubeMusicProvider
             return ProviderResult.Success(emptyList())
         }
     }
+
+private const val BITS_PER_KBIT = 1000

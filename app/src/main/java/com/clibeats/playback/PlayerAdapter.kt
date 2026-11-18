@@ -350,7 +350,9 @@ class PlayerAdapter
                     repeatMode = mappedRepeatMode,
                     shuffleEnabled = player.shuffleModeEnabled,
                     codec = format?.sampleMimeType?.let(::codecLabel),
-                    bitrateKbps = formatBitrate ?: currentTrack?.let { localBitrateKbps[it.id] },
+                    bitrateKbps =
+                        formatBitrate
+                            ?: currentTrack?.let { localBitrateKbps[it.id] ?: streamResolver.knownBitrateKbps(it) },
                     sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
                     bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
                     durationMs = player.duration.takeIf { it > 0 } ?: (currentTrack?.durationMs ?: 0L),
