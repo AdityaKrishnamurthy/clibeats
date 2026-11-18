@@ -6,6 +6,7 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +20,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Repeat
+import androidx.compose.material.icons.outlined.RepeatOne
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.Icon
@@ -43,6 +45,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.clibeats.domain.model.RepeatMode
+import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
@@ -53,7 +57,7 @@ import com.clibeats.presentation.theme.LocalAccentColor
  *
  * Terminal-style panel:
  * - Rendered as a [TuiBlock] titled "Playing" that highlights when active
- * - Controls: SkipPrevious · PlayArrow/Pause (accent) · SkipNext · QueueMusic
+ * - Controls: SkipPrevious · PlayArrow/Pause (accent) · SkipNext · Repeat
  * - Seekable progress bar with `m:ss / m:ss` timestamp (Spotify TUI style)
  *
  * @param progress     0.0 – 1.0 progress fraction (for display)
@@ -74,11 +78,15 @@ fun PlayerBar(
     onPlayPauseClick: () -> Unit = {},
     onSkipNextClick: () -> Unit = {},
     onSkipPreviousClick: () -> Unit = {},
-    onQueueClick: () -> Unit = {},
+    repeatMode: RepeatMode = RepeatMode.OFF,
+    onRepeatClick: () -> Unit = {},
+    repeatHint: String? = null,
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
+    onExpandClick: () -> Unit = {},
 ) {
     val accent = LocalAccentColor.current
+    val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
 
     // Track bar width in pixels for seek calculation
@@ -99,30 +107,36 @@ fun PlayerBar(
                     .height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Artwork square (36x36dp)
-                Box(modifier = Modifier.size(36.dp)) {
-                    artworkContent?.invoke()
-                }
+                // Artwork + title: tap opens the full-screen Now Playing view
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClickLabel = "Open now playing", onClick = onExpandClick),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.size(36.dp)) {
+                        artworkContent?.invoke()
+                    }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
-                // Track Title + Artist
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = trackTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CliBeatsTextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (artist.isNotBlank()) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = artist,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = CliBeatsTextSecondary,
+                            text = trackTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = CliBeatsTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (artist.isNotBlank()) {
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
 
@@ -169,16 +183,19 @@ fun PlayerBar(
                         )
                     }
 
-                    IconButton(
-                        onClick = onQueueClick,
-                        modifier = Modifier.semantics { contentDescription = "Open queue" },
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                            contentDescription = null,
-                            tint = CliBeatsTextPrimary,
-                            modifier = Modifier.size(20.dp),
-                        )
+                    HintedControl(hint = repeatHint) {
+                        IconButton(
+                            onClick = onRepeatClick,
+                            modifier =
+                                Modifier.semantics { contentDescription = "Repeat: ${repeatMode.name.lowercase()}" },
+                        ) {
+                            Icon(
+                                imageVector = repeatIcon,
+                                contentDescription = null,
+                                tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }

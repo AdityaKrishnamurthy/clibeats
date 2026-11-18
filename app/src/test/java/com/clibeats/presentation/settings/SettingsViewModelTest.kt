@@ -45,6 +45,9 @@ class SettingsViewModelTest {
         whenever(appPreferences.cacheMaxMb).thenReturn(flowOf(512))
         whenever(appPreferences.highQualityStreaming).thenReturn(flowOf(true))
         whenever(appPreferences.authToken).thenReturn(flowOf(null))
+        whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
+        whenever(appPreferences.localMusicTreeUris).thenReturn(flowOf(emptyList()))
+        whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
         whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
         whenever(providerRegistry.providers).thenReturn(emptyList())
 
@@ -75,9 +78,9 @@ class SettingsViewModelTest {
         }
 
     @Test
-    fun `setCacheMaxMb delegates to appPreferences and cacheManager`() =
+    fun `setSongCacheMb delegates to appPreferences and cacheManager`() =
         runTest(testDispatcher) {
-            viewModel.setCacheMaxMb(1024)
+            viewModel.setSongCacheMb(1024)
             testDispatcher.scheduler.advanceUntilIdle()
             verify(appPreferences).setCacheMaxMb(1024)
         }
@@ -85,12 +88,13 @@ class SettingsViewModelTest {
     @Test
     fun `exportPlaylists surfaces manager result`() =
         runTest(testDispatcher) {
-            whenever(playlistExchangeManager.export()).thenReturn(Result.success(java.io.File("clibeats.json")))
+            val target = org.mockito.kotlin.mock<android.net.Uri>()
+            whenever(playlistExchangeManager.export(target)).thenReturn(Result.success(2))
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.exchangeMessage.collect()
             }
 
-            viewModel.exportPlaylists()
+            viewModel.exportPlaylists(target)
             testDispatcher.scheduler.advanceUntilIdle()
 
             assertThat(viewModel.exchangeMessage.value).contains("Exported")

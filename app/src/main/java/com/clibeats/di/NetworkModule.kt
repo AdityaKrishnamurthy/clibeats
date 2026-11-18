@@ -53,7 +53,7 @@ object NetworkModule {
         if (BuildConfig.DEBUG) {
             builder.addInterceptor(
                 HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BODY
+                    level = HttpLoggingInterceptor.Level.BASIC // BODY buffered + logged every image: big lag
                 },
             )
         }

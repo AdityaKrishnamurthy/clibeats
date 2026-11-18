@@ -1,18 +1,18 @@
 package com.clibeats.theme
 
 import androidx.compose.ui.graphics.Color
-import com.clibeats.presentation.theme.CliBeatsAccent
-import com.clibeats.presentation.theme.CliBeatsBackground
+import com.clibeats.presentation.theme.CliBeatsAccentDefault
+import com.clibeats.presentation.theme.CliBeatsBackgroundDark
 import com.clibeats.presentation.theme.CliBeatsBorderActive
-import com.clibeats.presentation.theme.CliBeatsBorderInactive
+import com.clibeats.presentation.theme.CliBeatsBorderInactiveDark
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDestructiveSurface
-import com.clibeats.presentation.theme.CliBeatsDivider
-import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
-import com.clibeats.presentation.theme.CliBeatsTextDisabled
-import com.clibeats.presentation.theme.CliBeatsTextPrimary
-import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.CliBeatsDividerDark
+import com.clibeats.presentation.theme.CliBeatsSurfaceDark
+import com.clibeats.presentation.theme.CliBeatsSurfaceVariantDark
+import com.clibeats.presentation.theme.CliBeatsTextDisabledDark
+import com.clibeats.presentation.theme.CliBeatsTextPrimaryDark
+import com.clibeats.presentation.theme.CliBeatsTextSecondaryDark
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -23,47 +23,47 @@ import org.junit.Test
 class CliBeatsColorsTest {
     @Test
     fun background_is_0C0C0C() {
-        assertEquals(Color(0xFF0C0C0C), CliBeatsBackground)
+        assertEquals(Color(0xFF0C0C0C), CliBeatsBackgroundDark)
     }
 
     @Test
     fun surface_is_121212() {
-        assertEquals(Color(0xFF121212), CliBeatsSurface)
+        assertEquals(Color(0xFF121212), CliBeatsSurfaceDark)
     }
 
     @Test
     fun surfaceVariant_is_1A1A1A() {
-        assertEquals(Color(0xFF1A1A1A), CliBeatsSurfaceVariant)
+        assertEquals(Color(0xFF1A1A1A), CliBeatsSurfaceVariantDark)
     }
 
     @Test
     fun accent_is_1DB954() {
-        assertEquals(Color(0xFF1DB954), CliBeatsAccent)
+        assertEquals(Color(0xFF1DB954), CliBeatsAccentDefault)
     }
 
     @Test
     fun textPrimary_is_FFFFFF() {
-        assertEquals(Color(0xFFFFFFFF), CliBeatsTextPrimary)
+        assertEquals(Color(0xFFFFFFFF), CliBeatsTextPrimaryDark)
     }
 
     @Test
     fun textSecondary_is_B3B3B3() {
-        assertEquals(Color(0xFFB3B3B3), CliBeatsTextSecondary)
+        assertEquals(Color(0xFFB3B3B3), CliBeatsTextSecondaryDark)
     }
 
     @Test
     fun textDisabled_is_535353() {
-        assertEquals(Color(0xFF535353), CliBeatsTextDisabled)
+        assertEquals(Color(0xFF535353), CliBeatsTextDisabledDark)
     }
 
     @Test
     fun divider_is_2A2A2A() {
-        assertEquals(Color(0xFF2A2A2A), CliBeatsDivider)
+        assertEquals(Color(0xFF2A2A2A), CliBeatsDividerDark)
     }
 
     @Test
     fun borderInactive_is_333333() {
-        assertEquals(Color(0xFF333333), CliBeatsBorderInactive)
+        assertEquals(Color(0xFF333333), CliBeatsBorderInactiveDark)
     }
 
     @Test

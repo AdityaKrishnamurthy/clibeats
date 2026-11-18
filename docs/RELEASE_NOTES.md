@@ -1,14 +1,42 @@
-# CLIBeats v1.0 — Release Notes
+# CLIBeats v2.0.0 — Release Notes
 
-**Release Date:** 2026-08-07  
-**Build Target:** Android 8.0+ (API 26+)  
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.0.0.apk` (verify with `SHA256SUMS.txt`)
 
-CLIBeats v1.0 is a terminal-inspired, privacy-first audio streaming and media player app for Android. Built with Jetpack Compose, Clean Architecture, and AndroidX Media3.
+v2.0 is a full overhaul of playback, the local library and the interface.
 
-## Key Features
-- **TUI Monospace Interface**: Terminal UI design system with monospace typography, dense data tables, and high-contrast styling.
-- **Multi-Provider Architecture**: Plug-and-play streaming backend supporting local storage and YouTube Music (InnerTube API).
-- **Background Playback Engine**: AndroidX Media3 MediaSessionService providing continuous background playback, audio focus handling, and notification controls.
-- **Offline Caching & Downloads**: 500 MB LRU disk cache with automatic offline fallback resolution.
-- **Settings & Preference Controls**: Adjustable disk cache limits (256MB-2GB), active provider selector, streaming quality toggles, and cache maintenance.
-- **Accessibility & Performance**: 60 FPS list scrolling, cold start <2s budget, and WCAG AA TalkBack compliance.
+## Highlights
+
+- **Reliable queue playback** — every queued song plays when it's reached (skip, auto-advance, repeat).
+  Streams resolve lazily, so playback starts after ~0.5 s and expired YouTube links refresh themselves.
+- **Your own music** — add one or more folders; FLAC (16/24-bit), WAV, MP3, M4A/AAC, OGG/Opus, ALAC and
+  AIFF with tags and cover art. M3U / M3U8 / PLS playlists show up as read-only local playlists.
+- **Full-screen Now Playing** — high-res artwork, quality line (codec · bitrate · sample rate · bit depth),
+  repeat, shuffle, sleep timer, queue, add to playlist and favourite.
+- **Favourites & playlists** — playlist grid with ♥ Favorites and Most Played; export / import includes
+  Favorites.
+- **Gestures** — swipe between tabs; swipe a song right to queue it, left to favourite it; long-press to add
+  it to a playlist.
+- **System integration** — background playback, notification and lock-screen controls with high-res art,
+  and a working **resume card** after the app is closed (same song, same position).
+- **Themes** — Dark, AMOLED and Light with six accent colours; first-run setup on new installs.
+- **Storage** — separate song and artwork caches, each with its own limit and clear button.
+- **New app icon** — terminal window with a prompt and spectrum bars, plus a themed (monochrome) icon.
+
+## Fixes
+
+- Songs couldn't be added to playlists; queued songs didn't play; local results were slow.
+- A song that fails to play is now skipped with a short notice instead of stalling the queue.
+- The "end of track" sleep timer works with repeat-one.
+- Changing the artwork cache limit applies immediately.
+- Search results follow your region (country and language).
+
+## Under the hood
+
+- Media3 `MediaLibraryService` with playback resumption; Room upserts that no longer wipe playlists.
+- NewPipeExtractor v0.27.1; Coil image pipeline tuned for instant thumbnails.
+- 198 unit tests, ktlint, detekt and Android Lint in CI; signed release builds from tags.
+
+## Upgrading
+
+If you installed an earlier build signed with a different key, uninstall it first. Export your playlists
+(Settings → Playlist exchange) before uninstalling and import them afterwards.

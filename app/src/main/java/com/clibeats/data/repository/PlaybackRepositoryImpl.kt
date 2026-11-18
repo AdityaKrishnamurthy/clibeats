@@ -1,7 +1,10 @@
-@file:Suppress("ForbiddenImport", "MaxLineLength", "LongMethod", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "MaxLineLength", "LongMethod", "TooManyFunctions", "LongParameterList")
 
 package com.clibeats.data.repository
 
+import android.content.Context
+import coil.ImageLoader
+import coil.request.ImageRequest
 import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.QueueEntity
@@ -11,16 +14,27 @@ import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.util.DiagnosticLogger
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -35,6 +49,9 @@ class PlaybackRepositoryImpl
         private val songDao: SongDao,
         private val appPreferences: AppPreferences,
         private val ioDispatcher: CoroutineDispatcher,
+        private val historyRepository: HistoryRepository? = null,
+        private val imageLoader: dagger.Lazy<ImageLoader>? = null,
+        private val appContext: Context? = null,
     ) : PlaybackRepository {
         @Inject
         constructor(
@@ -43,6 +60,9 @@ class PlaybackRepositoryImpl
             queueDao: QueueDao,
             songDao: SongDao,
             appPreferences: AppPreferences,
+            historyRepository: HistoryRepository,
+            imageLoader: dagger.Lazy<ImageLoader>,
+            @ApplicationContext appContext: Context,
         ) : this(
             playerAdapter,
             streamResolver,
@@ -50,6 +70,9 @@ class PlaybackRepositoryImpl
             songDao,
             appPreferences,
             Dispatchers.IO,
+            historyRepository,
+            imageLoader,
+            appContext,
         )
 
         private val repositoryScope = CoroutineScope(SupervisorJob() + ioDispatcher)
@@ -58,30 +81,67 @@ class PlaybackRepositoryImpl
 
         override val queueState: StateFlow<List<Track>> = playerAdapter.queueFlow
 
+        override val playerMessages: Flow<String> = playerAdapter.messages
+
+        override val pauseAtEndOfTrack: StateFlow<Boolean> = playerAdapter.pauseAtEndOfTrack
+
+        override fun setPauseAtEndOfTrack(enabled: Boolean) = playerAdapter.setPauseAtEndOfTrack(enabled)
+
+        private val restored = CompletableDeferred<Unit>()
+
+        override suspend fun awaitRestored() = restored.await()
+
         init {
             repositoryScope.launch {
                 restorePersistentQueue()
-            }
-            repositoryScope.launch {
-                playerAdapter.queueFlow.collect { tracks ->
-                    persistQueueItems(tracks)
+                restored.complete(Unit)
+                // Start saving only after the restore: the player's empty initial state (no queue, song 0,
+                // position 0) would otherwise overwrite the saved queue before it is read back, and the
+                // resume card / next launch would start the wrong song from 0:00.
+                // drop(1): the queue as it is right now is what was just restored (or nothing, if the
+                // restore failed) - don't write it back, only save later changes.
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    playerAdapter.queueFlow.drop(1).collect { tracks -> persistQueueItems(tracks) }
                 }
+                launch(start = CoroutineStart.UNDISPATCHED) { persistPlaybackPosition() }
             }
             repositoryScope.launch {
-                playerAdapter.playbackState.collect { state ->
-                    val tracks = playerAdapter.queueFlow.value
-                    val currentIndex =
-                        state.currentTrack?.let { current ->
-                            tracks.indexOfFirst { it.id == current.id }
-                        } ?: 0
+                // On each new track: record history and warm stream URLs for the next tracks
+                // so skip / auto-advance starts without waiting on extraction.
+                playerAdapter.playbackState
+                    .map { it.currentTrack }
+                    .distinctUntilChanged { a, b -> a?.id == b?.id }
+                    .collectLatest { current ->
+                        if (current == null) return@collectLatest
+                        runCatching { historyRepository?.recordPlay(current.id, current.providerId) }
+                        prefetchAfter(current)
+                    }
+            }
+        }
+
+        /**
+         * Saves the current song, position and modes on meaningful changes (track, play/pause, modes) and
+         * every few seconds while playing, so a resume after the app is killed starts close to where it was.
+         */
+        private suspend fun persistPlaybackPosition() {
+            playerAdapter.playbackState
+                .distinctUntilChanged { old, new ->
+                    old.currentTrack?.id == new.currentTrack?.id &&
+                        old.isPlaying == new.isPlaying &&
+                        old.repeatMode == new.repeatMode &&
+                        old.shuffleEnabled == new.shuffleEnabled &&
+                        old.positionMs / POSITION_SAVE_STEP_MS == new.positionMs / POSITION_SAVE_STEP_MS
+                }.collect { state ->
+                    val current = state.currentTrack ?: return@collect
+                    val index = playerAdapter.queueFlow.value.indexOfFirst { it.id == current.id }
+                    if (index < 0) return@collect
                     appPreferences.saveQueueMetadata(
-                        index = if (currentIndex >= 0) currentIndex else 0,
+                        index = index,
                         positionMs = state.positionMs,
                         repeatMode = state.repeatMode.name,
                         shuffleEnabled = state.shuffleEnabled,
                     )
                 }
-            }
         }
 
         private suspend fun restorePersistentQueue() {
@@ -131,64 +191,22 @@ class PlaybackRepositoryImpl
         override fun playTrack(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.playTrack(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for playTrack",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.playTrack(track) }
         }
 
         override fun addToQueue(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.addToQueue(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for addToQueue",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.addToQueue(track) }
         }
 
         override fun playNext(track: Track) {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logTrackSelected(traceId, track.id, track.title)
-
-            repositoryScope.launch {
-                runCatching {
-                    val resolved = streamResolver.resolve(track, traceId)
-                    DiagnosticLogger.logMediaPrepare(traceId, resolved.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.playNext(resolved)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve stream for playNext",
-                    )
-                }
-            }
+            // Streams resolve lazily inside ExoPlayer (TrackUriResolver); hand off immediately.
+            repositoryScope.launch(Dispatchers.Main) { playerAdapter.playNext(track) }
         }
 
         override fun setQueue(
@@ -198,28 +216,30 @@ class PlaybackRepositoryImpl
             if (tracks.isEmpty()) return
             val traceId = DiagnosticLogger.generateTraceId()
 
-            repositoryScope.launch {
-                runCatching {
-                    val targetIndex = startIndex.coerceIn(tracks.indices)
-                    val targetTrack = tracks[targetIndex]
-                    DiagnosticLogger.logTrackSelected(traceId, targetTrack.id, targetTrack.title)
+            repositoryScope.launch(Dispatchers.Main) {
+                val targetIndex = startIndex.coerceIn(tracks.indices)
+                DiagnosticLogger.logTrackSelected(traceId, tracks[targetIndex].id, tracks[targetIndex].title)
+                playerAdapter.setQueue(tracks, targetIndex)
+            }
+        }
 
-                    val resolvedTarget = streamResolver.resolve(targetTrack, traceId)
-                    val mutableQueue = tracks.toMutableList()
-                    mutableQueue[targetIndex] = resolvedTarget
-
-                    DiagnosticLogger.logMediaPrepare(traceId, resolvedTarget.id)
-                    withContext(Dispatchers.Main) {
-                        playerAdapter.setQueue(mutableQueue, targetIndex)
-                    }
-                }.onFailure { e ->
-                    DiagnosticLogger.logError(
-                        traceId,
-                        "MEDIA_PLAYBACK_FAILED",
-                        e.message ?: "Failed to resolve queue start track",
-                    )
+        private suspend fun prefetchAfter(current: Track) {
+            val queue = playerAdapter.queueFlow.value
+            val idx = queue.indexOfFirst { it.id == current.id }
+            if (idx < 0) return
+            queue.drop(idx + 1).take(PREFETCH_COUNT).forEach { next ->
+                prefetchArtwork(next)
+                if (next.streamUrl.isNullOrBlank() || next.streamUrl.contains("expire")) {
+                    runCatching { streamResolver.resolve(next) }
                 }
             }
+        }
+
+        /** Warms the disk cache with the next tracks' high-res covers so Now Playing shows them instantly. */
+        private fun prefetchArtwork(track: Track) {
+            val context = appContext ?: return
+            val url = artworkUrlFor(track.artworkUrl, ARTWORK_FULL_PX) ?: return
+            runCatching { imageLoader?.get()?.enqueue(ImageRequest.Builder(context).data(url).build()) }
         }
 
         override fun moveTrackInQueue(
@@ -237,6 +257,8 @@ class PlaybackRepositoryImpl
 
         override fun seekTo(positionMs: Long) = playerAdapter.seekTo(positionMs)
 
+        override fun skipToIndex(index: Int) = playerAdapter.skipToIndex(index)
+
         override fun skipToNext() = playerAdapter.skipToNext()
 
         override fun skipToPrevious() = playerAdapter.skipToPrevious()
@@ -244,4 +266,9 @@ class PlaybackRepositoryImpl
         override fun setRepeatMode(mode: RepeatMode) = playerAdapter.setRepeatMode(mode)
 
         override fun toggleShuffle() = playerAdapter.toggleShuffle()
+
+        private companion object {
+            const val PREFETCH_COUNT = 2
+            const val POSITION_SAVE_STEP_MS = 5_000L
+        }
     }

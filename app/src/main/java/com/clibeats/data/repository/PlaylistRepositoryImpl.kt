@@ -4,6 +4,8 @@
 package com.clibeats.data.repository
 
 import com.clibeats.data.local.dao.PlaylistDao
+import com.clibeats.data.local.dao.SongDao
+import com.clibeats.data.local.entity.PlaylistEntity
 import com.clibeats.data.local.entity.PlaylistSongCrossRef
 import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
@@ -12,6 +14,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaylistRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,7 +26,11 @@ class PlaylistRepositoryImpl
     @Inject
     constructor(
         private val playlistDao: PlaylistDao,
+        private val songDao: SongDao? = null,
     ) : PlaylistRepository {
+        override fun getPlaylistCoversAsFlow(): Flow<Map<String, String?>> =
+            playlistDao.getPlaylistCoversAsFlow().map { covers -> covers.associate { it.playlistId to it.artworkUrl } }
+
         override fun getAllPlaylistsAsFlow(): Flow<List<Playlist>> = playlistDao.getAllAsFlow().map { list -> list.map { it.toDomain() } }
 
         override suspend fun getPlaylistById(id: String): Playlist? = playlistDao.getById(id)?.toDomain()
@@ -49,15 +56,69 @@ class PlaylistRepositoryImpl
             playlistId: String,
             songId: String,
             position: Int,
-        ) = playlistDao.addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId, position))
+        ) {
+            if (isReadOnly(playlistId)) return
+            playlistDao.addSongToPlaylist(PlaylistSongCrossRef(playlistId, songId, position))
+        }
 
         override suspend fun removeSongFromPlaylist(
             playlistId: String,
             songId: String,
-        ) = playlistDao.removeSongFromPlaylist(playlistId, songId)
+        ) {
+            if (isReadOnly(playlistId)) return
+            playlistDao.removeSongFromPlaylist(playlistId, songId)
+            playlistDao.refreshTrackCount(playlistId)
+        }
 
         override suspend fun reorderPlaylistSongs(
             playlistId: String,
             songIds: List<String>,
-        ) = playlistDao.reorderPlaylistSongs(playlistId, songIds)
+        ) {
+            if (isReadOnly(playlistId)) return
+            playlistDao.reorderPlaylistSongs(playlistId, songIds)
+        }
+
+        // Playlists mirrored from M3U/M3U8/PLS files are import-only: the file is the source of truth.
+        // (The scanner writes them through PlaylistDao directly, not through this repository.)
+        private fun isReadOnly(playlistId: String) = playlistId.startsWith("localpl:")
+
+        override suspend fun addTrackToPlaylist(
+            playlistId: String,
+            track: Track,
+        ) {
+            if (isReadOnly(playlistId)) return
+            // The cross-ref has a FK on songs.id; search results aren't in the songs table yet.
+            // Persist without the (expiring) stream URL; it is re-resolved at playback.
+            val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track
+            songDao?.upsertAll(listOf(storable.toEntity()))
+            playlistDao.addSongToPlaylist(
+                PlaylistSongCrossRef(playlistId, track.id, playlistDao.nextPosition(playlistId)),
+            )
+            playlistDao.refreshTrackCount(playlistId)
+        }
+
+        override suspend fun createAppPlaylist(
+            name: String,
+            songIds: List<String>,
+        ): String {
+            val id = UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            playlistDao.upsert(
+                PlaylistEntity(
+                    id = id,
+                    name = name,
+                    description = null,
+                    artworkUrl = null,
+                    trackCount = 0,
+                    isOwned = true,
+                    providerId = "local",
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            // Same transaction helper as reorder: inserts cross refs in order.
+            playlistDao.reorderPlaylistSongs(id, songIds.distinct())
+            playlistDao.refreshTrackCount(id)
+            return id
+        }
     }

@@ -75,9 +75,9 @@ fun QueueScreen(viewModel: QueueViewModel = hiltViewModel()) {
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.DeleteSweep,
-                        contentDescription = "Clear Queue",
+                        contentDescription = null,
                     )
-                    Text(text = " Clear", style = MaterialTheme.typography.bodySmall)
+                    Text(text = " Clear upcoming", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }

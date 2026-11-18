@@ -36,12 +36,18 @@ class LibraryRepositoryImpl
 
         override fun isLiked(trackId: String): Flow<Boolean> = likedSongDao.isLikedFlow(trackId)
 
+        override suspend fun addToFavorites(track: Track) {
+            if (!likedSongDao.isLiked(track.id)) toggleLike(track)
+        }
+
         override suspend fun toggleLike(track: Track) {
             val currentlyLiked = likedSongDao.isLiked(track.id)
             if (currentlyLiked) {
                 likedSongDao.unlikeSong(track.id)
             } else {
-                songDao.upsert(track.toEntity())
+                // Signed (expiring) stream URLs are re-resolved at playback; don't persist them.
+                val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track
+                songDao.upsert(storable.toEntity())
                 likedSongDao.likeSong(track.id)
             }
         }

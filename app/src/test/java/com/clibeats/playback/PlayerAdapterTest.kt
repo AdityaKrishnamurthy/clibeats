@@ -4,7 +4,6 @@ package com.clibeats.playback
 
 import android.content.Context
 import androidx.media3.exoplayer.ExoPlayer
-import com.clibeats.data.cache.CacheManager
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -17,7 +16,7 @@ import org.mockito.kotlin.whenever
 
 class PlayerAdapterTest {
     private lateinit var exoPlayer: ExoPlayer
-    private lateinit var cacheManager: CacheManager
+    private lateinit var cacheManager: StreamResolver
     private lateinit var adapter: PlayerAdapter
 
     @Before

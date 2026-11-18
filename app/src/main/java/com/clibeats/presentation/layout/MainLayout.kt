@@ -5,11 +5,21 @@
 
 package com.clibeats.presentation.layout
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
@@ -25,14 +35,31 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaul
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.imageLoader
+import coil.request.ImageRequest
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
+import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.presentation.player.HintTarget
+import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
+import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
@@ -56,67 +83,141 @@ fun MainLayout(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
+    var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                buildNavItems(
+                    selectedDestination = selectedDestination,
+                    onDestinationSelected = onDestinationSelected,
+                )
+            },
+            navigationSuiteColors = NavigationSuiteDefaults.colors(
+                navigationRailContainerColor = CliBeatsSurface,
+                navigationDrawerContainerColor = CliBeatsSurface,
+                navigationBarContainerColor = CliBeatsSurface,
+            ),
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                CliBeatsTopAppBar(
+                    onSearchClick = { onDestinationSelected(NavDestination.Search) },
+                )
+
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = CliBeatsDivider,
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    content()
+                }
+
+                // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
+                PlayerBarHost(
+                    playerViewModel,
+                    onExpandClick = { showNowPlaying = true },
+                )
+            }
+        }
+
+        // ── Full-screen Now Playing overlay (slides up over everything) ──
+        AnimatedVisibility(
+            visible = showNowPlaying,
+            enter = slideInVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+            exit = slideOutVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+        ) {
+            NowPlayingScreen(
+                viewModel = playerViewModel,
+                onClose = { showNowPlaying = false },
+                onOpenQueue = {
+                    showNowPlaying = false
+                    onDestinationSelected(NavDestination.Queue)
+                },
+            )
+        }
+    }
+}
+
+private const val NOW_PLAYING_ANIM_MS = 250
+
+@Suppress("FunctionNaming")
+@Composable
+private fun PlayerBarHost(
+    playerViewModel: PlayerViewModel,
+    onExpandClick: () -> Unit,
+) {
     val playbackState by playerViewModel.playbackState.collectAsState()
-    val trackDuration = playbackState.currentTrack?.durationMs ?: 0L
+    val hint by playerViewModel.hint.collectAsState()
+    val playerMessage by playerViewModel.playerMessage.collectAsState()
+    PlayerMessageLine(playerMessage)
+    // Prefetch the high-res cover as soon as a track starts, so Now Playing opens with it ready.
+    val context = LocalContext.current
+    val artworkUrl = playbackState.currentTrack?.artworkUrl
+    LaunchedEffect(artworkUrl) {
+        val hiRes = artworkUrlFor(artworkUrl, ARTWORK_FULL_PX) ?: return@LaunchedEffect
+        context.imageLoader.enqueue(ImageRequest.Builder(context).data(hiRes).build())
+    }
+    // Player-reported duration first: local files may have no duration in metadata.
+    val trackDuration = playbackState.durationMs.takeIf { it > 0 } ?: playbackState.currentTrack?.durationMs ?: 0L
     val progress =
         if (trackDuration > 0L) {
             (playbackState.positionMs.toFloat() / trackDuration.toFloat()).coerceIn(0f, 1f)
         } else {
             0f
         }
-
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            buildNavItems(
-                selectedDestination = selectedDestination,
-                onDestinationSelected = onDestinationSelected,
-            )
-        },
-        navigationSuiteColors = NavigationSuiteDefaults.colors(
-            navigationRailContainerColor = CliBeatsSurface,
-            navigationDrawerContainerColor = CliBeatsSurface,
-            navigationBarContainerColor = CliBeatsSurface,
-        ),
-        containerColor = MaterialTheme.colorScheme.background,
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            CliBeatsTopAppBar(
-                onSearchClick = { onDestinationSelected(NavDestination.Search) },
-            )
-
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = CliBeatsDivider,
-            )
-
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
-                content()
+    PlayerBar(
+        trackTitle = playbackState.currentTrack?.title ?: "Not playing",
+        artist = playbackState.currentTrack?.artist ?: "",
+        isPlaying = playbackState.isPlaying,
+        progress = progress,
+        currentMs = playbackState.positionMs,
+        totalMs = trackDuration,
+        artworkContent = playbackState.currentTrack?.artworkUrl?.let { url ->
+            {
+                TrackArtwork(artworkUrl = url, size = 36)
             }
+        },
+        onPlayPauseClick = playerViewModel::onPlayPauseClick,
+        onSkipNextClick = playerViewModel::onSkipNextClick,
+        onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
+        onSeek = playerViewModel::seekTo,
+        repeatMode = playbackState.repeatMode,
+        onRepeatClick = playerViewModel::onRepeatClick,
+        repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
+        onExpandClick = onExpandClick,
+    )
+}
 
-            // ── Persistent Player Bar ─────────────────────────────────────
-            PlayerBar(
-                trackTitle = playbackState.currentTrack?.title ?: "Not playing",
-                artist = playbackState.currentTrack?.artist ?: "",
-                isPlaying = playbackState.isPlaying,
-                progress = progress,
-                currentMs = playbackState.positionMs,
-                totalMs = trackDuration,
-                artworkContent = playbackState.currentTrack?.artworkUrl?.let { url ->
-                    {
-                        TrackArtwork(artworkUrl = url, size = 36)
-                    }
-                },
-                onPlayPauseClick = playerViewModel::onPlayPauseClick,
-                onSkipNextClick = playerViewModel::onSkipNextClick,
-                onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
-                onSeek = playerViewModel::seekTo,
-            )
-        }
+/** One-line notice above the player bar, e.g. a song that couldn't be played and was skipped. */
+@Suppress("FunctionNaming")
+@Composable
+private fun PlayerMessageLine(message: String?) {
+    // Keep the last text while fading out so the line doesn't empty mid-animation.
+    val last = remember { arrayOf("") }
+    message?.let { last[0] = it }
+    AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut()) {
+        Text(
+            text = "! " + last[0],
+            style = MaterialTheme.typography.labelMedium,
+            color = CliBeatsDestructive,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .semantics { liveRegion = LiveRegionMode.Polite }
+                    .background(CliBeatsSurface)
+                    .border(1.dp, CliBeatsDestructive)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+        )
     }
 }
 
@@ -129,12 +230,18 @@ private fun NavigationSuiteScope.buildNavItems(
             selected = destination == selectedDestination,
             onClick = { onDestinationSelected(destination) },
             icon = {
-                Icon(
-                    imageVector = destination.icon,
-                    contentDescription = destination.contentDescription,
+                // Label below already names the tab; a description here would be read twice.
+                Icon(imageVector = destination.icon, contentDescription = null)
+            },
+            // Six tabs: small single-line labels so "Playlists"/"Settings" fit at 360dp.
+            label = {
+                Text(
+                    text = destination.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    softWrap = false,
                 )
             },
-            label = { Text(destination.label) },
         )
     }
 }

@@ -5,9 +5,15 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitHorizontalTouchSlopOrCancellation
+import androidx.compose.foundation.gestures.horizontalDrag
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,8 +26,15 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -45,7 +58,8 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
  *
  * Per UI-SPEC: 48dp height, 32x32dp square artwork, start-aligned text.
  */
-@Suppress("FunctionNaming", "LongMethod", "LongParameterList")
+@Suppress("FunctionNaming", "LongMethod", "LongParameterList", "CyclomaticComplexMethod")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongTableRow(
     trackTitle: String,
@@ -57,6 +71,9 @@ fun SongTableRow(
     actions: (@Composable () -> Unit)? = null,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
+    onSwipeRight: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
+    onSwipeLeft: (() -> Unit)? = null,
 ) {
     val semanticsDescription = "$trackTitle by $artist"
     val rowBackground = when {
@@ -64,92 +81,135 @@ fun SongTableRow(
         else -> CliBeatsBackground
     }
 
-    Column(modifier = modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .background(rowBackground)
-                .semantics { contentDescription = semanticsDescription }
-                .clickable { onClick() },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // ── Now-playing left accent bar (2dp) ─────────────────────────
-            if (isNowPlaying) {
-                Box(
-                    modifier = Modifier
-                        .width(2.dp)
-                        .height(48.dp)
-                        .background(CliBeatsAccent),
-                )
-            } else {
-                Spacer(modifier = Modifier.width(2.dp))
-            }
-
-            Spacer(modifier = Modifier.width(6.dp))
-
-            // ── Track index or artwork ─────────────────────────────────────
-            if (artworkContent != null) {
-                Box(
-                    modifier = Modifier.size(32.dp),
-                ) {
-                    artworkContent()
-                }
-            } else {
-                // Index number fallback when no artwork
-                Text(
-                    text = index?.toString() ?: "–",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsTextDisabled,
-                    modifier = Modifier.width(24.dp),
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // ── Track title + artist (fills remaining space) ──────────────
-            Column(
-                modifier = Modifier.weight(1f),
-            ) {
-                Text(
-                    text = trackTitle,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = if (isNowPlaying) CliBeatsAccent else CliBeatsTextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // ── Duration (end-aligned, tabular) ───────────────────────────
-            Text(
-                text = duration,
-                style = MaterialTheme.typography.labelMedium,
-                color = CliBeatsTextSecondary,
-                modifier = Modifier.padding(end = if (actions == null) 16.dp else 8.dp),
-            )
-
-            actions?.let {
-                Box(modifier = Modifier.padding(end = 8.dp)) {
-                    it()
+    // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back).
+    var dragX by remember { mutableFloatStateOf(0f) }
+    val swipeModifier =
+        if (onSwipeRight == null && onSwipeLeft == null) {
+            Modifier
+        } else {
+            Modifier.pointerInput(onSwipeRight, onSwipeLeft) {
+                val threshold = SWIPE_THRESHOLD_DP.dp.toPx()
+                val maxRight = if (onSwipeRight != null) threshold * SWIPE_MAX_FACTOR else 0f
+                val maxLeft = if (onSwipeLeft != null) -threshold * SWIPE_MAX_FACTOR else 0f
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    // Only claim a direction this row handles; the other is left to the tab pager.
+                    val start =
+                        awaitHorizontalTouchSlopOrCancellation(down.id) { change, over ->
+                            val handled = if (over > 0f) onSwipeRight != null else onSwipeLeft != null
+                            if (handled) change.consume()
+                        } ?: return@awaitEachGesture
+                    dragX = 0f
+                    val completed =
+                        horizontalDrag(start.id) { change ->
+                            dragX = (dragX + change.positionChange().x).coerceIn(maxLeft, maxRight)
+                            change.consume()
+                        }
+                    if (completed && dragX > threshold) onSwipeRight?.invoke()
+                    if (completed && dragX < -threshold) onSwipeLeft?.invoke()
+                    dragX = 0f
                 }
             }
         }
 
-        // ── 1dp row divider ───────────────────────────────────────────────
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = CliBeatsDivider,
-        )
+    Box(modifier = modifier.fillMaxWidth().then(swipeModifier)) {
+        if (dragX != 0f) SwipeHint(dragX)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .graphicsLayer { translationX = dragX },
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(rowBackground)
+                    .semantics { contentDescription = semanticsDescription }
+                    .combinedClickable(
+                        onClickLabel = "Play",
+                        onLongClickLabel = if (onLongPress != null) "Add to playlist" else null,
+                        onLongClick = onLongPress,
+                        onClick = onClick,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // ── Now-playing left accent bar (2dp) ─────────────────────────
+                if (isNowPlaying) {
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .height(48.dp)
+                            .background(CliBeatsAccent),
+                    )
+                } else {
+                    Spacer(modifier = Modifier.width(2.dp))
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // ── Track index or artwork ─────────────────────────────────────
+                if (artworkContent != null) {
+                    Box(
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        artworkContent()
+                    }
+                } else {
+                    // Index number fallback when no artwork
+                    Text(
+                        text = index?.toString() ?: "–",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CliBeatsTextDisabled,
+                        modifier = Modifier.width(24.dp),
+                        textAlign = TextAlign.Center,
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // ── Track title + artist (fills remaining space) ──────────────
+                Column(
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(
+                        text = trackTitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = if (isNowPlaying) CliBeatsAccent else CliBeatsTextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CliBeatsTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // ── Duration (end-aligned, tabular) ───────────────────────────
+                Text(
+                    text = duration,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsTextSecondary,
+                    modifier = Modifier.padding(end = if (actions == null) 16.dp else 8.dp),
+                )
+
+                actions?.let {
+                    Box(modifier = Modifier.padding(end = 8.dp)) {
+                        it()
+                    }
+                }
+            }
+
+            // ── 1dp row divider ───────────────────────────────────────────────
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = CliBeatsDivider,
+            )
+        }
     }
 }
 
@@ -186,4 +246,23 @@ fun SongTableHeader(modifier: Modifier = Modifier) {
         }
         HorizontalDivider(thickness = 1.dp, color = CliBeatsDivider)
     }
+}
+
+private const val SWIPE_THRESHOLD_DP = 72
+private const val SWIPE_MAX_FACTOR = 1.5f
+
+/** Revealed behind the row while dragging: "+ QUEUE" (dragging right) or "♥ FAVORITE" (dragging left). */
+@Suppress("FunctionNaming")
+@Composable
+private fun BoxScope.SwipeHint(dragX: Float) {
+    val right = dragX > 0f
+    Text(
+        text = if (right) "+ QUEUE" else "♥ FAVORITE",
+        style = MaterialTheme.typography.labelMedium,
+        color = CliBeatsAccent,
+        modifier =
+            Modifier
+                .align(if (right) Alignment.CenterStart else Alignment.CenterEnd)
+                .padding(horizontal = 16.dp),
+    )
 }

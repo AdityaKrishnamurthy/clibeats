@@ -4,18 +4,20 @@
 package com.clibeats.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import com.clibeats.data.local.entity.SongEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@Suppress("TooManyFunctions")
 interface SongDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    // @Upsert updates in place. REPLACE deletes + re-inserts, which fired ON DELETE CASCADE
+    // and silently removed the song from every playlist / liked list on each queue save.
+    @Upsert
     suspend fun upsert(song: SongEntity)
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(songs: List<SongEntity>)
 
     @Query("SELECT * FROM songs WHERE id = :id")
@@ -38,6 +40,39 @@ interface SongDao {
         """,
     )
     fun searchAsFlow(query: String): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE provider_id = 'local' ORDER BY title COLLATE NOCASE ASC")
+    fun getLocalAsFlow(): Flow<List<SongEntity>>
+
+    @Query(
+        """
+        SELECT * FROM songs
+        WHERE provider_id = 'local'
+          AND (title LIKE '%' || :query || '%' ESCAPE '\'
+           OR artist LIKE '%' || :query || '%' ESCAPE '\'
+           OR album LIKE '%' || :query || '%' ESCAPE '\')
+        ORDER BY title COLLATE NOCASE ASC
+        """,
+    )
+    fun searchLocalAsFlow(query: String): Flow<List<SongEntity>>
+
+    /** Online songs the user actually played, most recent first. */
+    @Query(
+        """
+        SELECT s.* FROM songs s
+        INNER JOIN (SELECT song_id, MAX(played_at) AS last_played FROM history GROUP BY song_id) h
+            ON s.id = h.song_id
+        WHERE s.provider_id != 'local'
+        ORDER BY h.last_played DESC
+        """,
+    )
+    fun getPlayedOnlineAsFlow(): Flow<List<SongEntity>>
+
+    @Query("SELECT * FROM songs WHERE provider_id = 'local'")
+    suspend fun getLocalSongs(): List<SongEntity>
+
+    @Query("DELETE FROM songs WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<String>)
 
     @Query("DELETE FROM songs WHERE id = :id")
     suspend fun deleteById(id: String)

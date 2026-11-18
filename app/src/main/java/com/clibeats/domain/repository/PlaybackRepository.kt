@@ -5,12 +5,22 @@ package com.clibeats.domain.repository
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface PlaybackRepository {
     val playbackState: StateFlow<PlaybackState>
 
     val queueState: StateFlow<List<Track>>
+
+    /** One-off player messages for the UI (e.g. "Couldn't play X — skipped"). */
+    val playerMessages: Flow<String>
+
+    /** True while the "end of track" sleep timer is armed. */
+    val pauseAtEndOfTrack: StateFlow<Boolean>
+
+    /** Pause when the current song finishes (also with repeat-one). */
+    fun setPauseAtEndOfTrack(enabled: Boolean)
 
     fun playTrack(track: Track)
 
@@ -37,6 +47,11 @@ interface PlaybackRepository {
     fun pause()
 
     fun seekTo(positionMs: Long)
+
+    fun skipToIndex(index: Int)
+
+    /** Suspends until the saved queue has been restored into the player (used for playback resumption). */
+    suspend fun awaitRestored()
 
     fun skipToNext()
 

@@ -16,10 +16,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import coil.compose.SubcomposeAsyncImage
+import coil.compose.AsyncImage
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurface
 
@@ -47,15 +48,18 @@ fun TrackArtwork(
         return
     }
 
-    SubcomposeAsyncImage(
-        model = artworkUrl,
+    // AsyncImage + painter placeholder: SubcomposeAsyncImage subcomposed every list row (scroll jank).
+    val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
+    AsyncImage(
+        // Shared thumbnail size: one download per cover across all lists and the mini player.
+        model = artworkUrlFor(artworkUrl, if (size <= THUMB_MAX_DP) ARTWORK_THUMB_PX else ARTWORK_FULL_PX),
         contentDescription = "Track artwork",
         contentScale = ContentScale.Crop,
+        placeholder = placeholder,
+        error = placeholder,
         modifier = modifier
             .size(size.dp)
             .clip(shape),
-        error = { ArtworkPlaceholder(size = size) },
-        loading = { ArtworkPlaceholder(size = size) },
     )
 }
 
@@ -80,3 +84,5 @@ private fun ArtworkPlaceholder(
         )
     }
 }
+
+private const val THUMB_MAX_DP = 64

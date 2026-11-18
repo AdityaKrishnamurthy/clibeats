@@ -1,5 +1,5 @@
 // ForbiddenImport: playback engine implementation imports are legitimate
-@file:Suppress("ForbiddenImport", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "ReturnCount", "MagicNumber", "LargeClass")
 
 package com.clibeats.playback
 
@@ -9,11 +9,12 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.playback.service.PlaybackService
+import com.clibeats.presentation.component.ARTWORK_FULL_PX
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.util.DiagnosticLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -21,20 +22,22 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Singleton
 class PlayerAdapter
     @Inject
     constructor(
         private val player: ExoPlayer,
-        private val cacheManager: CacheManager,
+        private val streamResolver: StreamResolver,
         @ApplicationContext private val context: Context,
     ) {
         /**
@@ -43,8 +46,9 @@ class PlayerAdapter
          * shade / lock screen. The service wraps the same singleton [ExoPlayer].
          */
         private fun startPlaybackService() {
-            val intent = Intent(context, PlaybackService::class.java)
-            context.startForegroundService(intent)
+            // Plain start: Media3 promotes the service to foreground itself once playback starts.
+            // (startForegroundService would crash if Media3 hadn't posted its notification within 5s.)
+            runCatching { context.startService(Intent(context, PlaybackService::class.java)) }
         }
 
         private val _playbackState =
@@ -62,6 +66,17 @@ class PlayerAdapter
 
         private val _queueFlow = MutableStateFlow<List<Track>>(emptyList())
         val queueFlow: StateFlow<List<Track>> = _queueFlow.asStateFlow()
+
+        /** One-off messages for the UI, e.g. a song that couldn't be played and was skipped. */
+        private val _messages = MutableSharedFlow<String>(extraBufferCapacity = MESSAGE_BUFFER)
+        val messages: SharedFlow<String> = _messages
+
+        /** True while the "end of track" sleep timer is armed (the player pauses when the song ends). */
+        private val _pauseAtEndOfTrack = MutableStateFlow(false)
+        val pauseAtEndOfTrack: StateFlow<Boolean> = _pauseAtEndOfTrack.asStateFlow()
+
+        // Songs that failed in a row; stops skipping when a whole queue is unplayable (e.g. offline).
+        private var consecutiveFailures = 0
 
         private val trackList = mutableListOf<Track>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -99,12 +114,31 @@ class PlayerAdapter
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_READY) {
                             DiagnosticLogger.logMediaReady("player")
+                            consecutiveFailures = 0
                         }
+                        // The last song ended on its own: the "end of track" timer has done its job.
+                        if (playbackState == Player.STATE_ENDED) setPauseAtEndOfTrack(false)
                         updateState()
+                    }
+
+                    override fun onPlayWhenReadyChanged(
+                        playWhenReady: Boolean,
+                        reason: Int,
+                    ) {
+                        // Paused by pauseAtEndOfMediaItems (works with repeat-one too): disarm the timer.
+                        if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                            setPauseAtEndOfTrack(false)
+                        }
                     }
 
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         DiagnosticLogger.logError("player", "MEDIA_ERROR", error.message ?: "ExoPlayer error")
+                        if (retryAfterStreamError(error)) return
+                        skipAfterError()
+                        updateState()
+                    }
+
+                    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                         updateState()
                     }
 
@@ -112,6 +146,7 @@ class PlayerAdapter
                         mediaItem: MediaItem?,
                         reason: Int,
                     ) {
+                        retriedMediaId = null
                         updateState()
                     }
 
@@ -211,6 +246,9 @@ class PlayerAdapter
         }
 
         fun play() {
+            // Resuming a restored queue must also start the media service; otherwise there's no
+            // notification / lock-screen card and Android may kill background playback.
+            if (player.mediaItemCount > 0) startPlaybackService()
             player.play()
         }
 
@@ -220,6 +258,13 @@ class PlayerAdapter
 
         fun seekTo(positionMs: Long) {
             player.seekTo(positionMs)
+        }
+
+        fun skipToIndex(index: Int) {
+            if (index in trackList.indices) {
+                player.seekTo(index, 0L)
+                player.play()
+            }
         }
 
         fun skipToNext() {
@@ -269,16 +314,56 @@ class PlayerAdapter
             }
         }
 
+        /** Clears everything except the song that's playing, so playback continues. */
         fun clearQueue() {
-            trackList.clear()
-            player.clearMediaItems()
+            val current = player.currentMediaItemIndex
+            if (current !in trackList.indices) {
+                trackList.clear()
+                player.clearMediaItems()
+            } else {
+                if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
+                if (current > 0) player.removeMediaItems(0, current)
+                val keep = trackList[current]
+                trackList.clear()
+                trackList.add(keep)
+            }
             updateState()
+        }
+
+        // Local files often carry no bitrate in the container; derive it from file size / duration once.
+        private val localBitrateKbps = mutableMapOf<String, Int>()
+
+        private fun estimateLocalBitrate(track: Track) {
+            val uri = track.streamUrl?.takeIf { track.providerId == "local" } ?: return
+            val durationMs = player.duration.takeIf { it > 0 } ?: return
+            if (localBitrateKbps.containsKey(track.id)) return
+            localBitrateKbps[track.id] = 0
+            scope.launch {
+                val bytes =
+                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        runCatching {
+                            context.contentResolver
+                                .openAssetFileDescriptor(android.net.Uri.parse(uri), "r")
+                                ?.use { it.length }
+                        }.getOrNull()
+                    } ?: return@launch
+                if (bytes > 0) {
+                    localBitrateKbps[track.id] = (bytes * BITS_PER_BYTE / durationMs).toInt()
+                    updateState()
+                }
+            }
         }
 
         private fun updateState() {
             _queueFlow.value = trackList.toList()
             val currentIndex = player.currentMediaItemIndex
             val currentTrack = if (currentIndex in trackList.indices) trackList[currentIndex] else null
+            val format = runCatching { player.audioFormat }.getOrNull()
+            val formatBitrate =
+                format?.let { f ->
+                    listOf(f.averageBitrate, f.bitrate, f.peakBitrate).firstOrNull { it > 0 }?.div(BITS_PER_KBIT)
+                }
+            if (format != null && formatBitrate == null && currentTrack != null) estimateLocalBitrate(currentTrack)
             val mappedRepeatMode =
                 when (player.repeatMode) {
                     Player.REPEAT_MODE_ONE -> RepeatMode.ONE
@@ -294,17 +379,74 @@ class PlayerAdapter
                     bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
                     repeatMode = mappedRepeatMode,
                     shuffleEnabled = player.shuffleModeEnabled,
+                    codec = format?.sampleMimeType?.let(::codecLabel),
+                    bitrateKbps =
+                        formatBitrate
+                            ?: currentTrack?.let { track ->
+                                localBitrateKbps[track.id] ?: streamResolver.knownBitrateKbps(track, player.duration)
+                            },
+                    sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
+                    bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
+                    durationMs = player.duration.takeIf { it > 0 } ?: (currentTrack?.durationMs ?: 0L),
                 )
         }
 
+        private var retriedMediaId: String? = null
+
+        /** Arms or disarms the "end of track" sleep timer: pause when the current song finishes. */
+        fun setPauseAtEndOfTrack(enabled: Boolean) {
+            player.pauseAtEndOfMediaItems = enabled
+            _pauseAtEndOfTrack.value = enabled
+        }
+
+        /**
+         * A song that still fails after the retry would leave the queue stuck: tell the user and move
+         * on to the next song. Gives up after [MAX_CONSECUTIVE_FAILURES] in a row.
+         */
+        private fun skipAfterError() {
+            val title = trackList.getOrNull(player.currentMediaItemIndex)?.title ?: "this song"
+            consecutiveFailures++
+            if (player.hasNextMediaItem() && consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+                _messages.tryEmit("Couldn't play \"$title\" — skipped")
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.play()
+            } else {
+                _messages.tryEmit("Couldn't play \"$title\"")
+            }
+        }
+
+        /**
+         * Expired/forbidden stream (HTTP 403/410) or a failed resolve: invalidate the cached
+         * URL and re-prepare once. The resolving data source fetches a fresh URL.
+         */
+        private fun retryAfterStreamError(error: androidx.media3.common.PlaybackException): Boolean {
+            val retryable =
+                error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_BAD_HTTP_STATUS ||
+                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_IO_UNSPECIFIED
+            val index = player.currentMediaItemIndex
+            val track = trackList.getOrNull(index)
+            if (!retryable || track == null || retriedMediaId == track.id) return false
+            retriedMediaId = track.id
+            streamResolver.invalidate(track.providerId, track.id)
+            val position = player.currentPosition.coerceAtLeast(0L)
+            // Drop any stale direct URL so the placeholder resolver runs again.
+            val fresh = track.copy(streamUrl = track.streamUrl?.takeUnless { it.startsWith("http") })
+            trackList[index] = fresh
+            player.replaceMediaItem(index, fresh.toMediaItem())
+            player.seekTo(index, position)
+            player.prepare()
+            player.play()
+            return true
+        }
+
         private fun Track.toMediaItem(): MediaItem {
-            val cachedFile = runCatching { runBlocking { cacheManager.getCachedFile(id) } }.getOrNull()
-            val uri =
-                if (cachedFile != null && cachedFile.exists()) {
-                    android.net.Uri.fromFile(cachedFile)
-                } else {
-                    streamUrl?.let { android.net.Uri.parse(it) } ?: android.net.Uri.EMPTY
-                }
+            // Local files and non-expiring provider URLs play directly. Remote tracks get a placeholder URI that
+            // TrackUriResolver resolves (cache file -> fresh stream URL) when ExoPlayer opens it,
+            // so queued tracks are playable and expired URLs never reach the network.
+            // Signed (expiring) URLs, e.g. googlevideo `expire=`, always go through the resolver.
+            val direct = streamUrl?.takeIf { it.isNotBlank() && !it.contains("expire") }
+            val uri = direct?.let { android.net.Uri.parse(it) } ?: TrackUriResolver.placeholderUri(this)
 
             return MediaItem.Builder()
                 .setMediaId(id)
@@ -314,7 +456,8 @@ class PlayerAdapter
                         .setTitle(title)
                         .setArtist(artist)
                         .setAlbumTitle(album)
-                        .setArtworkUri(artworkUrl?.let { android.net.Uri.parse(it) })
+                        // High-res cover for the notification, lock screen and Bluetooth displays.
+                        .setArtworkUri(artworkUrlFor(artworkUrl, ARTWORK_FULL_PX)?.let { android.net.Uri.parse(it) })
                         .build(),
                 )
                 .build()
@@ -322,5 +465,30 @@ class PlayerAdapter
 
         companion object {
             private const val POLL_INTERVAL_MS = 500L
+            private const val BITS_PER_BYTE = 8L
+            private const val BITS_PER_KBIT = 1000
+            private const val MESSAGE_BUFFER = 4
+            private const val MAX_CONSECUTIVE_FAILURES = 5
+
+            fun codecLabel(mime: String): String =
+                when (mime) {
+                    androidx.media3.common.MimeTypes.AUDIO_FLAC -> "FLAC"
+                    androidx.media3.common.MimeTypes.AUDIO_MPEG -> "MP3"
+                    androidx.media3.common.MimeTypes.AUDIO_OPUS -> "OPUS"
+                    androidx.media3.common.MimeTypes.AUDIO_AAC -> "AAC"
+                    androidx.media3.common.MimeTypes.AUDIO_RAW, androidx.media3.common.MimeTypes.AUDIO_WAV -> "WAV"
+                    androidx.media3.common.MimeTypes.AUDIO_VORBIS -> "VORBIS"
+                    androidx.media3.common.MimeTypes.AUDIO_ALAC -> "ALAC"
+                    else -> mime.substringAfter('/').uppercase()
+                }
+
+            fun bitDepthOf(pcmEncoding: Int): Int? =
+                when (pcmEncoding) {
+                    androidx.media3.common.C.ENCODING_PCM_16BIT -> 16
+                    androidx.media3.common.C.ENCODING_PCM_24BIT -> 24
+                    androidx.media3.common.C.ENCODING_PCM_32BIT, androidx.media3.common.C.ENCODING_PCM_FLOAT -> 32
+                    androidx.media3.common.C.ENCODING_PCM_8BIT -> 8
+                    else -> null
+                }
         }
     }

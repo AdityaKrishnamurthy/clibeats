@@ -5,19 +5,27 @@ package com.clibeats.presentation.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
+import com.clibeats.domain.repository.HistoryRepository
+import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val TRENDING_LIMIT = 15
+private const val RECENT_FETCH = 50
+private const val RECENT_SHOWN = 10
 
 @HiltViewModel
 class HomeViewModel
@@ -25,9 +33,47 @@ class HomeViewModel
     constructor(
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
+        private val historyRepository: HistoryRepository? = null,
+        private val playbackRepository: PlaybackRepository? = null,
     ) : ViewModel() {
-        private val activeProviderId =
-            appPreferences.activeProviderId.map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+        val providers: List<MusicProvider> = providerRegistry.providers
+
+        val activeProviderId: StateFlow<String> =
+            appPreferences.activeProviderId
+                .map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
+
+        val recentlyPlayed: StateFlow<List<Track>> =
+            (historyRepository?.getRecentlyPlayedTracks(RECENT_FETCH) ?: flowOf(emptyList()))
+                .map { tracks -> tracks.distinctBy { it.id }.take(RECENT_SHOWN) }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        fun setActiveProvider(id: String) {
+            viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Plays [tracks] from [index]; queues the rest only if "auto-queue related" is on. */
+        fun playFromList(
+            tracks: List<Track>,
+            index: Int,
+        ) {
+            val repo = playbackRepository ?: return
+            viewModelScope.launch {
+                if (appPreferences.autoQueueRelated.first()) {
+                    repo.setQueue(tracks, index)
+                } else {
+                    repo.setQueue(listOf(tracks[index]), 0)
+                }
+            }
+        }
+
+        fun addToQueue(track: Track) {
+            playbackRepository?.addToQueue(track)
+        }
+
+        fun clearRecentlyPlayed() {
+            viewModelScope.launch { historyRepository?.clearAllHistory() }
+        }
 
         private val activeProvider: kotlinx.coroutines.flow.Flow<MusicProvider> =
             activeProviderId.map { id ->

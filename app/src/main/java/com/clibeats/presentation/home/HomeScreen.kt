@@ -21,23 +21,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
+import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
+import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.layout.NavDestination
-import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
@@ -55,10 +61,16 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 fun HomeScreen(
     onNavigate: (NavDestination) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
-    playerViewModel: PlayerViewModel = hiltViewModel(),
 ) {
+    val favorites: FavoritesViewModel = hiltViewModel()
     val uiState by homeViewModel.uiState.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
+    val activeProviderId by homeViewModel.activeProviderId.collectAsState()
+    val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
+    addToPlaylistTrack?.let { track ->
+        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+    }
 
     LazyColumn(
         modifier =
@@ -89,12 +101,15 @@ fun HomeScreen(
                     }
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text =
-                            "PROVIDER : $providerName\n" +
-                                "STREAM   : MP3 320 kbps (no account)\n" +
-                                "CACHE    : 500 MB (LRU Active)",
+                        text = "PROVIDER : $providerName",
                         style = MaterialTheme.typography.bodySmall,
                         color = CliBeatsTextSecondary,
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    ProviderSwitcher(
+                        providers = homeViewModel.providers,
+                        activeProviderId = activeProviderId,
+                        onSelect = homeViewModel::setActiveProvider,
                     )
                 }
             }
@@ -123,8 +138,33 @@ fun HomeScreen(
             Spacer(modifier = Modifier.height(12.dp))
         }
 
-        // 3. Trending Tracks Block Header
+        // 3. Recently played (from history) with clear
+        if (recentlyPlayed.isNotEmpty()) {
+            item {
+                SectionHeader(
+                    title = "RECENTLY PLAYED",
+                    actionLabel = "[ CLEAR ]",
+                    onAction = homeViewModel::clearRecentlyPlayed,
+                )
+            }
+            itemsIndexed(recentlyPlayed, key = { _, t -> "recent_${t.id}" }) { index, track ->
+                SongTableRow(
+                    trackTitle = track.title,
+                    artist = track.artist,
+                    duration = formatDuration(track.durationMs),
+                    artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                    onClick = { homeViewModel.playFromList(recentlyPlayed, index) },
+                    onSwipeRight = { homeViewModel.addToQueue(track) },
+                    onSwipeLeft = { favorites.add(track) },
+                    onLongPress = { addToPlaylistTrack = track },
+                )
+            }
+            item { Spacer(modifier = Modifier.height(12.dp)) }
+        }
+
+        // 4. Trending Tracks Block Header
         item {
+            SectionHeader(title = "TRENDING / ${providerName.uppercase()}")
             SongTableHeader()
         }
 
@@ -160,22 +200,16 @@ fun HomeScreen(
                         EmptyHomeState()
                     }
                 } else {
-                    items(state.tracks) { track ->
+                    itemsIndexed(state.tracks, key = { _, t -> "trend_${t.id}" }) { index, track ->
                         SongTableRow(
                             trackTitle = track.title,
                             artist = track.artist,
                             duration = formatDuration(track.durationMs),
-                            artworkContent =
-                                track.artworkUrl?.let { url ->
-                                    {
-                                        AsyncImage(
-                                            model = url,
-                                            contentDescription = "Artwork for ${track.title}",
-                                            modifier = Modifier.size(32.dp),
-                                        )
-                                    }
-                                },
-                            onClick = { playerViewModel.playTrack(track) },
+                            artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                            onClick = { homeViewModel.playFromList(state.tracks, index) },
+                            onSwipeRight = { homeViewModel.addToQueue(track) },
+                            onSwipeLeft = { favorites.add(track) },
+                            onLongPress = { addToPlaylistTrack = track },
                         )
                     }
                 }
@@ -231,6 +265,31 @@ private fun QuickShortcutButton(
     }
 }
 
+@Suppress("FunctionNaming")
+@Composable
+private fun SectionHeader(
+    title: String,
+    actionLabel: String? = null,
+    onAction: () -> Unit = {},
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = title, style = MaterialTheme.typography.labelMedium, color = CliBeatsAccent)
+        if (actionLabel != null) {
+            Text(
+                text = actionLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = CliBeatsTextSecondary,
+                modifier = Modifier.clickable(onClick = onAction).padding(8.dp),
+            )
+        }
+    }
+}
+
+@Suppress("FunctionNaming")
 @Composable
 private fun EmptyHomeState() {
     Column(

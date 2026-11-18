@@ -20,5 +20,16 @@ CLIBeats is built using open source software libraries. Below is the inventory o
 - **Coil**: Apache License 2.0
   - Copyright 2023 Coil Contributors
 
-## 5. Security & Testing
-- **Google Truth / JUnit 4 / Mockito / Timber**: Apache License 2.0 / MIT
+## 5. Media & Extraction
+- **NewPipeExtractor** (YouTube stream extraction): GNU General Public License v3.0
+  - Copyright (c) Team NewPipe — https://github.com/TeamNewPipe/NewPipeExtractor
+  - Note: because the release APK bundles this GPLv3 library, the distributed APK as a whole is subject to
+    the GPLv3. CLIBeats' own source code remains MIT-licensed (MIT is GPL-compatible).
+- **Guava** (used by Media3): Apache License 2.0
+
+## 6. Fonts
+- **JetBrains Mono**: SIL Open Font License 1.1
+  - Copyright 2020 The JetBrains Mono Project Authors
+
+## 7. Testing
+- **Google Truth / JUnit 4 / Mockito / Paparazzi / Timber**: Apache License 2.0 / EPL 1.0 / MIT

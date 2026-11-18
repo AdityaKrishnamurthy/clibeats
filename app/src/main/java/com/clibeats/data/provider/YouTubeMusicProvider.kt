@@ -62,7 +62,8 @@ class YouTubeMusicProvider
         }
 
         override suspend fun trending(limit: Int): ProviderResult<List<Track>> {
-            return search("trending music", limit)
+            val country = com.clibeats.data.provider.dto.UserLocale.countryName
+            return search(if (country.isBlank()) "trending music" else "top songs $country", limit)
         }
 
         override suspend fun getTrack(trackId: String): ProviderResult<Track> {
@@ -92,7 +93,7 @@ class YouTubeMusicProvider
                 return ProviderResult.Success(cached.url)
             }
 
-            // 2. Primary: NewPipeExtractor v0.26.4 maintained extraction
+            // 2. Primary: NewPipeExtractor v0.27.1 maintained extraction
             val newPipeExtracted = newPipeExtractorResolver.resolveStream(rawId, traceId)
             if (newPipeExtracted != null) {
                 DiagnosticLogger.logStreamFormatSelected(
@@ -186,6 +187,13 @@ class YouTubeMusicProvider
             )
         }
 
+        /** Bitrate (kbps) of the stream extracted for [trackId], if it's still cached. */
+        fun cachedBitrateKbps(trackId: String): Int? =
+            streamCacheManager.get(providerId, ProviderId.rawSourceId(providerId, trackId))
+                ?.bitrate
+                ?.takeIf { it > 0 }
+                ?.div(BITS_PER_KBIT)
+
         fun invalidateCache(trackId: String) {
             val rawId = ProviderId.rawSourceId(providerId, trackId)
             streamCacheManager.invalidate(providerId, rawId)
@@ -199,3 +207,5 @@ class YouTubeMusicProvider
             return ProviderResult.Success(emptyList())
         }
     }
+
+private const val BITS_PER_KBIT = 1000

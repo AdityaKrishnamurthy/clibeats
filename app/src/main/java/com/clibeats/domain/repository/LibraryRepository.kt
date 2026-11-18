@@ -14,6 +14,9 @@ interface LibraryRepository {
 
     suspend fun toggleLike(track: Track)
 
+    /** Likes [track] if it isn't already (never unlikes). */
+    suspend fun addToFavorites(track: Track)
+
     fun getSavedAlbums(): Flow<List<Album>>
 
     fun searchSavedAlbums(query: String): Flow<List<Album>>

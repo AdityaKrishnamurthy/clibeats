@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.PlaylistPlay
@@ -29,17 +31,26 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.FavoritesViewModel
+import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -52,12 +63,26 @@ import com.clibeats.presentation.theme.LocalAccentColor
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun SearchScreen(
-    onTrackClick: (Track) -> Unit = {},
+    focusRequested: Boolean = false,
+    onFocusHandled: () -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
 ) {
+    val searchFocus = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Double-tapping the Search tab focuses the box and opens the keyboard (one-shot).
+    LaunchedEffect(focusRequested) {
+        if (focusRequested) {
+            runCatching { searchFocus.requestFocus() }
+            keyboard?.show()
+            onFocusHandled()
+        }
+    }
+    val favorites: FavoritesViewModel = hiltViewModel()
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
+    val activeProviderId by viewModel.activeProviderId.collectAsState()
+    var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -73,6 +98,7 @@ fun SearchScreen(
             label = "Search",
             placeholder = "What do you want to play?",
             modifier = Modifier.semantics { contentDescription = "Search music" },
+            focusRequester = searchFocus,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
             trailingContent = {
@@ -93,7 +119,13 @@ fun SearchScreen(
             },
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+        ProviderSwitcher(
+            providers = viewModel.providers,
+            activeProviderId = activeProviderId,
+            onSelect = viewModel::setActiveProvider,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
 
         // ── Results area block ───────────────────────────────────────────
         TuiBlock(title = "Search Results — $providerName", modifier = Modifier.weight(1f)) {
@@ -107,13 +139,19 @@ fun SearchScreen(
                     } else {
                         SearchResultsList(
                             tracks = currentState.tracks,
-                            onTrackClick = onTrackClick,
+                            onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = viewModel::onAddToQueue,
+                            onFavorite = favorites::add,
                             onPlayNext = viewModel::onPlayNext,
+                            onAddToPlaylist = { playlistPickerTrack = it },
                         )
                     }
             }
         }
+    }
+
+    playlistPickerTrack?.let { track ->
+        AddToPlaylistDialog(track = track, onDismiss = { playlistPickerTrack = null })
     }
 }
 
@@ -190,13 +228,15 @@ private fun SearchNoResultsState() {
     }
 }
 
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongParameterList", "LongMethod")
 @Composable
 private fun SearchResultsList(
     tracks: List<Track>,
-    onTrackClick: (Track) -> Unit,
+    onTrackClick: (Int) -> Unit,
     onAddToQueue: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
     onPlayNext: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -212,7 +252,10 @@ private fun SearchResultsList(
                 duration = formatDuration(track.durationMs),
                 index = index + 1,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                onClick = { onTrackClick(track) },
+                onClick = { onTrackClick(index) },
+                onSwipeRight = { onAddToQueue(track) },
+                onSwipeLeft = { onFavorite(track) },
+                onLongPress = { onAddToPlaylist(track) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(
@@ -222,6 +265,17 @@ private fun SearchResultsList(
                             Icon(
                                 imageVector = Icons.Outlined.PlaylistPlay,
                                 contentDescription = "Play next",
+                                tint = CliBeatsTextSecondary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                        IconButton(
+                            onClick = { onAddToPlaylist(track) },
+                            modifier = Modifier.size(28.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                                contentDescription = "Add to playlist",
                                 tint = CliBeatsTextSecondary,
                                 modifier = Modifier.size(18.dp),
                             )

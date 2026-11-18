@@ -12,10 +12,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * MusicProvider over the local device library.
- *
- * Currently backed by the persisted library ([SongRepository]); scanning
- * on-device audio via MediaStore is future work (needs READ_MEDIA_AUDIO).
+ * MusicProvider over on-device music: songs scanned from the folder picked in
+ * Settings → Local Music (see LocalMusicScanner), stored with providerId = "local".
  */
 @Singleton
 class LocalMusicProvider
@@ -31,7 +29,7 @@ class LocalMusicProvider
             limit: Int,
         ): ProviderResult<List<Track>> =
             runCatching {
-                val tracks = songRepository.searchTracksAsFlow(query).first().map { it.withLocalFileUri() }
+                val tracks = songRepository.searchLocalTracksAsFlow(query).first().map { it.withLocalFileUri() }
                 ProviderResult.Success(tracks.take(limit))
             }.getOrElse { e ->
                 ProviderResult.Error(e.message ?: "Local search failed", e)
@@ -39,7 +37,7 @@ class LocalMusicProvider
 
         override suspend fun trending(limit: Int): ProviderResult<List<Track>> =
             runCatching {
-                val tracks = songRepository.getAllTracksAsFlow().first().map { it.withLocalFileUri() }
+                val tracks = songRepository.getLocalTracksAsFlow().first().map { it.withLocalFileUri() }
                 ProviderResult.Success(tracks.take(limit))
             }.getOrElse { e ->
                 ProviderResult.Error(e.message ?: "Local library read failed", e)
@@ -55,8 +53,7 @@ class LocalMusicProvider
 
         override suspend fun stream(trackId: String): ProviderResult<String> =
             runCatching {
-                val track = songRepository.getTrackById(trackId)
-                val url = track?.streamUrl?.let { uri -> if (uri.startsWith("file://")) uri else "file://$uri" }
+                val url = songRepository.getTrackById(trackId)?.withLocalFileUri()?.streamUrl
                 if (url != null) ProviderResult.Success(url) else ProviderResult.Error("No local file for: $trackId")
             }.getOrElse { e ->
                 ProviderResult.Error(e.message ?: "Local stream failed", e)
@@ -66,7 +63,7 @@ class LocalMusicProvider
 
         override suspend fun queue(): ProviderResult<List<Track>> = ProviderResult.Success(emptyList())
 
-        /** Rewrites a bare local path into a file:// URI the player can open. */
+        /** Rewrites a bare local path into a file:// URI; content:// (SAF) and http URIs pass through. */
         private fun Track.withLocalFileUri(): Track =
             if (localPathIsSet(this) && !streamUrl.orEmpty().startsWith("file://")) {
                 copy(streamUrl = "file://$streamUrl")
@@ -78,5 +75,6 @@ class LocalMusicProvider
             track.streamUrl != null &&
                 !track.streamUrl.startsWith("http://") &&
                 !track.streamUrl.startsWith("https://") &&
-                !track.streamUrl.startsWith("file://")
+                !track.streamUrl.startsWith("file://") &&
+                !track.streamUrl.startsWith("content://")
     }

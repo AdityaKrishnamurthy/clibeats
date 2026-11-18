@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.PlaybackRepository
@@ -17,10 +18,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val DEBOUNCE_MS = 300L
@@ -37,8 +40,31 @@ class SearchViewModel
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
 
-        private val activeProviderId =
-            appPreferences.activeProviderId.map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+        val providers: List<MusicProvider> = providerRegistry.providers
+
+        val activeProviderId: StateFlow<String> =
+            appPreferences.activeProviderId
+                .map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
+
+        fun setActiveProvider(id: String) {
+            viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Plays the tapped result with the rest of the results queued after it. */
+        fun onPlay(
+            tracks: List<Track>,
+            index: Int,
+        ) {
+            viewModelScope.launch {
+                // "Auto-queue related" off: play only the tapped song, no suggestions after it.
+                if (appPreferences.autoQueueRelated.first()) {
+                    playbackRepository.setQueue(tracks, index)
+                } else {
+                    playbackRepository.setQueue(listOf(tracks[index]), 0)
+                }
+            }
+        }
 
         val activeProviderName: StateFlow<String> =
             activeProviderId

@@ -5,7 +5,6 @@ import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
-import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -13,8 +12,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /**
  * All navigable destinations in the CLIBeats app.
  *
- * Primary bottom navigation consists of 4 main tabs ([mainTabs]) to avoid
- * overcrowded wrapping; secondary destinations are reachable from the More tab.
+ * Bottom navigation: Home, Search, Library, Queue, Playlists, Settings ([mainTabs]).
  */
 sealed class NavDestination(
     val route: String,
@@ -43,13 +41,6 @@ sealed class NavDestination(
         contentDescription = "Library",
     )
 
-    data object More : NavDestination(
-        route = "more",
-        label = "More",
-        icon = Icons.Outlined.MoreHoriz,
-        contentDescription = "More",
-    )
-
     data object Playlists : NavDestination(
         route = "playlists",
         label = "Playlists",
@@ -72,12 +63,12 @@ sealed class NavDestination(
     )
 
     companion object {
-        /** Primary bottom navigation tabs (kept to 4 to avoid overcrowded wrapping). */
+        /** Bottom navigation tabs. Settings is the gear on the right (replaces the old More menu). */
         val mainTabs: List<NavDestination>
-            get() = listOf(Home, Search, Library, More)
+            get() = listOf(Home, Search, Library, Queue, Playlists, Settings)
 
-        /** Every destination in the app (used by the More menu). */
+        /** Every destination in the app. */
         val all: List<NavDestination>
-            get() = listOf(Home, Search, Library, More, Playlists, Queue, Settings)
+            get() = mainTabs
     }
 }

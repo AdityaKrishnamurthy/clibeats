@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,11 @@ class AppPreferences
             val SAVED_SHUFFLE_ENABLED = booleanPreferencesKey("saved_shuffle_enabled")
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
+            val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
+            val ARTWORK_CACHE_MB = intPreferencesKey("artwork_cache_mb")
+            val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
+            val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri") // legacy single folder
+            val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
         }
 
         private object SecureKeys {
@@ -55,6 +61,33 @@ class AppPreferences
         val highQualityStreaming: Flow<Boolean> =
             dataStore.data.map { prefs ->
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
+            }
+
+        val artworkCacheMb: Flow<Int> =
+            dataStore.data.map { prefs -> prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB }
+
+        /** False until the first-run onboarding is finished (new installs only). */
+        val onboardingDone: Flow<Boolean> =
+            dataStore.data.map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
+
+        suspend fun setArtworkCacheMb(mb: Int) {
+            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb }
+        }
+
+        suspend fun setOnboardingDone() {
+            dataStore.edit { it[Keys.ONBOARDING_DONE] = true }
+        }
+
+        /** When true, tapping a song in a list queues the rest of that list after it. */
+        val autoQueueRelated: Flow<Boolean> =
+            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: true }
+
+        /** SAF tree URIs of all folders scanned for local music (includes the legacy single folder). */
+        val localMusicTreeUris: Flow<List<String>> =
+            dataStore.data.map { prefs ->
+                (prefs[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() + listOfNotNull(prefs[Keys.LOCAL_MUSIC_TREE_URI]))
+                    .distinct()
+                    .sorted()
             }
 
         val lastQueueIndex: Flow<Int> =
@@ -110,6 +143,21 @@ class AppPreferences
             dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb }
         }
 
+        suspend fun setAutoQueueRelated(enabled: Boolean) {
+            dataStore.edit { it[Keys.AUTO_QUEUE_RELATED] = enabled }
+        }
+
+        suspend fun addLocalMusicTreeUri(uri: String) {
+            dataStore.edit { it[Keys.LOCAL_MUSIC_TREE_URIS] = it[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() + uri }
+        }
+
+        suspend fun removeLocalMusicTreeUri(uri: String) {
+            dataStore.edit {
+                it[Keys.LOCAL_MUSIC_TREE_URIS] = it[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() - uri
+                if (it[Keys.LOCAL_MUSIC_TREE_URI] == uri) it.remove(Keys.LOCAL_MUSIC_TREE_URI)
+            }
+        }
+
         suspend fun setHighQualityStreaming(enabled: Boolean) {
             dataStore.edit { it[Keys.HIGH_QUALITY_STREAMING] = enabled }
         }
@@ -146,3 +194,5 @@ class AppPreferences
             _authToken.value = null
         }
     }
+
+private const val DEFAULT_ARTWORK_CACHE_MB = 128
