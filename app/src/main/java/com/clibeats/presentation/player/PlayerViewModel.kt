@@ -18,7 +18,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -164,14 +163,15 @@ class PlayerViewModel
         fun setSleepTimer(minutes: Int?) {
             sleepJob?.cancel()
             sleepJob = null
+            if (_sleepTimer.value == SleepTimer.EndOfTrack) playbackRepository.setPauseAtEndOfTrack(false)
             when {
                 minutes == null -> {
                     _sleepTimer.value = SleepTimer.EndOfTrack
+                    // The player itself pauses when the song ends (also with repeat-one on).
+                    playbackRepository.setPauseAtEndOfTrack(true)
                     sleepJob =
                         viewModelScope.launch {
-                            // First emission is the current track; the next change means it ended.
-                            playbackState.map { it.currentTrack?.id }.distinctUntilChanged().drop(1).first()
-                            playbackRepository.pause()
+                            playbackRepository.pauseAtEndOfTrack.first { armed -> !armed }
                             _sleepTimer.value = SleepTimer.Off
                         }
                 }

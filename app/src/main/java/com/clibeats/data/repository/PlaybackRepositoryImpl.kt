@@ -81,6 +81,10 @@ class PlaybackRepositoryImpl
 
         override val playerMessages: Flow<String> = playerAdapter.messages
 
+        override val pauseAtEndOfTrack: StateFlow<Boolean> = playerAdapter.pauseAtEndOfTrack
+
+        override fun setPauseAtEndOfTrack(enabled: Boolean) = playerAdapter.setPauseAtEndOfTrack(enabled)
+
         private val restored = CompletableDeferred<Unit>()
 
         override suspend fun awaitRestored() = restored.await()

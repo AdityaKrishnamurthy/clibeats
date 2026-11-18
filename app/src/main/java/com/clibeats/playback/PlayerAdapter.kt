@@ -71,6 +71,10 @@ class PlayerAdapter
         private val _messages = MutableSharedFlow<String>(extraBufferCapacity = MESSAGE_BUFFER)
         val messages: SharedFlow<String> = _messages
 
+        /** True while the "end of track" sleep timer is armed (the player pauses when the song ends). */
+        private val _pauseAtEndOfTrack = MutableStateFlow(false)
+        val pauseAtEndOfTrack: StateFlow<Boolean> = _pauseAtEndOfTrack.asStateFlow()
+
         // Songs that failed in a row; stops skipping when a whole queue is unplayable (e.g. offline).
         private var consecutiveFailures = 0
 
@@ -112,7 +116,19 @@ class PlayerAdapter
                             DiagnosticLogger.logMediaReady("player")
                             consecutiveFailures = 0
                         }
+                        // The last song ended on its own: the "end of track" timer has done its job.
+                        if (playbackState == Player.STATE_ENDED) setPauseAtEndOfTrack(false)
                         updateState()
+                    }
+
+                    override fun onPlayWhenReadyChanged(
+                        playWhenReady: Boolean,
+                        reason: Int,
+                    ) {
+                        // Paused by pauseAtEndOfMediaItems (works with repeat-one too): disarm the timer.
+                        if (reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM) {
+                            setPauseAtEndOfTrack(false)
+                        }
                     }
 
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -376,6 +392,12 @@ class PlayerAdapter
         }
 
         private var retriedMediaId: String? = null
+
+        /** Arms or disarms the "end of track" sleep timer: pause when the current song finishes. */
+        fun setPauseAtEndOfTrack(enabled: Boolean) {
+            player.pauseAtEndOfMediaItems = enabled
+            _pauseAtEndOfTrack.value = enabled
+        }
 
         /**
          * A song that still fails after the retry would leave the queue stuck: tell the user and move

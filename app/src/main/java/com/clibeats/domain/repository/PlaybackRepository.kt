@@ -16,6 +16,12 @@ interface PlaybackRepository {
     /** One-off player messages for the UI (e.g. "Couldn't play X — skipped"). */
     val playerMessages: Flow<String>
 
+    /** True while the "end of track" sleep timer is armed. */
+    val pauseAtEndOfTrack: StateFlow<Boolean>
+
+    /** Pause when the current song finishes (also with repeat-one). */
+    fun setPauseAtEndOfTrack(enabled: Boolean)
+
     fun playTrack(track: Track)
 
     fun setQueue(
