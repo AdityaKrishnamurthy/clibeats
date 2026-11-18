@@ -8,4 +8,5 @@ package com.clibeats.presentation.theme
 enum class CliBeatsThemeMode(val displayName: String) {
     DARK("Dark"),
     AMOLED("AMOLED"),
+    LIGHT("Light"),
 }
