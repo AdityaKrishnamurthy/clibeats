@@ -25,6 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.layout.NavDestination
@@ -98,20 +101,25 @@ private fun MoreScreenCredits(context: Context) {
             style = MaterialTheme.typography.labelSmall,
             color = CliBeatsTextSecondary,
         )
-        Text(
-            text = "Developed by: Omprakash Panda",
-            style = MaterialTheme.typography.bodyMedium,
-            color = CliBeatsTextPrimary,
-        )
-        Text(
-            text = GITHUB_URL,
-            style = MaterialTheme.typography.labelSmall,
-            color = CliBeatsAccent,
-            textDecoration = TextDecoration.Underline,
-            modifier = Modifier.clickable {
-                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))
-                context.startActivity(intent)
-            },
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "Developed by: ",
+                style = MaterialTheme.typography.bodyMedium,
+                color = CliBeatsTextPrimary,
+            )
+            // Name is the GitHub link (opens in browser).
+            Text(
+                text = "Omprakash Panda",
+                style = MaterialTheme.typography.bodyMedium,
+                color = CliBeatsAccent,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier
+                    .semantics { contentDescription = "Omprakash Panda on GitHub" }
+                    .clickable(role = Role.Button) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }
+                    }
+                    .padding(vertical = 4.dp),
+            )
+        }
     }
 }
