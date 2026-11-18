@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CLIBeats launcher icon (foreground). Source: logo/clibeats-logo.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Terminal window frame -->
+    <path
+        android:fillColor="#0D0D0D"
+        android:pathData="M24,24h60v60h-60z"
+        android:strokeWidth="3"
+        android:strokeColor="#00FF66" />
+    <!-- Title bar -->
+    <path
+        android:pathData="M24,34H84"
+        android:strokeWidth="2"
+        android:strokeColor="#00FF66" />
+    <path
+        android:fillColor="#00FF66"
+        android:pathData="M28,28h3v3h-3zM34,28h3v3h-3z" />
+    <!-- Prompt chevron -->
+    <path
+        android:pathData="M32,48L44,58L32,68"
+        android:strokeWidth="4"
+        android:strokeColor="#00FF66"
+        android:strokeLineCap="square"
+        android:strokeLineJoin="miter" />
+    <!-- Spectrum bars -->
+    <path
+        android:fillColor="#00FF66"
+        android:pathData="M50,60h5v14h-5zM58,44h5v30h-5zM66,52h5v22h-5zM74,40h5v34h-5z" />
+</vector>
