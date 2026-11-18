@@ -5,6 +5,11 @@
 
 package com.clibeats.presentation.layout
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,11 +32,15 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
+import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
@@ -56,53 +65,82 @@ fun MainLayout(
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
-    NavigationSuiteScaffold(
-        navigationSuiteItems = {
-            buildNavItems(
-                selectedDestination = selectedDestination,
-                onDestinationSelected = onDestinationSelected,
-            )
-        },
-        navigationSuiteColors = NavigationSuiteDefaults.colors(
-            navigationRailContainerColor = CliBeatsSurface,
-            navigationDrawerContainerColor = CliBeatsSurface,
-            navigationBarContainerColor = CliBeatsSurface,
-        ),
-        containerColor = MaterialTheme.colorScheme.background,
-    ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            CliBeatsTopAppBar(
-                onSearchClick = { onDestinationSelected(NavDestination.Search) },
-            )
+    var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
 
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = CliBeatsDivider,
-            )
+    Box(modifier = Modifier.fillMaxSize()) {
+        NavigationSuiteScaffold(
+            navigationSuiteItems = {
+                buildNavItems(
+                    selectedDestination = selectedDestination,
+                    onDestinationSelected = onDestinationSelected,
+                )
+            },
+            navigationSuiteColors = NavigationSuiteDefaults.colors(
+                navigationRailContainerColor = CliBeatsSurface,
+                navigationDrawerContainerColor = CliBeatsSurface,
+                navigationBarContainerColor = CliBeatsSurface,
+            ),
+            containerColor = MaterialTheme.colorScheme.background,
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                CliBeatsTopAppBar(
+                    onSearchClick = { onDestinationSelected(NavDestination.Search) },
+                )
 
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background),
-            ) {
-                content()
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = CliBeatsDivider,
+                )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background),
+                ) {
+                    content()
+                }
+
+                // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
+                PlayerBarHost(
+                    playerViewModel,
+                    onQueueClick = { onDestinationSelected(NavDestination.Queue) },
+                    onExpandClick = { showNowPlaying = true },
+                )
             }
+        }
 
-            // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
-            PlayerBarHost(playerViewModel, onQueueClick = { onDestinationSelected(NavDestination.Queue) })
+        // ── Full-screen Now Playing overlay (slides up over everything) ──
+        AnimatedVisibility(
+            visible = showNowPlaying,
+            enter = slideInVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+            exit = slideOutVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+        ) {
+            NowPlayingScreen(
+                viewModel = playerViewModel,
+                onClose = { showNowPlaying = false },
+                onOpenQueue = {
+                    showNowPlaying = false
+                    onDestinationSelected(NavDestination.Queue)
+                },
+            )
         }
     }
 }
+
+private const val NOW_PLAYING_ANIM_MS = 250
 
 @Suppress("FunctionNaming")
 @Composable
 private fun PlayerBarHost(
     playerViewModel: PlayerViewModel,
     onQueueClick: () -> Unit,
+    onExpandClick: () -> Unit,
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
-    val trackDuration = playbackState.currentTrack?.durationMs ?: 0L
+    // Player-reported duration first: local files may have no duration in metadata.
+    val trackDuration = playbackState.durationMs.takeIf { it > 0 } ?: playbackState.currentTrack?.durationMs ?: 0L
     val progress =
         if (trackDuration > 0L) {
             (playbackState.positionMs.toFloat() / trackDuration.toFloat()).coerceIn(0f, 1f)
@@ -128,6 +166,7 @@ private fun PlayerBarHost(
         onQueueClick = onQueueClick,
         repeatMode = playbackState.repeatMode,
         onRepeatClick = playerViewModel::onRepeatClick,
+        onExpandClick = onExpandClick,
     )
 }
 

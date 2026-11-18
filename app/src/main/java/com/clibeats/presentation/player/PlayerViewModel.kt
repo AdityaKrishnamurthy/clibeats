@@ -1,21 +1,54 @@
 package com.clibeats.presentation.player
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.clibeats.domain.model.PlaybackState
+import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** Sleep timer state: off, a countdown, or "pause when the current track ends". */
+sealed interface SleepTimer {
+    data object Off : SleepTimer
+
+    data class Countdown(val remainingMin: Int) : SleepTimer
+
+    data object EndOfTrack : SleepTimer
+}
 
 @HiltViewModel
 class PlayerViewModel
     @Inject
     constructor(
         private val playbackRepository: PlaybackRepository,
+        private val playlistRepository: PlaylistRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+
+        val playlists: StateFlow<List<Playlist>> =
+            (playlistRepository?.getAllPlaylistsAsFlow() ?: flowOf(emptyList()))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        private val _sleepTimer = MutableStateFlow<SleepTimer>(SleepTimer.Off)
+        val sleepTimer: StateFlow<SleepTimer> = _sleepTimer.asStateFlow()
+        private var sleepJob: Job? = null
 
         fun playTrack(track: Track) {
             playbackRepository.playTrack(track)
@@ -58,5 +91,47 @@ class PlayerViewModel
 
         fun seekTo(positionMs: Long) {
             playbackRepository.seekTo(positionMs)
+        }
+
+        fun addToPlaylist(
+            track: Track,
+            playlistId: String,
+        ) {
+            viewModelScope.launch {
+                runCatching { playlistRepository?.addTrackToPlaylist(playlistId, track) }
+            }
+        }
+
+        /** [minutes] > 0 starts a countdown; 0 turns it off; null = pause at end of current track. */
+        fun setSleepTimer(minutes: Int?) {
+            sleepJob?.cancel()
+            sleepJob = null
+            when {
+                minutes == null -> {
+                    _sleepTimer.value = SleepTimer.EndOfTrack
+                    sleepJob =
+                        viewModelScope.launch {
+                            // First emission is the current track; the next change means it ended.
+                            playbackState.map { it.currentTrack?.id }.distinctUntilChanged().drop(1).first()
+                            playbackRepository.pause()
+                            _sleepTimer.value = SleepTimer.Off
+                        }
+                }
+                minutes <= 0 -> _sleepTimer.value = SleepTimer.Off
+                else ->
+                    sleepJob =
+                        viewModelScope.launch {
+                            for (left in minutes downTo 1) {
+                                _sleepTimer.value = SleepTimer.Countdown(left)
+                                delay(MINUTE_MS)
+                            }
+                            playbackRepository.pause()
+                            _sleepTimer.value = SleepTimer.Off
+                        }
+            }
+        }
+
+        private companion object {
+            const val MINUTE_MS = 60_000L
         }
     }

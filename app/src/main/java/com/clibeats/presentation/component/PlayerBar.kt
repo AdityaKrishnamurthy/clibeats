@@ -6,6 +6,7 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -83,6 +84,7 @@ fun PlayerBar(
     onRepeatClick: () -> Unit = {},
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
+    onExpandClick: () -> Unit = {},
 ) {
     val accent = LocalAccentColor.current
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
@@ -105,30 +107,36 @@ fun PlayerBar(
                     .height(48.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                // Artwork square (36x36dp)
-                Box(modifier = Modifier.size(36.dp)) {
-                    artworkContent?.invoke()
-                }
+                // Artwork + title: tap opens the full-screen Now Playing view
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(onClickLabel = "Open now playing", onClick = onExpandClick),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.size(36.dp)) {
+                        artworkContent?.invoke()
+                    }
 
-                Spacer(modifier = Modifier.width(10.dp))
+                    Spacer(modifier = Modifier.width(10.dp))
 
-                // Track Title + Artist
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = trackTitle,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CliBeatsTextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (artist.isNotBlank()) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = artist,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = CliBeatsTextSecondary,
+                            text = trackTitle,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = CliBeatsTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                        if (artist.isNotBlank()) {
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsTextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                 }
 
