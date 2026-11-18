@@ -27,6 +27,10 @@ class ThemeViewModel
     constructor(
         private val appPreferences: AppPreferences,
     ) : ViewModel() {
+        /** null until loaded (avoids flashing onboarding or the app on start). */
+        val onboardingDone: StateFlow<Boolean?> =
+            appPreferences.onboardingDone.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
         val themeState: StateFlow<ThemeState> =
             combine(
                 appPreferences.themeMode,
