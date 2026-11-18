@@ -55,7 +55,10 @@ class SettingsViewModel
         }
 
         fun setArtworkCacheMb(mb: Int) {
-            viewModelScope.launch { appPreferences.setArtworkCacheMb(mb) }
+            viewModelScope.launch {
+                appPreferences.setArtworkCacheMb(mb)
+                runCatching { mediaCaches?.setArtworkLimitMb(mb) }
+            }
         }
 
         fun clearSongCache() {

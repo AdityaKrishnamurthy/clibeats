@@ -17,6 +17,7 @@ import coil.ImageLoader
 import com.clibeats.data.preferences.AppPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,7 +37,7 @@ data class CacheUsage(
 /**
  * Two independent caches with user-set limits:
  * - songs: Media3 [SimpleCache] used by ExoPlayer for streamed audio (keyed per track, see PlaybackModule)
- * - artwork: Coil's disk cache (limit applied when the ImageLoader is built, i.e. next app start)
+ * - artwork: Coil's disk cache ([ResizableDiskCache], limit applies immediately)
  */
 @Singleton
 class MediaCaches
@@ -45,6 +46,7 @@ class MediaCaches
         @ApplicationContext context: Context,
         appPreferences: AppPreferences,
         private val imageLoader: dagger.Lazy<ImageLoader>,
+        private val artworkDiskCache: dagger.Lazy<ResizableDiskCache>,
     ) {
         // Read once at startup; later changes go through setSongLimitMb.
         private val evictor =
@@ -98,6 +100,14 @@ class MediaCaches
                 refreshUsage()
             }
 
+        suspend fun setArtworkLimitMb(mb: Int) =
+            withContext(Dispatchers.IO) {
+                artworkDiskCache.get().resize(mb.toLong() * BYTES_IN_MB)
+                // The trim runs on Coil's background thread; give it a moment before re-measuring.
+                delay(TRIM_SETTLE_MS)
+                refreshUsage()
+            }
+
         suspend fun clearSongs() =
             withContext(Dispatchers.IO) {
                 songCache.keys.toList().forEach { runCatching { songCache.removeResource(it) } }
@@ -115,6 +125,7 @@ class MediaCaches
             const val BYTES_IN_MB = 1_048_576L
             private const val KEY_KBPS = "clibeats_kbps"
             private const val BITS_PER_BYTE = 8
+            private const val TRIM_SETTLE_MS = 500L
         }
     }
 
