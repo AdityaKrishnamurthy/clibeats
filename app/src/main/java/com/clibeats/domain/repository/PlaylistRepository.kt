@@ -4,6 +4,7 @@ import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions")
 interface PlaylistRepository {
     fun getAllPlaylistsAsFlow(): Flow<List<Playlist>>
 
@@ -36,4 +37,10 @@ interface PlaylistRepository {
         playlistId: String,
         track: Track,
     )
+
+    /** Creates an editable app playlist with [songIds] (already in the songs table) and returns its id. */
+    suspend fun createAppPlaylist(
+        name: String,
+        songIds: List<String>,
+    ): String
 }

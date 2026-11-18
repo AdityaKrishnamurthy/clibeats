@@ -41,7 +41,9 @@ class LibraryRepositoryImpl
             if (currentlyLiked) {
                 likedSongDao.unlikeSong(track.id)
             } else {
-                songDao.upsert(track.toEntity())
+                // Signed (expiring) stream URLs are re-resolved at playback; don't persist them.
+                val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track
+                songDao.upsert(storable.toEntity())
                 likedSongDao.likeSong(track.id)
             }
         }

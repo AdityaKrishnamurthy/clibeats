@@ -5,6 +5,7 @@ package com.clibeats.data.repository
 
 import com.clibeats.data.local.dao.PlaylistDao
 import com.clibeats.data.local.dao.SongDao
+import com.clibeats.data.local.entity.PlaylistEntity
 import com.clibeats.data.local.entity.PlaylistSongCrossRef
 import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
@@ -13,6 +14,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaylistRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -78,5 +80,30 @@ class PlaylistRepositoryImpl
                 PlaylistSongCrossRef(playlistId, track.id, playlistDao.nextPosition(playlistId)),
             )
             playlistDao.refreshTrackCount(playlistId)
+        }
+
+        override suspend fun createAppPlaylist(
+            name: String,
+            songIds: List<String>,
+        ): String {
+            val id = UUID.randomUUID().toString()
+            val now = System.currentTimeMillis()
+            playlistDao.upsert(
+                PlaylistEntity(
+                    id = id,
+                    name = name,
+                    description = null,
+                    artworkUrl = null,
+                    trackCount = 0,
+                    isOwned = true,
+                    providerId = "local",
+                    createdAt = now,
+                    updatedAt = now,
+                ),
+            )
+            // Same transaction helper as reorder: inserts cross refs in order.
+            playlistDao.reorderPlaylistSongs(id, songIds.distinct())
+            playlistDao.refreshTrackCount(id)
+            return id
         }
     }

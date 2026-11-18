@@ -66,6 +66,22 @@ interface PlaylistDao {
     @Query("DELETE FROM playlist_song_cross_ref WHERE playlist_id = :playlistId")
     suspend fun clearPlaylistSongs(playlistId: String)
 
+    /** Ids of playlists mirrored from M3U/PLS files in the music folder (read-only in the app). */
+    @Query("SELECT id FROM playlists WHERE id LIKE 'localpl:%'")
+    suspend fun getLocalFilePlaylistIds(): List<String>
+
+    @androidx.room.Transaction
+    suspend fun replaceLocalPlaylist(
+        playlist: PlaylistEntity,
+        songIds: List<String>,
+    ) {
+        upsert(playlist)
+        clearPlaylistSongs(playlist.id)
+        songIds.forEachIndexed { index, songId ->
+            addSongToPlaylist(PlaylistSongCrossRef(playlist.id, songId, index))
+        }
+    }
+
     @androidx.room.Transaction
     suspend fun reorderPlaylistSongs(
         playlistId: String,

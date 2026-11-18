@@ -6,7 +6,9 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
+import com.clibeats.data.local.dao.PlaylistDao
 import com.clibeats.data.local.dao.SongDao
+import com.clibeats.data.local.entity.PlaylistEntity
 import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.domain.provider.ProviderId
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -42,6 +44,7 @@ class LocalMusicScanner
     constructor(
         @ApplicationContext private val context: Context,
         private val songDao: SongDao,
+        private val playlistDao: PlaylistDao,
     ) {
         private val _status = MutableStateFlow<ScanStatus>(ScanStatus.Idle)
         val status: StateFlow<ScanStatus> = _status.asStateFlow()
@@ -51,6 +54,13 @@ class LocalMusicScanner
             val documentId: String,
             val name: String,
             val lastModified: Long,
+            // Normalized path inside the picked tree, e.g. "rock/queen/song.flac".
+            val relativePath: String,
+        )
+
+        private data class Listing(
+            val audio: List<AudioDoc>,
+            val playlists: List<AudioDoc>,
         )
 
         /** Returns the number of local tracks after the scan. */
@@ -59,7 +69,8 @@ class LocalMusicScanner
                 mutex.withLock {
                     try {
                         _status.value = ScanStatus.Scanning(0, 0)
-                        val docs = listAudioDocuments(treeUri)
+                        val listing = listDocuments(treeUri)
+                        val docs = listing.audio
                         val existing = songDao.getLocalSongs().associateBy { it.id }
                         val found = ArrayList<SongEntity>(docs.size)
                         docs.forEachIndexed { index, doc ->
@@ -78,7 +89,10 @@ class LocalMusicScanner
                         }
                         found.chunked(DB_CHUNK).forEach { songDao.upsertAll(it) }
                         val foundIds = found.mapTo(HashSet()) { it.id }
+                        // Also drops stale rows for playlist files the old scanner stored as tracks.
                         existing.keys.filterNot { it in foundIds }.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
+                        val pathToId = docs.zip(found).associate { (doc, song) -> doc.relativePath to song.id }
+                        syncLocalPlaylists(treeUri, listing, pathToId)
                         _status.value = ScanStatus.Done(found.size)
                         found.size
                     } catch (e: Exception) {
@@ -88,9 +102,12 @@ class LocalMusicScanner
                 }
             }
 
-        private fun listAudioDocuments(treeUri: Uri): List<AudioDoc> {
+        private fun listDocuments(treeUri: Uri): Listing {
             val result = mutableListOf<AudioDoc>()
-            val pending = ArrayDeque<String>().apply { add(DocumentsContract.getTreeDocumentId(treeUri)) }
+            val playlists = mutableListOf<AudioDoc>()
+            // (documentId, normalized directory path inside the tree)
+            val rootId = DocumentsContract.getTreeDocumentId(treeUri)
+            val pending = ArrayDeque<Pair<String, String>>().apply { add(rootId to "") }
             val projection =
                 arrayOf(
                     DocumentsContract.Document.COLUMN_DOCUMENT_ID,
@@ -99,24 +116,66 @@ class LocalMusicScanner
                     DocumentsContract.Document.COLUMN_LAST_MODIFIED,
                 )
             while (pending.isNotEmpty()) {
-                val parentId = pending.removeLast()
+                val (parentId, parentPath) = pending.removeLast()
                 val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentId)
                 context.contentResolver.query(childrenUri, projection, null, null, null)?.use { c ->
                     while (c.moveToNext()) {
                         val docId = c.getString(COL_ID) ?: continue
                         val name = c.getString(COL_NAME).orEmpty()
                         val mime = c.getString(COL_MIME).orEmpty()
+                        val path = PlaylistFileParser.normalize(if (parentPath.isEmpty()) name else "$parentPath/$name")
+                        val modified = if (c.isNull(COL_MODIFIED)) 0L else c.getLong(COL_MODIFIED)
                         when {
-                            mime == DocumentsContract.Document.MIME_TYPE_DIR -> pending.add(docId)
-                            isAudio(mime, name) -> {
-                                val modified = if (c.isNull(COL_MODIFIED)) 0L else c.getLong(COL_MODIFIED)
-                                result += AudioDoc(docId, name, modified)
-                            }
+                            mime == DocumentsContract.Document.MIME_TYPE_DIR -> pending.add(docId to path)
+                            // Checked before isAudio: M3U mime types start with "audio/".
+                            PlaylistFileParser.isPlaylistFile(mime, name) ->
+                                playlists += AudioDoc(docId, name, modified, path)
+                            isAudio(mime, name) -> result += AudioDoc(docId, name, modified, path)
                         }
                     }
                 }
             }
-            return result
+            return Listing(result, playlists)
+        }
+
+        /** Mirrors M3U/M3U8/PLS files as read-only `localpl:` playlists; removes ones whose file is gone. */
+        private suspend fun syncLocalPlaylists(
+            treeUri: Uri,
+            listing: Listing,
+            pathToId: Map<String, String>,
+        ) {
+            val nameToIds = pathToId.entries.groupBy({ it.key.substringAfterLast('/') }, { it.value })
+            val keepIds = HashSet<String>()
+            listing.playlists.forEach { doc ->
+                val content =
+                    runCatching {
+                        val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, doc.documentId)
+                        context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                    }.getOrNull() ?: return@forEach
+                val dir = doc.relativePath.substringBeforeLast('/', "")
+                val songIds =
+                    PlaylistFileParser.parseEntries(doc.name, content)
+                        .mapNotNull { PlaylistFileParser.resolve(it, dir, pathToId, nameToIds) }
+                        .distinct()
+                val id = LOCAL_PLAYLIST_PREFIX + doc.documentId
+                val now = System.currentTimeMillis()
+                playlistDao.replaceLocalPlaylist(
+                    PlaylistEntity(
+                        id = id,
+                        name = doc.name.substringBeforeLast('.'),
+                        description = doc.relativePath,
+                        artworkUrl = null,
+                        trackCount = songIds.size,
+                        isOwned = false,
+                        providerId = LOCAL,
+                        createdAt = doc.lastModified.takeIf { it > 0 } ?: now,
+                        updatedAt = now,
+                    ),
+                    songIds,
+                )
+                keepIds += id
+            }
+            playlistDao.getLocalFilePlaylistIds().filterNot { it in keepIds }.forEach { playlistDao.deleteById(it) }
         }
 
         private fun readTags(
@@ -172,6 +231,7 @@ class LocalMusicScanner
 
         companion object {
             const val LOCAL = "local"
+            const val LOCAL_PLAYLIST_PREFIX = "localpl:"
             private const val UNKNOWN_ARTIST = "Unknown Artist"
             private const val UNKNOWN_ALBUM = "Unknown Album"
             private const val PROGRESS_EVERY = 10
