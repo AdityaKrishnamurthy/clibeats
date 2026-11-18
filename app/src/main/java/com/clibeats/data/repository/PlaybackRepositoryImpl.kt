@@ -25,12 +25,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -93,11 +95,15 @@ class PlaybackRepositoryImpl
             repositoryScope.launch {
                 restorePersistentQueue()
                 restored.complete(Unit)
-            }
-            repositoryScope.launch {
-                playerAdapter.queueFlow.collect { tracks ->
-                    persistQueueItems(tracks)
+                // Start saving only after the restore: the player's empty initial state (no queue, song 0,
+                // position 0) would otherwise overwrite the saved queue before it is read back, and the
+                // resume card / next launch would start the wrong song from 0:00.
+                // drop(1): the queue as it is right now is what was just restored (or nothing, if the
+                // restore failed) - don't write it back, only save later changes.
+                launch(start = CoroutineStart.UNDISPATCHED) {
+                    playerAdapter.queueFlow.drop(1).collect { tracks -> persistQueueItems(tracks) }
                 }
+                launch(start = CoroutineStart.UNDISPATCHED) { persistPlaybackPosition() }
             }
             repositoryScope.launch {
                 // On each new track: record history and warm stream URLs for the next tracks
@@ -111,28 +117,31 @@ class PlaybackRepositoryImpl
                         prefetchAfter(current)
                     }
             }
-            repositoryScope.launch {
-                // Persist only on meaningful changes (track/mode/play-pause), not every 500ms tick.
-                playerAdapter.playbackState
-                    .distinctUntilChanged { old, new ->
-                        old.currentTrack?.id == new.currentTrack?.id &&
-                            old.isPlaying == new.isPlaying &&
-                            old.repeatMode == new.repeatMode &&
-                            old.shuffleEnabled == new.shuffleEnabled
-                    }.collect { state ->
-                        val tracks = playerAdapter.queueFlow.value
-                        val currentIndex =
-                            state.currentTrack?.let { current ->
-                                tracks.indexOfFirst { it.id == current.id }
-                            } ?: 0
-                        appPreferences.saveQueueMetadata(
-                            index = if (currentIndex >= 0) currentIndex else 0,
-                            positionMs = state.positionMs,
-                            repeatMode = state.repeatMode.name,
-                            shuffleEnabled = state.shuffleEnabled,
-                        )
-                    }
-            }
+        }
+
+        /**
+         * Saves the current song, position and modes on meaningful changes (track, play/pause, modes) and
+         * every few seconds while playing, so a resume after the app is killed starts close to where it was.
+         */
+        private suspend fun persistPlaybackPosition() {
+            playerAdapter.playbackState
+                .distinctUntilChanged { old, new ->
+                    old.currentTrack?.id == new.currentTrack?.id &&
+                        old.isPlaying == new.isPlaying &&
+                        old.repeatMode == new.repeatMode &&
+                        old.shuffleEnabled == new.shuffleEnabled &&
+                        old.positionMs / POSITION_SAVE_STEP_MS == new.positionMs / POSITION_SAVE_STEP_MS
+                }.collect { state ->
+                    val current = state.currentTrack ?: return@collect
+                    val index = playerAdapter.queueFlow.value.indexOfFirst { it.id == current.id }
+                    if (index < 0) return@collect
+                    appPreferences.saveQueueMetadata(
+                        index = index,
+                        positionMs = state.positionMs,
+                        repeatMode = state.repeatMode.name,
+                        shuffleEnabled = state.shuffleEnabled,
+                    )
+                }
         }
 
         private suspend fun restorePersistentQueue() {
@@ -260,5 +269,6 @@ class PlaybackRepositoryImpl
 
         private companion object {
             const val PREFETCH_COUNT = 2
+            const val POSITION_SAVE_STEP_MS = 5_000L
         }
     }

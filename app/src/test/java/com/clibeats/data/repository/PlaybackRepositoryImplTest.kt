@@ -26,6 +26,7 @@ import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -147,6 +148,38 @@ class PlaybackRepositoryImplTest {
                 repeatMode = eq(RepeatMode.OFF),
                 shuffleEnabled = eq(false),
             )
+        }
+
+    @Test
+    fun `startup does not overwrite the saved queue or position before restoring`() =
+        runTest(testDispatcher) {
+            val entity =
+                SongEntity(
+                    id = "s2",
+                    title = "Second",
+                    artist = "Artist",
+                    album = "Album",
+                    durationMs = 200000L,
+                    artworkUrl = null,
+                    streamUrl = null,
+                    providerId = "ytmusic",
+                )
+            whenever(queueDao.getQueueSongs()).thenReturn(listOf(entity, entity.copy(id = "s3")))
+            whenever(appPreferences.lastQueueIndex).thenReturn(flowOf(1))
+            whenever(appPreferences.lastPlaybackPosition).thenReturn(flowOf(42_000L))
+
+            PlaybackRepositoryImpl(playerAdapter, streamResolver, queueDao, songDao, appPreferences, testDispatcher)
+
+            verify(playerAdapter).restoreQueue(
+                tracks = any(),
+                startIndex = eq(1),
+                positionMs = eq(42_000L),
+                repeatMode = eq(RepeatMode.OFF),
+                shuffleEnabled = eq(false),
+            )
+            // The player's empty initial state must never be saved over the real queue / song / position.
+            verify(appPreferences, never()).saveQueueMetadata(any(), any(), any(), any())
+            verify(queueDao, never()).clearQueue()
         }
 
     @Test
