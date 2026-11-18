@@ -4,6 +4,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.repository.PlaybackRepository
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
@@ -29,6 +30,7 @@ class PlayerViewModelTest {
     fun setup() {
         repository = mock()
         whenever(repository.playbackState).thenReturn(stateFlow)
+        whenever(repository.playerMessages).thenReturn(emptyFlow())
         viewModel = PlayerViewModel(repository)
     }
 

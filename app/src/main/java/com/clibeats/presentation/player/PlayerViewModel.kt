@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -70,6 +71,16 @@ class PlayerViewModel
         private val _sleepTimer = MutableStateFlow<SleepTimer>(SleepTimer.Off)
         val sleepTimer: StateFlow<SleepTimer> = _sleepTimer.asStateFlow()
         private var sleepJob: Job? = null
+
+        /** Short-lived player message (e.g. a song that couldn't be played), shown above the player bar. */
+        @Suppress("OPT_IN_USAGE")
+        val playerMessage: StateFlow<String?> =
+            playbackRepository.playerMessages
+                .transformLatest { message ->
+                    emit(message)
+                    delay(MESSAGE_MS)
+                    emit(null)
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
         fun playTrack(track: Track) {
             playbackRepository.playTrack(track)
@@ -181,6 +192,7 @@ class PlayerViewModel
         private companion object {
             const val MINUTE_MS = 60_000L
             const val TOAST_MS = 1_500L
+            const val MESSAGE_MS = 3_000L
         }
     }
 

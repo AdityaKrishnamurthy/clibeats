@@ -1,5 +1,5 @@
 // ForbiddenImport: playback engine implementation imports are legitimate
-@file:Suppress("ForbiddenImport", "TooManyFunctions", "ReturnCount", "MagicNumber")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "ReturnCount", "MagicNumber", "LargeClass")
 
 package com.clibeats.playback
 
@@ -22,7 +22,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -65,6 +67,13 @@ class PlayerAdapter
         private val _queueFlow = MutableStateFlow<List<Track>>(emptyList())
         val queueFlow: StateFlow<List<Track>> = _queueFlow.asStateFlow()
 
+        /** One-off messages for the UI, e.g. a song that couldn't be played and was skipped. */
+        private val _messages = MutableSharedFlow<String>(extraBufferCapacity = MESSAGE_BUFFER)
+        val messages: SharedFlow<String> = _messages
+
+        // Songs that failed in a row; stops skipping when a whole queue is unplayable (e.g. offline).
+        private var consecutiveFailures = 0
+
         private val trackList = mutableListOf<Track>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
         private var tickerJob: Job? = null
@@ -101,6 +110,7 @@ class PlayerAdapter
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_READY) {
                             DiagnosticLogger.logMediaReady("player")
+                            consecutiveFailures = 0
                         }
                         updateState()
                     }
@@ -108,6 +118,7 @@ class PlayerAdapter
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         DiagnosticLogger.logError("player", "MEDIA_ERROR", error.message ?: "ExoPlayer error")
                         if (retryAfterStreamError(error)) return
+                        skipAfterError()
                         updateState()
                     }
 
@@ -367,6 +378,23 @@ class PlayerAdapter
         private var retriedMediaId: String? = null
 
         /**
+         * A song that still fails after the retry would leave the queue stuck: tell the user and move
+         * on to the next song. Gives up after [MAX_CONSECUTIVE_FAILURES] in a row.
+         */
+        private fun skipAfterError() {
+            val title = trackList.getOrNull(player.currentMediaItemIndex)?.title ?: "this song"
+            consecutiveFailures++
+            if (player.hasNextMediaItem() && consecutiveFailures < MAX_CONSECUTIVE_FAILURES) {
+                _messages.tryEmit("Couldn't play \"$title\" — skipped")
+                player.seekToNextMediaItem()
+                player.prepare()
+                player.play()
+            } else {
+                _messages.tryEmit("Couldn't play \"$title\"")
+            }
+        }
+
+        /**
          * Expired/forbidden stream (HTTP 403/410) or a failed resolve: invalidate the cached
          * URL and re-prepare once. The resolving data source fetches a fresh URL.
          */
@@ -417,6 +445,8 @@ class PlayerAdapter
             private const val POLL_INTERVAL_MS = 500L
             private const val BITS_PER_BYTE = 8L
             private const val BITS_PER_KBIT = 1000
+            private const val MESSAGE_BUFFER = 4
+            private const val MAX_CONSECUTIVE_FAILURES = 5
 
             fun codecLabel(mime: String): String =
                 when (mime) {

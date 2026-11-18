@@ -5,12 +5,16 @@ package com.clibeats.domain.repository
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 interface PlaybackRepository {
     val playbackState: StateFlow<PlaybackState>
 
     val queueState: StateFlow<List<Track>>
+
+    /** One-off player messages for the UI (e.g. "Couldn't play X — skipped"). */
+    val playerMessages: Flow<String>
 
     fun playTrack(track: Track)
 

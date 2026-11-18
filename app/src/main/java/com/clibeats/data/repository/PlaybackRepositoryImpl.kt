@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -77,6 +78,8 @@ class PlaybackRepositoryImpl
         override val playbackState: StateFlow<PlaybackState> = playerAdapter.playbackState
 
         override val queueState: StateFlow<List<Track>> = playerAdapter.queueFlow
+
+        override val playerMessages: Flow<String> = playerAdapter.messages
 
         private val restored = CompletableDeferred<Unit>()
 
