@@ -63,17 +63,31 @@ class LocalMusicScanner
             val playlists: List<AudioDoc>,
         )
 
-        /** Returns the number of local tracks after the scan. */
-        suspend fun scan(treeUri: Uri): Int =
+        private val emptyListing = Listing(emptyList(), emptyList())
+
+        /**
+         * Scans every chosen music folder in one pass and returns the number of local tracks.
+         * One pass matters: "remove songs that are gone" must see all folders, or scanning one
+         * folder would delete the others' songs.
+         */
+        suspend fun scan(treeUris: List<Uri>): Int =
             withContext(Dispatchers.IO) {
                 mutex.withLock {
                     try {
                         _status.value = ScanStatus.Scanning(0, 0)
-                        val listing = listDocuments(treeUri)
-                        val docs = listing.audio
+                        // A folder whose permission was revoked lists as empty (its songs are then removed).
+                        val listings =
+                            treeUris.map { tree ->
+                                tree to (runCatching { listDocuments(tree) }.getOrNull() ?: emptyListing)
+                            }
+                        // Nested/overlapping folder picks list the same file twice; keep one.
+                        val pairs =
+                            listings
+                                .flatMap { (tree, listing) -> listing.audio.map { tree to it } }
+                                .distinctBy { it.second.documentId }
                         val existing = songDao.getLocalSongs().associateBy { it.id }
-                        val found = ArrayList<SongEntity>(docs.size)
-                        docs.forEachIndexed { index, doc ->
+                        val found = ArrayList<SongEntity>(pairs.size)
+                        pairs.forEachIndexed { index, (treeUri, doc) ->
                             val id = ProviderId.composite(LOCAL, doc.documentId)
                             val previous = existing[id]
                             // cached_at = file last-modified for local songs; unchanged files skip tag reads.
@@ -85,14 +99,23 @@ class LocalMusicScanner
                                     readTags(treeUri, doc, id)
                                 }
                             found += entity
-                            if (index % PROGRESS_EVERY == 0) _status.value = ScanStatus.Scanning(index + 1, docs.size)
+                            if (index % PROGRESS_EVERY == 0) _status.value = ScanStatus.Scanning(index + 1, pairs.size)
                         }
                         found.chunked(DB_CHUNK).forEach { songDao.upsertAll(it) }
                         val foundIds = found.mapTo(HashSet()) { it.id }
                         // Also drops stale rows for playlist files the old scanner stored as tracks.
                         existing.keys.filterNot { it in foundIds }.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
-                        val pathToId = docs.zip(found).associate { (doc, song) -> doc.relativePath to song.id }
-                        syncLocalPlaylists(treeUri, listing, pathToId)
+                        val keepPlaylistIds = HashSet<String>()
+                        listings.forEach { (treeUri, listing) ->
+                            val pathToId =
+                                listing.audio.associate { doc ->
+                                    doc.relativePath to ProviderId.composite(LOCAL, doc.documentId)
+                                }
+                            keepPlaylistIds += syncLocalPlaylists(treeUri, listing, pathToId)
+                        }
+                        playlistDao.getLocalFilePlaylistIds()
+                            .filterNot { it in keepPlaylistIds }
+                            .forEach { playlistDao.deleteById(it) }
                         _status.value = ScanStatus.Done(found.size)
                         found.size
                     } catch (e: Exception) {
@@ -138,12 +161,12 @@ class LocalMusicScanner
             return Listing(result, playlists)
         }
 
-        /** Mirrors M3U/M3U8/PLS files as read-only `localpl:` playlists; removes ones whose file is gone. */
+        /** Mirrors one folder's M3U/M3U8/PLS files as read-only `localpl:` playlists; returns their ids. */
         private suspend fun syncLocalPlaylists(
             treeUri: Uri,
             listing: Listing,
             pathToId: Map<String, String>,
-        ) {
+        ): Set<String> {
             val nameToIds = pathToId.entries.groupBy({ it.key.substringAfterLast('/') }, { it.value })
             val keepIds = HashSet<String>()
             listing.playlists.forEach { doc ->
@@ -175,7 +198,7 @@ class LocalMusicScanner
                 )
                 keepIds += id
             }
-            playlistDao.getLocalFilePlaylistIds().filterNot { it in keepIds }.forEach { playlistDao.deleteById(it) }
+            return keepIds
         }
 
         private fun readTags(

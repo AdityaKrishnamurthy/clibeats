@@ -73,9 +73,9 @@ class SettingsViewModel
             appPreferences.autoQueueRelated
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
 
-        val localMusicFolder: StateFlow<String?> =
-            appPreferences.localMusicTreeUri
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+        val localMusicFolders: StateFlow<List<String>> =
+            appPreferences.localMusicTreeUris
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         val scanStatus: StateFlow<ScanStatus> = localMusicScanner?.status ?: MutableStateFlow(ScanStatus.Idle)
 
@@ -83,19 +83,29 @@ class SettingsViewModel
             viewModelScope.launch { appPreferences.setAutoQueueRelated(enabled) }
         }
 
-        /** Saves the picked folder (permission already persisted by the screen) and scans it. */
+        /** Adds a picked folder (permission already persisted by the screen) and rescans all folders. */
         fun onLocalFolderPicked(treeUri: Uri) {
             viewModelScope.launch {
-                appPreferences.setLocalMusicTreeUri(treeUri.toString())
-                runCatching { localMusicScanner?.scan(treeUri) }
+                appPreferences.addLocalMusicTreeUri(treeUri.toString())
+                scanAllFolders()
+            }
+        }
+
+        /** Removes a folder (the screen releases its permission); its songs disappear on the rescan. */
+        fun removeLocalFolder(uri: String) {
+            viewModelScope.launch {
+                appPreferences.removeLocalMusicTreeUri(uri)
+                scanAllFolders()
             }
         }
 
         fun rescanLocalMusic() {
-            viewModelScope.launch {
-                val uri = appPreferences.localMusicTreeUri.first() ?: return@launch
-                runCatching { localMusicScanner?.scan(Uri.parse(uri)) }
-            }
+            viewModelScope.launch { scanAllFolders() }
+        }
+
+        private suspend fun scanAllFolders() {
+            val folders = appPreferences.localMusicTreeUris.first().map(Uri::parse)
+            runCatching { localMusicScanner?.scan(folders) }
         }
 
         val uiState: StateFlow<SettingsUiState> =

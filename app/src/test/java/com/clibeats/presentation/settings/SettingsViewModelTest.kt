@@ -46,7 +46,7 @@ class SettingsViewModelTest {
         whenever(appPreferences.highQualityStreaming).thenReturn(flowOf(true))
         whenever(appPreferences.authToken).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
-        whenever(appPreferences.localMusicTreeUri).thenReturn(flowOf(null))
+        whenever(appPreferences.localMusicTreeUris).thenReturn(flowOf(emptyList()))
         whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
         whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
         whenever(providerRegistry.providers).thenReturn(emptyList())

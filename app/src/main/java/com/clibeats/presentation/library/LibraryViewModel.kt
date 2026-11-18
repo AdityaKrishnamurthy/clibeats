@@ -37,8 +37,8 @@ class LibraryViewModel
         val mode: StateFlow<LibraryMode> = _mode.asStateFlow()
 
         val localFolderChosen: StateFlow<Boolean> =
-            (appPreferences?.localMusicTreeUri ?: flowOf(null))
-                .map { !it.isNullOrBlank() }
+            (appPreferences?.localMusicTreeUris ?: flowOf(emptyList()))
+                .map { it.isNotEmpty() }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
 
         @OptIn(ExperimentalCoroutinesApi::class)

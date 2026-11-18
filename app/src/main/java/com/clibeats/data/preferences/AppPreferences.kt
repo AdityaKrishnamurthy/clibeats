@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,7 +40,8 @@ class AppPreferences
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val ARTWORK_CACHE_MB = intPreferencesKey("artwork_cache_mb")
             val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
-            val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri")
+            val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri") // legacy single folder
+            val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
         }
 
         private object SecureKeys {
@@ -80,9 +82,13 @@ class AppPreferences
         val autoQueueRelated: Flow<Boolean> =
             dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: true }
 
-        /** SAF tree URI of the folder scanned for local music (null = not chosen). */
-        val localMusicTreeUri: Flow<String?> =
-            dataStore.data.map { prefs -> prefs[Keys.LOCAL_MUSIC_TREE_URI] }
+        /** SAF tree URIs of all folders scanned for local music (includes the legacy single folder). */
+        val localMusicTreeUris: Flow<List<String>> =
+            dataStore.data.map { prefs ->
+                (prefs[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() + listOfNotNull(prefs[Keys.LOCAL_MUSIC_TREE_URI]))
+                    .distinct()
+                    .sorted()
+            }
 
         val lastQueueIndex: Flow<Int> =
             dataStore.data.map { prefs ->
@@ -141,8 +147,15 @@ class AppPreferences
             dataStore.edit { it[Keys.AUTO_QUEUE_RELATED] = enabled }
         }
 
-        suspend fun setLocalMusicTreeUri(uri: String) {
-            dataStore.edit { it[Keys.LOCAL_MUSIC_TREE_URI] = uri }
+        suspend fun addLocalMusicTreeUri(uri: String) {
+            dataStore.edit { it[Keys.LOCAL_MUSIC_TREE_URIS] = it[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() + uri }
+        }
+
+        suspend fun removeLocalMusicTreeUri(uri: String) {
+            dataStore.edit {
+                it[Keys.LOCAL_MUSIC_TREE_URIS] = it[Keys.LOCAL_MUSIC_TREE_URIS].orEmpty() - uri
+                if (it[Keys.LOCAL_MUSIC_TREE_URI] == uri) it.remove(Keys.LOCAL_MUSIC_TREE_URI)
+            }
         }
 
         suspend fun setHighQualityStreaming(enabled: Boolean) {

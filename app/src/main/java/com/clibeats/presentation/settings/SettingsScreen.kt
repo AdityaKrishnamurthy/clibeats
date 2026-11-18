@@ -74,7 +74,7 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val exchangeMessage by viewModel.exchangeMessage.collectAsState()
     val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
-    val localFolder by viewModel.localMusicFolder.collectAsState()
+    val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
     val accent = LocalAccentColor.current
     val context = LocalContext.current
@@ -146,11 +146,41 @@ fun SettingsScreen(
         // ── Section: Local Music ────────────────────────────────────────────
         TuiBlock(title = "Local Music", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "FOLDER : ${localFolder?.let(::folderLabel) ?: "not chosen"}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                if (localFolders.isEmpty()) {
+                    Text(
+                        text = "FOLDERS : none chosen",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                localFolders.forEach { folder ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "▸ ${folderLabel(folder)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "[ x ]",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier =
+                                Modifier
+                                    .semantics { contentDescription = "Remove folder ${folderLabel(folder)}" }
+                                    .clickable(role = Role.Button) {
+                                        runCatching {
+                                            context.contentResolver.releasePersistableUriPermission(
+                                                Uri.parse(folder),
+                                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                                            )
+                                        }
+                                        viewModel.removeLocalFolder(folder)
+                                    }.padding(8.dp),
+                        )
+                    }
+                }
                 Text(
                     text =
                         when (val status = scanStatus) {
@@ -173,11 +203,11 @@ fun SettingsScreen(
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
                     ) {
-                        Text("CHOOSE FOLDER")
+                        Text("+ ADD FOLDER")
                     }
                     Button(
                         onClick = viewModel::rescanLocalMusic,
-                        enabled = localFolder != null && scanStatus !is ScanStatus.Scanning,
+                        enabled = localFolders.isNotEmpty() && scanStatus !is ScanStatus.Scanning,
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = accent),
                     ) {

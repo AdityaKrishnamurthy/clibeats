@@ -13,6 +13,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,8 +35,8 @@ class OnboardingViewModel
         fun onFolderPicked(uri: Uri) {
             _folderName.value = uri.lastPathSegment?.substringAfterLast(':')?.ifBlank { null } ?: "Selected folder"
             viewModelScope.launch {
-                appPreferences.setLocalMusicTreeUri(uri.toString())
-                runCatching { localMusicScanner.scan(uri) }
+                appPreferences.addLocalMusicTreeUri(uri.toString())
+                runCatching { localMusicScanner.scan(appPreferences.localMusicTreeUris.first().map(Uri::parse)) }
             }
         }
 
