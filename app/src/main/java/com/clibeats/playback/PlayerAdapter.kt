@@ -1,5 +1,5 @@
 // ForbiddenImport: playback engine implementation imports are legitimate
-@file:Suppress("ForbiddenImport", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "ReturnCount", "MagicNumber")
 
 package com.clibeats.playback
 
@@ -27,6 +27,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Singleton
 class PlayerAdapter
     @Inject
@@ -104,6 +105,10 @@ class PlayerAdapter
                     override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                         DiagnosticLogger.logError("player", "MEDIA_ERROR", error.message ?: "ExoPlayer error")
                         if (retryAfterStreamError(error)) return
+                        updateState()
+                    }
+
+                    override fun onTracksChanged(tracks: androidx.media3.common.Tracks) {
                         updateState()
                     }
 
@@ -282,10 +287,40 @@ class PlayerAdapter
             updateState()
         }
 
+        // Local files often carry no bitrate in the container; derive it from file size / duration once.
+        private val localBitrateKbps = mutableMapOf<String, Int>()
+
+        private fun estimateLocalBitrate(track: Track) {
+            val uri = track.streamUrl?.takeIf { track.providerId == "local" } ?: return
+            val durationMs = player.duration.takeIf { it > 0 } ?: return
+            if (localBitrateKbps.containsKey(track.id)) return
+            localBitrateKbps[track.id] = 0
+            scope.launch {
+                val bytes =
+                    kotlinx.coroutines.withContext(Dispatchers.IO) {
+                        runCatching {
+                            context.contentResolver
+                                .openAssetFileDescriptor(android.net.Uri.parse(uri), "r")
+                                ?.use { it.length }
+                        }.getOrNull()
+                    } ?: return@launch
+                if (bytes > 0) {
+                    localBitrateKbps[track.id] = (bytes * BITS_PER_BYTE / durationMs).toInt()
+                    updateState()
+                }
+            }
+        }
+
         private fun updateState() {
             _queueFlow.value = trackList.toList()
             val currentIndex = player.currentMediaItemIndex
             val currentTrack = if (currentIndex in trackList.indices) trackList[currentIndex] else null
+            val format = runCatching { player.audioFormat }.getOrNull()
+            val formatBitrate =
+                format?.let { f ->
+                    listOf(f.averageBitrate, f.bitrate, f.peakBitrate).firstOrNull { it > 0 }?.div(BITS_PER_KBIT)
+                }
+            if (format != null && formatBitrate == null && currentTrack != null) estimateLocalBitrate(currentTrack)
             val mappedRepeatMode =
                 when (player.repeatMode) {
                     Player.REPEAT_MODE_ONE -> RepeatMode.ONE
@@ -301,6 +336,11 @@ class PlayerAdapter
                     bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
                     repeatMode = mappedRepeatMode,
                     shuffleEnabled = player.shuffleModeEnabled,
+                    codec = format?.sampleMimeType?.let(::codecLabel),
+                    bitrateKbps = formatBitrate ?: currentTrack?.let { localBitrateKbps[it.id] },
+                    sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
+                    bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
+                    durationMs = player.duration.takeIf { it > 0 } ?: (currentTrack?.durationMs ?: 0L),
                 )
         }
 
@@ -354,5 +394,28 @@ class PlayerAdapter
 
         companion object {
             private const val POLL_INTERVAL_MS = 500L
+            private const val BITS_PER_BYTE = 8L
+            private const val BITS_PER_KBIT = 1000
+
+            fun codecLabel(mime: String): String =
+                when (mime) {
+                    androidx.media3.common.MimeTypes.AUDIO_FLAC -> "FLAC"
+                    androidx.media3.common.MimeTypes.AUDIO_MPEG -> "MP3"
+                    androidx.media3.common.MimeTypes.AUDIO_OPUS -> "OPUS"
+                    androidx.media3.common.MimeTypes.AUDIO_AAC -> "AAC"
+                    androidx.media3.common.MimeTypes.AUDIO_RAW, androidx.media3.common.MimeTypes.AUDIO_WAV -> "WAV"
+                    androidx.media3.common.MimeTypes.AUDIO_VORBIS -> "VORBIS"
+                    androidx.media3.common.MimeTypes.AUDIO_ALAC -> "ALAC"
+                    else -> mime.substringAfter('/').uppercase()
+                }
+
+            fun bitDepthOf(pcmEncoding: Int): Int? =
+                when (pcmEncoding) {
+                    androidx.media3.common.C.ENCODING_PCM_16BIT -> 16
+                    androidx.media3.common.C.ENCODING_PCM_24BIT -> 24
+                    androidx.media3.common.C.ENCODING_PCM_32BIT, androidx.media3.common.C.ENCODING_PCM_FLOAT -> 32
+                    androidx.media3.common.C.ENCODING_PCM_8BIT -> 8
+                    else -> null
+                }
         }
     }
