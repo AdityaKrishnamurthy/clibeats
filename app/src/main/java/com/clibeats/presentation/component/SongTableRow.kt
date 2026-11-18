@@ -5,8 +5,9 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -53,6 +54,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
  * Per UI-SPEC: 48dp height, 32x32dp square artwork, start-aligned text.
  */
 @Suppress("FunctionNaming", "LongMethod", "LongParameterList")
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SongTableRow(
     trackTitle: String,
@@ -65,6 +67,7 @@ fun SongTableRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     onSwipeRight: (() -> Unit)? = null,
+    onLongPress: (() -> Unit)? = null,
 ) {
     val semanticsDescription = "$trackTitle by $artist"
     val rowBackground = when {
@@ -106,7 +109,12 @@ fun SongTableRow(
                 .height(48.dp)
                 .background(rowBackground)
                 .semantics { contentDescription = semanticsDescription }
-                .clickable { onClick() },
+                .combinedClickable(
+                    onClickLabel = "Play",
+                    onLongClickLabel = if (onLongPress != null) "Add to playlist" else null,
+                    onLongClick = onLongPress,
+                    onClick = onClick,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             // ── Now-playing left accent bar (2dp) ─────────────────────────

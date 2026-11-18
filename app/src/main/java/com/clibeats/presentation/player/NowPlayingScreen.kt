@@ -2,9 +2,12 @@
 
 package com.clibeats.presentation.player
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,12 +26,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Bedtime
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.RepeatOne
+import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.AlertDialog
@@ -45,23 +50,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.ColorPainter
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
+import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import kotlinx.coroutines.launch
 
 /** Full-screen player opened from the bottom PlayerBar. Collects state itself (ticks stay local). */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
@@ -74,7 +90,44 @@ fun NowPlayingScreen(
     val state by viewModel.playbackState.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
+    val isLiked by viewModel.isCurrentLiked.collectAsState()
     val track = state.currentTrack
+
+    // Drag down on the artwork/header to collapse: follows the finger, snaps back if not far/fast enough.
+    val dragOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val dismissPx = with(LocalDensity.current) { DISMISS_DRAG_DP.dp.toPx() }
+    val dragToDismiss =
+        Modifier.pointerInput(Unit) {
+            val tracker = VelocityTracker()
+            var total = 0f
+            detectVerticalDragGestures(
+                onDragStart = {
+                    tracker.resetTracking()
+                    total = 0f
+                },
+                onDragEnd = {
+                    val velocity = tracker.calculateVelocity().y
+                    if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
+                        onClose()
+                    } else {
+                        scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
+                    }
+                },
+                onDragCancel = { scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) } },
+                onVerticalDrag = { change, dy ->
+                    change.consume()
+                    total += dy
+                    // Track our own cumulative offset: local positions shift as the screen translates.
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, total))
+                    scope.launch { dragOffset.snapTo((dragOffset.value + dy).coerceAtLeast(0f)) }
+                },
+            )
+        }
+    val closeAction =
+        Modifier.semantics {
+            customActions = listOf(CustomAccessibilityAction("Close player") { onClose().let { true } })
+        }
     var showSleepDialog by remember { mutableStateOf(false) }
     var showPlaylistDialog by remember { mutableStateOf(false) }
 
@@ -82,6 +135,7 @@ fun NowPlayingScreen(
         modifier =
             Modifier
                 .fillMaxSize()
+                .graphicsLayer { translationY = dragOffset.value }
                 .background(CliBeatsBackground)
                 .clickable(enabled = false) {} // swallow taps so the screen below doesn't receive them
                 .safeDrawingPadding()
@@ -89,26 +143,34 @@ fun NowPlayingScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // ── Header ──
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Outlined.KeyboardArrowDown, contentDescription = "Close player", tint = CliBeatsTextPrimary)
-            }
+        Column(
+            modifier = Modifier.fillMaxWidth().then(dragToDismiss).then(closeAction).padding(vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            // Grab handle hints that the screen can be dragged down.
+            Box(
+                Modifier
+                    .size(width = 36.dp, height = 4.dp)
+                    .background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = "> now_playing",
                 style = MaterialTheme.typography.labelMedium,
                 color = CliBeatsAccent,
-                modifier = Modifier.weight(1f),
-                textAlign = TextAlign.Center,
             )
-            Spacer(Modifier.size(48.dp))
         }
 
         Spacer(Modifier.height(12.dp))
 
         // ── Artwork ──
         val placeholder = ColorPainter(MaterialTheme.colorScheme.surfaceVariant)
+        // High-res cover; if the large variant doesn't exist (e.g. ytimg maxres), fall back to 480px.
+        var artFallback by remember(track?.artworkUrl) { mutableStateOf(false) }
+        val artSize = if (artFallback) FALLBACK_ART_PX else LARGE_ART_PX
         AsyncImage(
-            model = track?.artworkUrl,
+            model = artworkUrlFor(track?.artworkUrl, artSize),
+            onError = { if (!artFallback) artFallback = true },
             contentDescription = track?.let { "Artwork for ${it.title}" },
             contentScale = ContentScale.Crop,
             placeholder = placeholder,
@@ -120,7 +182,9 @@ fun NowPlayingScreen(
                     .fillMaxWidth()
                     .aspectRatio(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp)),
+                    .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
+                    .then(dragToDismiss)
+                    .then(closeAction),
         )
 
         Spacer(Modifier.height(20.dp))
@@ -158,7 +222,7 @@ fun NowPlayingScreen(
 
         Spacer(Modifier.height(8.dp))
 
-        // ── Transport controls (no shuffle by design) ──
+        // ── Transport controls: repeat · prev · play/pause · next · shuffle ──
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -198,13 +262,18 @@ fun NowPlayingScreen(
             IconButton(onClick = viewModel::onSkipNextClick, modifier = Modifier.size(56.dp)) {
                 Icon(Icons.Outlined.SkipNext, "Next", tint = CliBeatsTextPrimary, modifier = Modifier.size(32.dp))
             }
-            // Balance the row so play/pause stays centred.
-            Spacer(Modifier.size(48.dp))
+            IconButton(onClick = viewModel::onShuffleClick) {
+                Icon(
+                    Icons.Outlined.Shuffle,
+                    contentDescription = if (state.shuffleEnabled) "Shuffle: on" else "Shuffle: off",
+                    tint = if (state.shuffleEnabled) CliBeatsAccent else CliBeatsTextSecondary,
+                )
+            }
         }
 
         Spacer(Modifier.height(16.dp))
 
-        // ── Bottom actions: sleep timer · queue · add to playlist ──
+        // ── Bottom actions: sleep timer · queue · add to playlist · favourite ──
         Row(
             modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
@@ -234,6 +303,13 @@ fun NowPlayingScreen(
             }
             IconButton(onClick = { showPlaylistDialog = true }, enabled = track != null) {
                 Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, "Add to playlist", tint = CliBeatsTextSecondary)
+            }
+            IconButton(onClick = viewModel::toggleLike, enabled = track != null) {
+                Icon(
+                    imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = if (isLiked) "Remove from Favorites" else "Add to Favorites",
+                    tint = if (isLiked) CliBeatsAccent else CliBeatsTextSecondary,
+                )
             }
         }
     }
@@ -361,6 +437,12 @@ private fun providerLabel(id: String): String =
         "internet_archive" -> "Internet Archive"
         else -> id.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
+
+private const val DISMISS_DRAG_DP = 120
+private const val DISMISS_VELOCITY_PX_S = 1_500f
+private const val SNAP_BACK_MS = 200
+private const val LARGE_ART_PX = 1080
+private const val FALLBACK_ART_PX = 480
 
 private val SLEEP_OPTIONS =
     listOf("Off" to 0, "15 min" to 15, "30 min" to 30, "45 min" to 45, "60 min" to 60, "End of track" to null)

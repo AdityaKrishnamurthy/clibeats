@@ -6,6 +6,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -39,8 +41,24 @@ class PlayerViewModel
     constructor(
         private val playbackRepository: PlaybackRepository,
         private val playlistRepository: PlaylistRepository? = null,
+        private val libraryRepository: LibraryRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+
+        /** Whether the current track is in Favorites (liked songs). */
+        @Suppress("OPT_IN_USAGE")
+        val isCurrentLiked: StateFlow<Boolean> =
+            playbackState
+                .map { it.currentTrack?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == null || libraryRepository == null) flowOf(false) else libraryRepository.isLiked(id)
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
+
+        /** Short-lived feedback ("REPEAT: ONE", "SHUFFLE: ON"); null when hidden. */
+        private val _toast = MutableStateFlow<String?>(null)
+        val toast: StateFlow<String?> = _toast.asStateFlow()
+        private var toastJob: Job? = null
 
         val playlists: StateFlow<List<Playlist>> =
             (playlistRepository?.getAllPlaylistsAsFlow() ?: flowOf(emptyList()))
@@ -87,6 +105,29 @@ class PlayerViewModel
                     RepeatMode.ONE -> RepeatMode.OFF
                 }
             playbackRepository.setRepeatMode(next)
+            showToast("REPEAT: ${next.name}")
+        }
+
+        fun onShuffleClick() {
+            val enabling = !playbackState.value.shuffleEnabled
+            playbackRepository.toggleShuffle()
+            showToast(if (enabling) "SHUFFLE: ON" else "SHUFFLE: OFF")
+        }
+
+        fun toggleLike() {
+            val track = playbackState.value.currentTrack ?: return
+            viewModelScope.launch { runCatching { libraryRepository?.toggleLike(track) } }
+        }
+
+        private fun showToast(message: String) {
+            // Replace any visible toast instantly; hide after TOAST_MS.
+            toastJob?.cancel()
+            _toast.value = message
+            toastJob =
+                viewModelScope.launch {
+                    delay(TOAST_MS)
+                    _toast.value = null
+                }
         }
 
         fun seekTo(positionMs: Long) {
@@ -133,5 +174,6 @@ class PlayerViewModel
 
         private companion object {
             const val MINUTE_MS = 60_000L
+            const val TOAST_MS = 1_500L
         }
     }

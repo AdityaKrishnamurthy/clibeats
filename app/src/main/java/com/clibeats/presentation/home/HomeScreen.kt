@@ -28,11 +28,16 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
@@ -61,6 +66,10 @@ fun HomeScreen(
     val providerName by homeViewModel.activeProviderName.collectAsState()
     val activeProviderId by homeViewModel.activeProviderId.collectAsState()
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
+    addToPlaylistTrack?.let { track ->
+        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+    }
 
     LazyColumn(
         modifier =
@@ -145,6 +154,7 @@ fun HomeScreen(
                     artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                     onClick = { homeViewModel.playFromList(recentlyPlayed, index) },
                     onSwipeRight = { homeViewModel.addToQueue(track) },
+                    onLongPress = { addToPlaylistTrack = track },
                 )
             }
             item { Spacer(modifier = Modifier.height(12.dp)) }
@@ -205,6 +215,7 @@ fun HomeScreen(
                                 },
                             onClick = { homeViewModel.playFromList(state.tracks, index) },
                             onSwipeRight = { homeViewModel.addToQueue(track) },
+                            onLongPress = { addToPlaylistTrack = track },
                         )
                     }
                 }

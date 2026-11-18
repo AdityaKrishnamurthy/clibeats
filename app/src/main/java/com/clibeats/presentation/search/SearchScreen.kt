@@ -7,13 +7,11 @@
 package com.clibeats.presentation.search
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,13 +25,11 @@ import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.PlaylistPlay
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -48,8 +44,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
@@ -66,7 +62,6 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
-    val playlists by viewModel.playlists.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     val focusManager = LocalFocusManager.current
@@ -135,47 +130,8 @@ fun SearchScreen(viewModel: SearchViewModel = hiltViewModel()) {
     }
 
     playlistPickerTrack?.let { track ->
-        AddToPlaylistDialog(
-            playlists = playlists,
-            onPick = { playlist ->
-                viewModel.onAddToPlaylist(track, playlist.id)
-                playlistPickerTrack = null
-            },
-            onDismiss = { playlistPickerTrack = null },
-        )
+        AddToPlaylistDialog(track = track, onDismiss = { playlistPickerTrack = null })
     }
-}
-
-@Suppress("FunctionNaming")
-@Composable
-private fun AddToPlaylistDialog(
-    playlists: List<Playlist>,
-    onPick: (Playlist) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("> add --to-playlist") },
-        text = {
-            if (playlists.isEmpty()) {
-                Text("No playlists yet. Create one in the Playlists tab.", color = CliBeatsTextSecondary)
-            } else {
-                LazyColumn {
-                    items(playlists, key = { it.id }) { playlist ->
-                        Text(
-                            text = "[ ${playlist.name} ]",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onPick(playlist) }
-                                .padding(vertical = 10.dp),
-                        )
-                    }
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
 
 @Suppress("FunctionNaming")
@@ -276,6 +232,7 @@ private fun SearchResultsList(
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
+                onLongPress = { onAddToPlaylist(track) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(

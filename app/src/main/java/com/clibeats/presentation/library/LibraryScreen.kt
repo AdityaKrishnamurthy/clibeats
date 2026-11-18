@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -42,6 +43,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -61,6 +63,10 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
     val mode by viewModel.mode.collectAsState()
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
+    addToPlaylistTrack?.let { track ->
+        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+    }
     val tabs = listOf("Tracks", "Artists", "Albums")
 
     Column(
@@ -143,6 +149,7 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
                                         viewModel.onTrackClick(track, currentState.tracks, index)
                                     },
                                     onSwipeRight = viewModel::onSwipeAddToQueue,
+                                    onLongPress = { addToPlaylistTrack = it },
                                 )
                             1 -> ArtistsList(artists = currentState.artists)
                             2 -> AlbumsList(albums = currentState.albums)
@@ -160,6 +167,7 @@ private fun TracksList(
     tracks: List<Track>,
     onTrackClick: (Track, Int) -> Unit,
     onSwipeRight: (Track) -> Unit,
+    onLongPress: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -174,6 +182,7 @@ private fun TracksList(
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(track, index) },
                 onSwipeRight = { onSwipeRight(track) },
+                onLongPress = { onLongPress(track) },
             )
         }
     }
