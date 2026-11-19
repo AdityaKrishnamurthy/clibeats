@@ -286,6 +286,24 @@ class PlayerAdapter
             }
         }
 
+        /** Index of the playing item in the queue, or -1 when the queue is empty. */
+        fun currentIndex(): Int = if (trackList.isEmpty()) -1 else player.currentMediaItemIndex
+
+        /**
+         * Plays [track] by inserting it just before the current item, so the rest of the queue is kept
+         * and "next" returns to the song that was playing. Used by "previous" for songs from earlier queues.
+         */
+        fun playBeforeCurrent(track: Track) {
+            startPlaybackService()
+            val index = player.currentMediaItemIndex.coerceIn(0, trackList.size)
+            trackList.add(index, track)
+            player.addMediaItem(index, track.toMediaItem())
+            player.seekTo(index, 0L)
+            player.prepare()
+            player.play()
+            updateState()
+        }
+
         fun setRepeatMode(mode: RepeatMode) {
             player.repeatMode =
                 when (mode) {
@@ -471,7 +489,12 @@ class PlayerAdapter
                         .setAlbumTitle(album)
                         // High-res cover for the notification, lock screen and Bluetooth displays.
                         .setArtworkUri(artworkUrlFor(artworkUrl, ARTWORK_FULL_PX)?.let { android.net.Uri.parse(it) })
-                        .build(),
+                        // Original URL, so ArtworkBitmapLoader can fall back to smaller sizes of the same cover.
+                        .setExtras(
+                            android.os.Bundle().apply {
+                                putString(ArtworkBitmapLoader.ARTWORK_SOURCE_KEY, artworkUrl)
+                            },
+                        ).build(),
                 )
                 .build()
         }

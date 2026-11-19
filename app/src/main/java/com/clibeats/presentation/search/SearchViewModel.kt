@@ -28,6 +28,7 @@ import javax.inject.Inject
 
 private const val DEBOUNCE_MS = 300L
 private const val MIN_QUERY_LENGTH = 2
+private const val LOCAL_ID = "local"
 
 @HiltViewModel
 class SearchViewModel
@@ -47,8 +48,23 @@ class SearchViewModel
                 .map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
                 .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
 
+        /** Online provider to return to when switching back from Local. */
+        private var lastOnlineProviderId = ProviderRegistry.DEFAULT_PROVIDER_ID
+
         fun setActiveProvider(id: String) {
+            if (id != LOCAL_ID) lastOnlineProviderId = id
             viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Tapping the Search tab again: Online <-> Local (back to the online provider used last). */
+        fun toggleSource() {
+            val current = activeProviderId.value
+            if (current == LOCAL_ID) {
+                setActiveProvider(lastOnlineProviderId)
+            } else {
+                lastOnlineProviderId = current
+                setActiveProvider(LOCAL_ID)
+            }
         }
 
         /** Plays the tapped result with the rest of the results queued after it. */
@@ -57,6 +73,7 @@ class SearchViewModel
             index: Int,
         ) {
             viewModelScope.launch {
+                appPreferences.addRecentSearchTrack(tracks[index])
                 // "Auto-queue related" off: play only the tapped song, no suggestions after it.
                 if (appPreferences.autoQueueRelated.first()) {
                     playbackRepository.setQueue(tracks, index)
@@ -115,9 +132,26 @@ class SearchViewModel
 
         fun onAddToQueue(track: Track) {
             playbackRepository.addToQueue(track)
+            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
 
         fun onPlayNext(track: Track) {
             playbackRepository.playNext(track)
+            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
+
+        /** Songs picked from search results, shown while the search box is empty. */
+        val recentSearches: StateFlow<List<Track>> =
+            appPreferences.recentSearchTracks
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        fun clearRecentSearches() {
+            viewModelScope.launch { appPreferences.clearRecentSearchTracks() }
+        }
+
+        /** Plays a song from Recent searches (the rest of the list follows only with auto-queue on). */
+        fun onPlayRecent(
+            tracks: List<Track>,
+            index: Int,
+        ) = onPlay(tracks, index)
     }

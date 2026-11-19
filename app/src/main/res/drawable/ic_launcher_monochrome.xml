@@ -1,33 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- CLIBeats launcher icon (monochrome, for themed icons). Source: logo/clibeats-logo.svg -->
+<!-- CLIBeats launcher icon (monochrome). Generated from logo/clibeats-logo.svg geometry;
+     content fits inside the 66 dp safe zone so round, squircle and square masks never clip it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Terminal window frame -->
+    <!-- Terminal frame -->
     <path
-        android:fillColor="#00000000"
-        android:pathData="M24,24h60v60h-60z"
-        android:strokeWidth="3"
-        android:strokeColor="#FFFFFFFF" />
-    <!-- Title bar -->
-    <path
-        android:pathData="M24,34H84"
-        android:strokeWidth="2"
-        android:strokeColor="#FFFFFFFF" />
-    <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M28,28h3v3h-3zM34,28h3v3h-3z" />
+        android:pathData="M32.66,37.37H75.34A3.73,3.73 0,0 1 79.07,41.1V66.9A3.73,3.73 0,0 1 75.34,70.63H32.66A3.73,3.73 0,0 1 28.93,66.9V41.1A3.73,3.73 0,0 1 32.66,37.37Z"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.67" />
     <!-- Prompt chevron -->
     <path
-        android:pathData="M32,48L44,58L32,68"
-        android:strokeWidth="4"
-        android:strokeColor="#FFFFFFFF"
-        android:strokeLineCap="square"
-        android:strokeLineJoin="miter" />
-    <!-- Spectrum bars -->
+        android:pathData="M34.98,46.16L42.36,54.04L34.98,61.91"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.67"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <!-- Cursor and spectrum bars -->
     <path
-        android:fillColor="#FFFFFFFF"
-        android:pathData="M50,60h5v14h-5zM58,44h5v30h-5zM66,52h5v22h-5zM74,40h5v34h-5z" />
+        android:fillColor="#FFFFFF"
+        android:pathData="M43.28,60.5H50.94A0.42,0.42 0,0 1 51.36,60.93V62.75A0.42,0.42 0,0 1 50.94,63.18H43.28A0.42,0.42 0,0 1 42.86,62.75V60.93A0.42,0.42 0,0 1 43.28,60.5ZM53.82,50.73H55.58A0.42,0.42 0,0 1 56,51.15V62.75A0.42,0.42 0,0 1 55.58,63.18H53.82A0.42,0.42 0,0 1 53.4,62.75V51.15A0.42,0.42 0,0 1 53.82,50.73ZM58.46,44.89H60.22A0.42,0.42 0,0 1 60.64,45.32V62.75A0.42,0.42 0,0 1 60.22,63.18H58.46A0.42,0.42 0,0 1 58.04,62.75V45.32A0.42,0.42 0,0 1 58.46,44.89ZM63.04,52.77H64.79A0.42,0.42 0,0 1 65.21,53.19V62.75A0.42,0.42 0,0 1 64.79,63.18H63.04A0.42,0.42 0,0 1 62.61,62.75V53.19A0.42,0.42 0,0 1 63.04,52.77ZM67.68,47.99H69.43A0.42,0.42 0,0 1 69.86,48.41V62.75A0.42,0.42 0,0 1 69.43,63.18H67.68A0.42,0.42 0,0 1 67.25,62.75V48.41A0.42,0.42 0,0 1 67.68,47.99ZM72.32,56.07H74.07A0.42,0.42 0,0 1 74.5,56.5V62.75A0.42,0.42 0,0 1 74.07,63.18H72.32A0.42,0.42 0,0 1 71.89,62.75V56.5A0.42,0.42 0,0 1 72.32,56.07Z" />
 </vector>

@@ -16,6 +16,9 @@ interface LikedSongDao {
         likedAt: Long = System.currentTimeMillis(),
     )
 
+    @Query("DELETE FROM liked_songs")
+    suspend fun deleteAll()
+
     @Query("DELETE FROM liked_songs WHERE song_id = :songId")
     suspend fun unlikeSong(songId: String)
 

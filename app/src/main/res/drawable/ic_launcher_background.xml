@@ -1,16 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- CLIBeats launcher icon (background). Source: logo/clibeats-logo.svg -->
+<!-- CLIBeats launcher icon (background). Generated from logo/clibeats-logo.svg geometry;
+     content fits inside the 66 dp safe zone so round, squircle and square masks never clip it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <path
-        android:fillColor="#0D0D0D"
+        android:fillColor="#0F0F0D"
         android:pathData="M0,0h108v108h-108z" />
-    <!-- Terminal grid -->
-    <path
-        android:pathData="M0,18H108M0,36H108M0,54H108M0,72H108M0,90H108M18,0V108M36,0V108M54,0V108M72,0V108M90,0V108"
-        android:strokeWidth="1"
-        android:strokeColor="#1A1A1A" />
 </vector>

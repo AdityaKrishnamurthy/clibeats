@@ -6,6 +6,7 @@ import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.provider.ProviderRegistry
+import com.clibeats.domain.repository.SongRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -52,7 +53,11 @@ class SettingsViewModelTest {
         whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
         whenever(providerRegistry.providers).thenReturn(emptyList())
 
-        viewModel = SettingsViewModel(appPreferences, cacheManager, providerRegistry, playlistExchangeManager)
+        val songRepository: SongRepository = mock()
+        whenever(songRepository.getLocalTrackCountAsFlow()).thenReturn(flowOf(0))
+
+        viewModel =
+            SettingsViewModel(appPreferences, cacheManager, providerRegistry, playlistExchangeManager, songRepository)
     }
 
     @After

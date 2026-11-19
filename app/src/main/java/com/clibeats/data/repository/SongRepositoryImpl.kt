@@ -33,11 +33,13 @@ class SongRepositoryImpl
 
         override fun getLocalTracksAsFlow(): Flow<List<Track>> = songDao.getLocalAsFlow().map { entities -> entities.map { it.toDomain() } }
 
+        override fun getLocalTrackCountAsFlow(): Flow<Int> = songDao.countLocalAsFlow()
+
         override fun searchLocalTracksAsFlow(query: String): Flow<List<Track>> =
             songDao.searchLocalAsFlow(query.escapeForLike()).map { entities -> entities.map { it.toDomain() } }
 
-        override fun getPlayedOnlineTracksAsFlow(): Flow<List<Track>> =
-            songDao.getPlayedOnlineAsFlow().map { entities -> entities.map { it.toDomain() } }
+        override fun getPlayedOnlineTracksAsFlow(sinceEpochMs: Long): Flow<List<Track>> =
+            songDao.getPlayedOnlineAsFlow(sinceEpochMs).map { entities -> entities.map { it.toDomain() } }
 
         override suspend fun getTrackById(id: String): Track? = songDao.getById(id)?.toDomain()
 

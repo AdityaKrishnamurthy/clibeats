@@ -48,8 +48,8 @@ object StreamUrlDeobfuscator {
         }
         val ordered =
             audio.sortedWith(
-                compareByDescending<JsonElement> { it.stringField("mimeType").contains("mp4") }
-                    .thenByDescending { it.stringField("bitrate").toIntOrNull() ?: 0 },
+                compareByDescending<JsonElement> { it.stringField("bitrate").toIntOrNull() ?: 0 }
+                    .thenByDescending { it.stringField("mimeType").contains("mp4") },
             )
         ordered.forEach { format ->
             deobfuscateStreamUrl(format, traceId)?.let { return it }

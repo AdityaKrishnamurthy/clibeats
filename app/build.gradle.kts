@@ -146,6 +146,7 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization.converter)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.palette.ktx)
     implementation(libs.newpipe.extractor)
     detektPlugins(libs.detekt.formatting)
     debugImplementation(libs.compose.ui.tooling)

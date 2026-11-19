@@ -46,7 +46,10 @@ class LibraryViewModel
             _mode
                 .flatMapLatest { mode ->
                     when (mode) {
-                        LibraryMode.ONLINE -> songRepository.getPlayedOnlineTracksAsFlow()
+                        LibraryMode.ONLINE ->
+                            (appPreferences?.libraryHistoryClearedAt ?: flowOf(0L)).flatMapLatest { since ->
+                                songRepository.getPlayedOnlineTracksAsFlow(since)
+                            }
                         LibraryMode.OFFLINE -> songRepository.getLocalTracksAsFlow()
                     }
                 }.map { tracks ->
@@ -75,6 +78,11 @@ class LibraryViewModel
                     initialValue = LibraryUiState.Loading,
                 )
 
+        /** Clears the Library's played list only; Home "Recently played" keeps its own. */
+        fun clearPlayedHistory() {
+            viewModelScope.launch { appPreferences?.setLibraryHistoryClearedAt(System.currentTimeMillis()) }
+        }
+
         fun setMode(mode: LibraryMode) {
             _mode.value = mode
         }
@@ -86,7 +94,7 @@ class LibraryViewModel
             index: Int,
         ) {
             viewModelScope.launch {
-                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: true
+                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: false
                 if (autoQueue) {
                     playbackRepository.setQueue(tracks, index)
                 } else {

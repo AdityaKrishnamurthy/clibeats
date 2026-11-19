@@ -13,16 +13,16 @@ Swipe left / right anywhere outside a song row to move between tabs.
 
 | Tab | What it does |
 |---|---|
-| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (with `[ CLEAR ]`), trending songs. |
-| **Search** | Search the active source. Double-tap the tab to jump straight into the search box. |
-| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device. Tracks / Artists / Albums. |
-| **Queue** | Reorder, remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
-| **Playlists** | ♥ Favorites, Most Played, your playlists, a **+** tile and local M3U playlists. Tap the tab again to go back to the grid. |
+| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. Tap the tab again to switch Online ↔ Local. |
+| **Search** | Search the active source. With the box empty it lists songs you picked from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
+| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
+| **Queue** | Hold a song (or drag its ≡ handle) and move it to reorder; remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
+| **Playlists** | ♥ Favorites, Most Played (✕ removes a song, `[ CLEAR ALL ]` asks first), your playlists, a **+** tile and local M3U playlists. Tap the tab again to go back to the grid. |
 | **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
 
 ## Song gestures
 
-- **Tap** — play (with "Auto-queue related songs" on, the rest of the list is queued after it).
+- **Tap** — play (with "Auto-queue related songs" on in Settings → Playback, the rest of the list is queued after it; off by default).
 - **Swipe right** — add to queue.
 - **Swipe left** — add to ♥ Favorites.
 - **Long-press** — add to a playlist (or create a new one).
@@ -30,8 +30,12 @@ Swipe left / right anywhere outside a song row to move between tabs.
 ## Player
 
 - **Mini player** — tap the song to open Now Playing.
-- **Now Playing** — seek bar, repeat (off → all → one), previous, play/pause, next, shuffle, sleep timer,
+- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. Drag across the waveform behind the controls to scrub: playback
+  keeps going, and dragging back near the current time snaps onto it. Repeat (off → all → one), previous, play/pause,
+  next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
+- **Previous** — always plays the song that played before, local or online, even from an earlier queue
+  (also from the notification and lock screen).
 - **Sleep timer** — 15 / 30 / 45 / 60 minutes or end of the current song (works with repeat-one too).
 - If a song can't be played, CLIBeats skips to the next one and shows a short notice above the player.
 

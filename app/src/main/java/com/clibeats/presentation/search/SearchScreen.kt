@@ -7,11 +7,14 @@
 package com.clibeats.presentation.search
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -66,7 +69,15 @@ fun SearchScreen(
     focusRequested: Boolean = false,
     onFocusHandled: () -> Unit = {},
     viewModel: SearchViewModel = hiltViewModel(),
+    toggleSourceRequested: Boolean = false,
+    onToggleSourceHandled: () -> Unit = {},
 ) {
+    LaunchedEffect(toggleSourceRequested) {
+        if (toggleSourceRequested) {
+            viewModel.toggleSource()
+            onToggleSourceHandled()
+        }
+    }
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     // Double-tapping the Search tab focuses the box and opens the keyboard (one-shot).
@@ -83,6 +94,7 @@ fun SearchScreen(
     val providerName by viewModel.activeProviderName.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
+    val recentSearches by viewModel.recentSearches.collectAsState()
     val focusManager = LocalFocusManager.current
 
     Column(
@@ -129,6 +141,22 @@ fun SearchScreen(
 
         // ── Results area block ───────────────────────────────────────────
         TuiBlock(title = "Search Results — $providerName", modifier = Modifier.weight(1f)) {
+            // Empty box: show the songs picked from earlier searches (or the hint when there are none).
+            if (query.isBlank()) {
+                if (recentSearches.isEmpty()) {
+                    SearchIdleState()
+                } else {
+                    RecentSearchesList(
+                        tracks = recentSearches,
+                        onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
+                        onClear = viewModel::clearRecentSearches,
+                        onAddToQueue = viewModel::onAddToQueue,
+                        onFavorite = favorites::add,
+                        onAddToPlaylist = { playlistPickerTrack = it },
+                    )
+                }
+                return@TuiBlock
+            }
             when (val currentState = state) {
                 is SearchUiState.Idle -> SearchIdleState()
                 is SearchUiState.Loading -> SearchLoadingState(providerName)
@@ -152,6 +180,48 @@ fun SearchScreen(
 
     playlistPickerTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { playlistPickerTrack = null })
+    }
+}
+
+@Suppress("FunctionNaming", "LongParameterList")
+@Composable
+private fun RecentSearchesList(
+    tracks: List<Track>,
+    onTrackClick: (Int) -> Unit,
+    onClear: () -> Unit,
+    onAddToQueue: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    onAddToPlaylist: (Track) -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    LazyColumn(modifier = Modifier.fillMaxSize()) {
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(text = "RECENT SEARCHES", style = MaterialTheme.typography.labelMedium, color = accent)
+                Text(
+                    text = "[ CLEAR ]",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsTextSecondary,
+                    modifier = Modifier.clickable(onClick = onClear).padding(8.dp),
+                )
+            }
+        }
+        itemsIndexed(items = tracks, key = { _, track -> "recent_${track.id}" }) { index, track ->
+            SongTableRow(
+                trackTitle = track.title,
+                artist = track.artist,
+                duration = formatDuration(track.durationMs),
+                artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                onClick = { onTrackClick(index) },
+                onSwipeRight = { onAddToQueue(track) },
+                onSwipeLeft = { onFavorite(track) },
+                onLongPress = { onAddToPlaylist(track) },
+            )
+        }
     }
 }
 

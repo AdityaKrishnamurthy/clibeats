@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.clibeats.domain.model.Track
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -37,6 +38,11 @@ class AppPreferences
             val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
             val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri") // legacy single folder
             val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
+            val HOME_RECENTS_CLEARED_AT = longPreferencesKey("home_recents_cleared_at")
+            val LIBRARY_HISTORY_CLEARED_AT = longPreferencesKey("library_history_cleared_at")
+            val RECENT_SEARCH_TRACKS = stringPreferencesKey("recent_search_tracks")
+            val MOST_PLAYED_CLEARED_AT = longPreferencesKey("most_played_cleared_at")
+            val MOST_PLAYED_SONG_RESETS = stringSetPreferencesKey("most_played_song_resets")
             val UPDATE_FREQUENCY = stringPreferencesKey("update_frequency")
             val UPDATE_LAST_CHECK_AT = longPreferencesKey("update_last_check_at")
             val UPDATE_ETAG = stringPreferencesKey("update_etag")
@@ -45,6 +51,65 @@ class AppPreferences
             val UPDATE_DOWNLOAD_ID = longPreferencesKey("update_download_id")
             val UPDATE_DOWNLOAD_VERSION = stringPreferencesKey("update_download_version")
             val UPDATE_DOWNLOAD_SHA256 = stringPreferencesKey("update_download_sha256")
+        }
+
+        /** Home "Recently played" only shows plays after this time ([ CLEAR ] on Home moves it). */
+        val homeRecentsClearedAt: Flow<Long> = dataStore.data.map { it[Keys.HOME_RECENTS_CLEARED_AT] ?: 0L }
+
+        /** Library Online only shows plays after this time ([ CLEAR ] in Library moves it). */
+        val libraryHistoryClearedAt: Flow<Long> = dataStore.data.map { it[Keys.LIBRARY_HISTORY_CLEARED_AT] ?: 0L }
+
+        suspend fun setHomeRecentsClearedAt(epochMs: Long) {
+            dataStore.edit { it[Keys.HOME_RECENTS_CLEARED_AT] = epochMs }
+        }
+
+        suspend fun setLibraryHistoryClearedAt(epochMs: Long) {
+            dataStore.edit { it[Keys.LIBRARY_HISTORY_CLEARED_AT] = epochMs }
+        }
+
+        /** Most Played counts only plays after this time ([ CLEAR ALL ] moves it). */
+        val mostPlayedClearedAt: Flow<Long> = dataStore.data.map { it[Keys.MOST_PLAYED_CLEARED_AT] ?: 0L }
+
+        /** Per-song reset times for songs removed from Most Played ("<epochMs>|<songId>"). */
+        val mostPlayedSongResets: Flow<Map<String, Long>> =
+            dataStore.data.map { prefs ->
+                prefs[Keys.MOST_PLAYED_SONG_RESETS].orEmpty().mapNotNull { entry ->
+                    val time = entry.substringBefore('|').toLongOrNull() ?: return@mapNotNull null
+                    entry.substringAfter('|') to time
+                }.toMap()
+            }
+
+        suspend fun clearMostPlayed(epochMs: Long) {
+            dataStore.edit {
+                it[Keys.MOST_PLAYED_CLEARED_AT] = epochMs
+                it.remove(Keys.MOST_PLAYED_SONG_RESETS) // older per-song resets no longer matter
+            }
+        }
+
+        suspend fun resetMostPlayedSong(
+            songId: String,
+            epochMs: Long,
+        ) {
+            dataStore.edit { prefs ->
+                val current = prefs[Keys.MOST_PLAYED_SONG_RESETS].orEmpty()
+                val others = current.filterNot { it.substringAfter('|') == songId }
+                prefs[Keys.MOST_PLAYED_SONG_RESETS] = others.toSet() + "$epochMs|$songId"
+            }
+        }
+
+        /** Songs picked from search results, most recent first (shown when the search box is empty). */
+        val recentSearchTracks: Flow<List<Track>> =
+            dataStore.data.map { prefs -> RecentSearches.decode(prefs[Keys.RECENT_SEARCH_TRACKS]) }
+
+        suspend fun addRecentSearchTrack(track: Track) {
+            dataStore.edit { prefs ->
+                val updated = RecentSearches.add(RecentSearches.decode(prefs[Keys.RECENT_SEARCH_TRACKS]), track)
+                prefs[Keys.RECENT_SEARCH_TRACKS] = RecentSearches.encode(updated)
+            }
+        }
+
+        suspend fun clearRecentSearchTracks() {
+            dataStore.edit { it.remove(Keys.RECENT_SEARCH_TRACKS) }
         }
 
         /** Everything the in-app updater persists, read in one go. */
@@ -155,9 +220,9 @@ class AppPreferences
             dataStore.edit { it[Keys.ONBOARDING_DONE] = true }
         }
 
-        /** When true, tapping a song in a list queues the rest of that list after it. */
+        /** When true, tapping a song in a list queues the rest of that list after it. Off by default. */
         val autoQueueRelated: Flow<Boolean> =
-            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: true }
+            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: false }
 
         /** SAF tree URIs of all folders scanned for local music (includes the legacy single folder). */
         val localMusicTreeUris: Flow<List<String>> =

@@ -8,6 +8,12 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,11 +64,14 @@ private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
+private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
 private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
 private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
+
+private fun trackCountLabel(count: Int): String = if (count == 1) "1 track in library" else "$count tracks in library"
 
 /** "primary:Music/FLAC" -> "Music/FLAC" for display. */
 private fun folderLabel(treeUri: String): String =
@@ -70,7 +79,6 @@ private fun folderLabel(treeUri: String): String =
         .getOrDefault(treeUri)
 
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
-@OptIn(ExperimentalLayoutApi::class) // FlowRow in the About credits
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -82,6 +90,7 @@ fun SettingsScreen(
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
     val shareFile by viewModel.shareFile.collectAsState()
+    val localTrackCount by viewModel.localTrackCount.collectAsState()
     val accent = LocalAccentColor.current
     val context = LocalContext.current
 
@@ -207,14 +216,14 @@ fun SettingsScreen(
                 Text(
                     text =
                         when (val status = scanStatus) {
-                            is ScanStatus.Idle -> LOCAL_HINT
+                            is ScanStatus.Idle, is ScanStatus.Done ->
+                                if (localFolders.isEmpty()) LOCAL_HINT else trackCountLabel(localTrackCount)
                             is ScanStatus.Scanning ->
                                 if (status.total == 0) {
                                     "Scanning..."
                                 } else {
                                     "Scanning ${status.processed}/${status.total}..."
                                 }
-                            is ScanStatus.Done -> "${status.trackCount} track(s) in library"
                             is ScanStatus.Failed -> "Scan failed: ${status.message}"
                         },
                     style = MaterialTheme.typography.labelSmall,
@@ -405,48 +414,25 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                FlowRow(verticalArrangement = Arrangement.Center) {
-                    Text(
-                        text = "Developed by: ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
-                    Text(
-                        text = "Omprakash Panda",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accent,
-                        textDecoration = TextDecoration.Underline,
-                        modifier =
-                            Modifier
-                                .semantics { contentDescription = "Omprakash Panda on GitHub" }
-                                .clickable(role = Role.Button) {
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
-                                    }
-                                }.padding(vertical = 4.dp),
-                    )
-                    Text(
-                        text = " & ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
-                    Text(
-                        text = "Aditya Krishnamurthy",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accent,
-                        textDecoration = TextDecoration.Underline,
-                        modifier =
-                            Modifier
-                                .semantics { contentDescription = "Aditya Krishnamurthy on GitHub" }
-                                .clickable(role = Role.Button) {
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ADITYA_GITHUB_URL)))
-                                    }
-                                }.padding(vertical = 4.dp),
-                    )
-                }
+                Text(
+                    text = "Developed by",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DeveloperLine(name = "Omprakash Panda", url = OMPRAKASH_GITHUB_URL)
+                DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "source: github.com/Omprakash-p06/clibeats · MIT",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .semantics { contentDescription = "Source code on GitHub" }
+                            .clickable(role = Role.Button) {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }
+                            }.padding(vertical = 4.dp),
+                )
             }
         }
     }
@@ -551,3 +537,52 @@ private fun AccentColorPicker(
         }
     }
 }
+
+/** One credit line, terminal style: `> Name`, linking to GitHub. The last line carries the prompt cursor. */
+@Suppress("FunctionNaming")
+@Composable
+private fun DeveloperLine(
+    name: String,
+    url: String,
+    cursor: Boolean = false,
+) {
+    val context = LocalContext.current
+    val accent = LocalAccentColor.current
+    val blink by rememberInfiniteTransition(label = "cursor").animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(CURSOR_BLINK_MS, easing = blinkEasing), RepeatMode.Restart),
+        label = "blink",
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .semantics { contentDescription = "$name on GitHub" }
+                .clickable(role = Role.Button) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                }.padding(vertical = 4.dp),
+    ) {
+        Text(
+            text = "> ",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = accent,
+            textDecoration = TextDecoration.Underline,
+            maxLines = 1,
+        )
+        if (cursor) {
+            Text(text = " ▌", style = MaterialTheme.typography.bodyMedium, color = accent.copy(alpha = blink))
+        }
+    }
+}
+
+private const val CURSOR_BLINK_MS = 1_100
+
+/** On for the first half of each cycle, off for the second, like a terminal cursor. */
+private val blinkEasing = Easing { fraction -> if (fraction < HALF_CYCLE) 0f else 1f }
+private const val HALF_CYCLE = 0.5f
