@@ -18,6 +18,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import com.clibeats.util.DiagnosticLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -166,6 +167,8 @@ class PoTokenGenerator
                     }, tokenTimeoutMs)
 
                     deferred.await()
+                } catch (e: CancellationException) {
+                    throw e // let a cancelled lookup cancel instead of reporting "no token"
                 } catch (e: Exception) {
                     DiagnosticLogger.logError(traceId, "PO_TOKEN_FAILED", e.message ?: "WebView error")
                     null

@@ -33,7 +33,7 @@ class NewPipeExtractorResolver
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
-        private val appPreferences: AppPreferences? = null,
+        private val appPreferences: AppPreferences,
     ) {
         private val isInitialized = AtomicBoolean(false)
 
@@ -93,13 +93,14 @@ class NewPipeExtractorResolver
                         return@withContext null
                     }
 
-                    val isHighQuality = appPreferences?.highQualityStreaming?.first() ?: true
-                    // Prefer highest bitrate when high-quality streaming is enabled; otherwise pick lower bitrate (data saver)
+                    val isHighQuality = appPreferences.highQualityStreaming.first()
+                    // High quality: highest bitrate. Data saver: lowest *known* bitrate (unknown is reported as <= 0).
+                    val known = audioStreams.filter { it.averageBitrate > 0 }.ifEmpty { audioStreams }
                     val selectedStream =
                         if (isHighQuality) {
-                            audioStreams.maxByOrNull { it.averageBitrate } ?: audioStreams.first()
+                            known.maxByOrNull { it.averageBitrate } ?: audioStreams.first()
                         } else {
-                            audioStreams.minByOrNull { it.averageBitrate } ?: audioStreams.first()
+                            known.minByOrNull { it.averageBitrate } ?: audioStreams.first()
                         }
                     val streamUrl = selectedStream.content
                     if (streamUrl.isBlank()) {
