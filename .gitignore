@@ -22,3 +22,10 @@
 app/build/
 .kotlin/
 *.jks
+
+# Local AI / planning tooling
+.gsd/
+.planning/
+.agents/
+AGENTS.md
+CLAUDE.md
