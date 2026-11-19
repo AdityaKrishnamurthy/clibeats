@@ -67,6 +67,7 @@ fun HomeScreen(
     val providerName by homeViewModel.activeProviderName.collectAsState()
     val activeProviderId by homeViewModel.activeProviderId.collectAsState()
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
+    val isOnline by homeViewModel.isOnline.collectAsState()
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -81,6 +82,8 @@ fun HomeScreen(
     ) {
         // 1. System Provider Status Block
         item {
+            val isLocal = activeProviderId == "local"
+            val isSystemOnline = isLocal || isOnline
             TuiBlock(title = "System Status", isActive = true) {
                 Column {
                     Row(
@@ -91,12 +94,12 @@ fun HomeScreen(
                         Text(
                             text = "● ACTIVE PROVIDER",
                             style = MaterialTheme.typography.labelMedium,
-                            color = CliBeatsAccent,
+                            color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            text = "[ ONLINE ]",
+                            text = if (isSystemOnline) "[ ONLINE ]" else "[ OFFLINE ]",
                             style = MaterialTheme.typography.labelSmall,
-                            color = CliBeatsAccent,
+                            color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )
                     }
                     Spacer(modifier = Modifier.height(4.dp))
