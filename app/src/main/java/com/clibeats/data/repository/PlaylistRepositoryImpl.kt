@@ -9,6 +9,7 @@ import com.clibeats.data.local.entity.PlaylistEntity
 import com.clibeats.data.local.entity.PlaylistSongCrossRef
 import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
+import com.clibeats.data.playlist.PlaylistCoverStore
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaylistRepository
@@ -26,6 +27,7 @@ class PlaylistRepositoryImpl
     @Inject
     constructor(
         private val playlistDao: PlaylistDao,
+        private val coverStore: PlaylistCoverStore,
         private val songDao: SongDao? = null,
     ) : PlaylistRepository {
         override fun getPlaylistCoversAsFlow(): Flow<Map<String, String?>> =
@@ -45,7 +47,10 @@ class PlaylistRepositoryImpl
             )
         }
 
-        override suspend fun deletePlaylist(id: String) = playlistDao.deleteById(id)
+        override suspend fun deletePlaylist(id: String) {
+            playlistDao.deleteById(id)
+            coverStore.deleteFor(id)
+        }
 
         override fun getSongsForPlaylistAsFlow(playlistId: String): Flow<List<Track>> =
             playlistDao.getSongsForPlaylistAsFlow(playlistId).map { list ->
@@ -127,6 +132,17 @@ class PlaylistRepositoryImpl
             artworkUrl: String?,
         ) {
             if (isReadOnly(playlistId)) return
+            // A URL or "reset" replaces any cover picked from the device.
+            coverStore.deleteFor(playlistId)
             playlistDao.updateArtworkUrl(playlistId, artworkUrl)
+        }
+
+        override suspend fun setPlaylistCoverImage(
+            playlistId: String,
+            imageUri: String,
+        ) {
+            if (isReadOnly(playlistId)) return
+            val stored = coverStore.save(playlistId, imageUri) ?: return
+            playlistDao.updateArtworkUrl(playlistId, stored)
         }
     }

@@ -64,7 +64,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -86,7 +85,6 @@ import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
-import java.io.File
 
 @Suppress("CyclomaticComplexMethod")
 @Composable
@@ -223,8 +221,11 @@ fun PlaylistScreen(
     coverChangePlaylist?.let { playlist ->
         ChangeCoverDialog(
             playlist = playlist,
-            currentCover = (state as? PlaylistUiState.Success)?.covers?.get(playlist.id),
             onDismiss = { coverChangePlaylist = null },
+            onPickImage = { uri ->
+                viewModel.setPlaylistCoverImage(playlist.id, uri.toString())
+                coverChangePlaylist = null
+            },
             onSave = { newUrl ->
                 viewModel.updatePlaylistArtwork(playlist.id, newUrl)
                 coverChangePlaylist = null
@@ -593,24 +594,15 @@ private fun CreatePlaylistDialog(
 @Composable
 private fun ChangeCoverDialog(
     playlist: Playlist,
-    currentCover: String?,
     onDismiss: () -> Unit,
+    onPickImage: (Uri) -> Unit,
     onSave: (String?) -> Unit,
 ) {
-    val context = LocalContext.current
     var urlText by remember { mutableStateOf("") }
+    // The copy into app storage happens off the main thread in the repository.
     val pickImageLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
-            if (uri != null) {
-                runCatching {
-                    val dir = File(context.filesDir, "covers").also { it.mkdirs() }
-                    val file = File(dir, "playlist_${playlist.id}.jpg")
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        file.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    onSave(file.toURI().toString())
-                }
-            }
+            if (uri != null) onPickImage(uri)
         }
 
     AlertDialog(
@@ -638,7 +630,8 @@ private fun ChangeCoverDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                if (!currentCover.isNullOrBlank()) {
+                // Only a custom cover can be reset; otherwise the first song's art is already shown.
+                if (!playlist.artworkUrl.isNullOrBlank()) {
                     TextButton(
                         onClick = { onSave(null) },
                         modifier = Modifier.fillMaxWidth(),

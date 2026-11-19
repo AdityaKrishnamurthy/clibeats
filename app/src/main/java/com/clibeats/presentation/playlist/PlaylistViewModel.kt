@@ -181,6 +181,16 @@ class PlaylistViewModel
             }
         }
 
+        /** Copies an image picked on the device into app storage and uses it as the cover. */
+        fun setPlaylistCoverImage(
+            playlistId: String,
+            imageUri: String,
+        ) {
+            viewModelScope.launch {
+                playlistRepository.setPlaylistCoverImage(playlistId, imageUri)
+            }
+        }
+
         private companion object {
             const val FAVORITES_ID = "__favorites__"
             const val MOST_PLAYED_ID = "__most_played__"

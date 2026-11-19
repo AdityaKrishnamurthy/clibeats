@@ -55,4 +55,10 @@ interface PlaylistRepository {
         playlistId: String,
         artworkUrl: String?,
     )
+
+    /** Uses an image picked on the device (a content URI) as the playlist cover. */
+    suspend fun setPlaylistCoverImage(
+        playlistId: String,
+        imageUri: String,
+    )
 }
