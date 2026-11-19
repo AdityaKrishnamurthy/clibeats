@@ -49,8 +49,6 @@ playback, the local library and the interface.
 - Update checks use the GitHub Releases API with ETags; downloads use Android's DownloadManager.
 - 215 unit tests, ktlint, detekt and Android Lint in CI.
 
-## Upgrading
+## Updates
 
-If any earlier CLIBeats build is installed (including v2.0.0), uninstall it once before installing v2.1.0.
-Export your playlists first (Settings → Playlist exchange) and import them afterwards. After that, future
-versions update from inside the app.
+From this version on, new releases update from inside the app (Settings → Updates).
