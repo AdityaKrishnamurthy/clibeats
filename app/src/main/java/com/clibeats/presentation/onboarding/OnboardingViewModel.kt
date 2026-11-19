@@ -44,7 +44,7 @@ class OnboardingViewModel
             viewModelScope.launch {
                 val file = manager.latestFile
                 if (!file.isFile) {
-                    _restoreMessage.value = "No backup found on this device"
+                    _restoreMessage.value = "! No backup found on this device"
                     _canRestore.value = false
                     return@launch
                 }
@@ -52,9 +52,9 @@ class OnboardingViewModel
                     exchange.import(Uri.fromFile(file)).fold(
                         onSuccess = { count ->
                             _canRestore.value = false
-                            "Restored $count track(s) from backup"
+                            "[ OK ] Restored $count track(s) from backup"
                         },
-                        onFailure = { error -> "Restore failed: ${error.message}" },
+                        onFailure = { error -> "! Restore failed: ${error.message}" },
                     )
             }
         }
