@@ -3,6 +3,7 @@
 package com.clibeats.util
 
 import android.util.Log
+import com.clibeats.BuildConfig
 
 object DiagnosticLogger {
     private const val TAG = "CliBeatsDiagnostic"
@@ -13,6 +14,7 @@ object DiagnosticLogger {
         level: Int,
         message: String,
     ) {
+        if (!BuildConfig.DEBUG && level != Log.ERROR) return
         runCatching {
             when (level) {
                 Log.ERROR -> Log.e(TAG, message)
