@@ -7,6 +7,7 @@
 package com.clibeats.presentation.queue
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,11 +18,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteSweep
-import androidx.compose.material.icons.outlined.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.KeyboardArrowUp
+import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -31,12 +32,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.search.formatDuration
+import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
@@ -96,64 +107,146 @@ fun QueueScreen(viewModel: QueueViewModel = hiltViewModel()) {
                 }
             }
 
-            is QueueUiState.Success -> {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    itemsIndexed(
-                        items = currentState.tracks,
-                        key = { index, track -> "${track.id}_$index" },
-                    ) { index, track ->
-                        SongTableRow(
-                            trackTitle = track.title,
-                            artist = track.artist,
-                            duration = formatDuration(track.durationMs),
-                            index = index + 1,
-                            isNowPlaying = track.id == currentState.currentTrackId,
-                            onClick = { viewModel.onTrackClick(track, index) },
-                            actions = {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (index > 0) {
-                                        IconButton(
-                                            onClick = { viewModel.onMove(index, index - 1) },
-                                            modifier = Modifier.size(28.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.KeyboardArrowUp,
-                                                contentDescription = "Move up",
-                                                tint = CliBeatsTextSecondary,
-                                                modifier = Modifier.size(18.dp),
+            is QueueUiState.Success -> ReorderableQueue(currentState, viewModel)
+        }
+    }
+}
+
+/**
+ * Queue list reordered by dragging a row's handle. The order changes locally while dragging and is
+ * committed to the player as a single move when the finger lifts, so playback isn't disturbed mid-drag.
+ */
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
+@Composable
+private fun ReorderableQueue(
+    state: QueueUiState.Success,
+    viewModel: QueueViewModel,
+) {
+    val tracks = state.tracks
+    // Stable keys that survive reordering; the same song can be queued more than once.
+    val keys =
+        remember(tracks) {
+            val seen = HashMap<String, Int>()
+            tracks.map { track ->
+                val n = seen.merge(track.id, 1, Int::plus) ?: 1
+                "${track.id}#$n"
+            }
+        }
+    var order by remember(tracks) { mutableStateOf(tracks.indices.toList()) }
+    var dragKey by remember { mutableStateOf<String?>(null) }
+    var dragFrom by remember { mutableIntStateOf(-1) }
+    var dragOffset by remember { mutableFloatStateOf(0f) }
+    val listState = rememberLazyListState()
+    val edge = with(LocalDensity.current) { AUTO_SCROLL_EDGE_DP.dp.toPx() }
+
+    fun endDrag(commit: Boolean) {
+        val to = order.indexOfFirst { keys[it] == dragKey }
+        val moved = dragFrom >= 0 && to >= 0 && to != dragFrom
+        if (commit && moved) {
+            viewModel.onMove(dragFrom, to)
+        } else {
+            order = tracks.indices.toList()
+        }
+        dragKey = null
+        dragFrom = -1
+        dragOffset = 0f
+    }
+
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        itemsIndexed(items = order, key = { _, i -> keys[i] }) { position, i ->
+            val track = tracks[i]
+            val key = keys[i]
+            val dragging = key == dragKey
+            Box(
+                modifier =
+                    if (dragging) {
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer {
+                                translationY = dragOffset
+                                shadowElevation = 8f
+                            }
+                    } else {
+                        Modifier.animateItem()
+                    },
+            ) {
+                SongTableRow(
+                    trackTitle = track.title,
+                    artist = track.artist,
+                    duration = formatDuration(track.durationMs),
+                    index = position + 1,
+                    isNowPlaying = track.id == state.currentTrackId,
+                    onClick = { if (dragKey == null) viewModel.onTrackClick(track, i) },
+                    actions = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.DragHandle,
+                                contentDescription = "Drag to reorder",
+                                tint = if (dragging) CliBeatsAccent else CliBeatsTextSecondary,
+                                modifier =
+                                    Modifier
+                                        .size(36.dp)
+                                        .pointerInput(key) {
+                                            detectDragGestures(
+                                                onDragStart = {
+                                                    dragKey = key
+                                                    dragFrom = order.indexOf(i)
+                                                    dragOffset = 0f
+                                                },
+                                                onDrag = { change, amount ->
+                                                    change.consume()
+                                                    dragOffset += amount.y
+                                                    val info = listState.layoutInfo
+                                                    val current =
+                                                        info.visibleItemsInfo.firstOrNull { it.key == key }
+                                                            ?: return@detectDragGestures
+                                                    // Keep scrolling while the row is held near the top or bottom.
+                                                    val top = current.offset + dragOffset
+                                                    val bottom = top + current.size
+                                                    val nearEnd =
+                                                        bottom > info.viewportEndOffset - edge && amount.y > 0
+                                                    val nearStart =
+                                                        top < info.viewportStartOffset + edge && amount.y < 0
+                                                    if (nearEnd || nearStart) {
+                                                        dragOffset += listState.dispatchRawDelta(amount.y)
+                                                    }
+                                                    val center = current.offset + dragOffset + current.size / 2f
+                                                    val target =
+                                                        info.visibleItemsInfo.firstOrNull {
+                                                            it.key != key && center >= it.offset &&
+                                                                center <= it.offset + it.size
+                                                        }
+                                                    if (target != null) {
+                                                        order =
+                                                            order.toMutableList().apply {
+                                                                add(target.index, removeAt(current.index))
+                                                            }
+                                                        dragOffset += current.offset - target.offset
+                                                    }
+                                                },
+                                                onDragEnd = { endDrag(commit = true) },
+                                                onDragCancel = { endDrag(commit = false) },
                                             )
-                                        }
-                                    }
-                                    if (index < currentState.tracks.lastIndex) {
-                                        IconButton(
-                                            onClick = { viewModel.onMove(index, index + 1) },
-                                            modifier = Modifier.size(28.dp),
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.KeyboardArrowDown,
-                                                contentDescription = "Move down",
-                                                tint = CliBeatsTextSecondary,
-                                                modifier = Modifier.size(18.dp),
-                                            )
-                                        }
-                                    }
-                                    IconButton(
-                                        onClick = { viewModel.onRemove(index) },
-                                        modifier = Modifier.size(28.dp),
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Close,
-                                            contentDescription = "Remove from queue",
-                                            tint = CliBeatsTextSecondary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                    }
-                }
+                                        }.padding(8.dp),
+                            )
+                            IconButton(
+                                onClick = { viewModel.onRemove(i) },
+                                enabled = dragKey == null,
+                                modifier = Modifier.size(28.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Close,
+                                    contentDescription = "Remove from queue",
+                                    tint = CliBeatsTextSecondary,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                    },
+                )
             }
         }
     }
 }
+
+private const val AUTO_SCROLL_EDGE_DP = 48
