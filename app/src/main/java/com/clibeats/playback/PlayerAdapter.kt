@@ -173,6 +173,7 @@ class PlayerAdapter
             startPlaybackService()
             trackList.clear()
             trackList.add(track)
+            syncQueue()
             val mediaItem = track.toMediaItem()
             player.setMediaItem(mediaItem)
             player.prepare()
@@ -187,6 +188,7 @@ class PlayerAdapter
             startPlaybackService()
             trackList.clear()
             trackList.addAll(tracks)
+            syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
             player.setMediaItems(mediaItems, startIndex, 0L)
             player.prepare()
@@ -197,6 +199,7 @@ class PlayerAdapter
         fun addToQueue(track: Track) {
             startPlaybackService()
             trackList.add(track)
+            syncQueue()
             val mediaItem = track.toMediaItem()
             player.addMediaItem(mediaItem)
             if (player.playbackState == Player.STATE_IDLE || player.mediaItemCount == 1) {
@@ -214,6 +217,7 @@ class PlayerAdapter
                     (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
                 }
             trackList.add(targetIndex, track)
+            syncQueue()
             player.addMediaItem(targetIndex, track.toMediaItem())
             if (player.playbackState == Player.STATE_IDLE || player.mediaItemCount == 1) {
                 player.prepare()
@@ -231,6 +235,7 @@ class PlayerAdapter
             if (tracks.isEmpty()) return
             trackList.clear()
             trackList.addAll(tracks)
+            syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
             val validIndex = startIndex.coerceIn(tracks.indices)
             player.setMediaItems(mediaItems, validIndex, positionMs.coerceAtLeast(0L))
@@ -241,11 +246,13 @@ class PlayerAdapter
                     RepeatMode.ALL -> Player.REPEAT_MODE_ALL
                 }
             player.shuffleModeEnabled = shuffleEnabled
-            player.prepare()
             updateState()
         }
 
         fun play() {
+            if (player.playbackState == Player.STATE_IDLE && player.mediaItemCount > 0) {
+                player.prepare()
+            }
             // Resuming a restored queue must also start the media service; otherwise there's no
             // notification / lock-screen card and Android may kill background playback.
             if (player.mediaItemCount > 0) startPlaybackService()
@@ -301,6 +308,7 @@ class PlayerAdapter
             if (fromIndex in trackList.indices && toIndex in trackList.indices && fromIndex != toIndex) {
                 val track = trackList.removeAt(fromIndex)
                 trackList.add(toIndex, track)
+                syncQueue()
                 player.moveMediaItem(fromIndex, toIndex)
                 updateState()
             }
@@ -309,6 +317,7 @@ class PlayerAdapter
         fun removeFromQueue(index: Int) {
             if (index in trackList.indices) {
                 trackList.removeAt(index)
+                syncQueue()
                 player.removeMediaItem(index)
                 updateState()
             }
@@ -327,7 +336,12 @@ class PlayerAdapter
                 trackList.clear()
                 trackList.add(keep)
             }
+            syncQueue()
             updateState()
+        }
+
+        private fun syncQueue() {
+            _queueFlow.value = trackList.toList()
         }
 
         // Local files often carry no bitrate in the container; derive it from file size / duration once.
@@ -355,7 +369,6 @@ class PlayerAdapter
         }
 
         private fun updateState() {
-            _queueFlow.value = trackList.toList()
             val currentIndex = player.currentMediaItemIndex
             val currentTrack = if (currentIndex in trackList.indices) trackList[currentIndex] else null
             val format = runCatching { player.audioFormat }.getOrNull()
