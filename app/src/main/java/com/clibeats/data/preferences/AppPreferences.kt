@@ -12,13 +12,14 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 // Indentation: detekt 1.23.6 misparses ktlint_official @Inject constructor() style (false positive).
-@Suppress("Indentation")
+@Suppress("Indentation", "TooManyFunctions")
 class AppPreferences
     @Inject
     constructor(
@@ -42,6 +43,92 @@ class AppPreferences
             val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
             val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri") // legacy single folder
             val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
+            val UPDATE_FREQUENCY = stringPreferencesKey("update_frequency")
+            val UPDATE_LAST_CHECK_AT = longPreferencesKey("update_last_check_at")
+            val UPDATE_ETAG = stringPreferencesKey("update_etag")
+            val UPDATE_CACHED_RELEASE = stringPreferencesKey("update_cached_release")
+            val UPDATE_SNOOZE_UNTIL = longPreferencesKey("update_snooze_until")
+            val UPDATE_DOWNLOAD_ID = longPreferencesKey("update_download_id")
+            val UPDATE_DOWNLOAD_VERSION = stringPreferencesKey("update_download_version")
+            val UPDATE_DOWNLOAD_SHA256 = stringPreferencesKey("update_download_sha256")
+        }
+
+        /** Everything the in-app updater persists, read in one go. */
+        data class UpdateRecord(
+            val frequency: String?,
+            val lastCheckAt: Long,
+            val etag: String?,
+            val cachedReleaseJson: String?,
+            val snoozeUntil: Long,
+            val downloadId: Long,
+            val downloadVersion: String?,
+            val downloadSha256: String?,
+        )
+
+        /** Stored name of the auto-check frequency (null = default). */
+        val updateFrequency: Flow<String?> = dataStore.data.map { it[Keys.UPDATE_FREQUENCY] }
+
+        suspend fun updateRecord(): UpdateRecord {
+            val prefs = dataStore.data.first()
+            return UpdateRecord(
+                frequency = prefs[Keys.UPDATE_FREQUENCY],
+                lastCheckAt = prefs[Keys.UPDATE_LAST_CHECK_AT] ?: 0L,
+                etag = prefs[Keys.UPDATE_ETAG],
+                cachedReleaseJson = prefs[Keys.UPDATE_CACHED_RELEASE],
+                snoozeUntil = prefs[Keys.UPDATE_SNOOZE_UNTIL] ?: 0L,
+                downloadId = prefs[Keys.UPDATE_DOWNLOAD_ID] ?: NO_DOWNLOAD,
+                downloadVersion = prefs[Keys.UPDATE_DOWNLOAD_VERSION],
+                downloadSha256 = prefs[Keys.UPDATE_DOWNLOAD_SHA256],
+            )
+        }
+
+        suspend fun setUpdateFrequency(name: String) {
+            dataStore.edit { it[Keys.UPDATE_FREQUENCY] = name }
+        }
+
+        /** Records a successful check; a null [releaseJson] means "no release" and clears the cache. */
+        suspend fun saveUpdateCheck(
+            checkedAt: Long,
+            etag: String?,
+            releaseJson: String?,
+        ) {
+            dataStore.edit { prefs ->
+                prefs[Keys.UPDATE_LAST_CHECK_AT] = checkedAt
+                if (etag != null) prefs[Keys.UPDATE_ETAG] = etag else prefs.remove(Keys.UPDATE_ETAG)
+                if (releaseJson != null) {
+                    prefs[Keys.UPDATE_CACHED_RELEASE] = releaseJson
+                } else {
+                    prefs.remove(Keys.UPDATE_CACHED_RELEASE)
+                }
+            }
+        }
+
+        suspend fun setUpdateLastCheckAt(checkedAt: Long) {
+            dataStore.edit { it[Keys.UPDATE_LAST_CHECK_AT] = checkedAt }
+        }
+
+        suspend fun setUpdateSnoozeUntil(until: Long) {
+            dataStore.edit { it[Keys.UPDATE_SNOOZE_UNTIL] = until }
+        }
+
+        suspend fun saveUpdateDownload(
+            id: Long,
+            version: String,
+            sha256: String,
+        ) {
+            dataStore.edit { prefs ->
+                prefs[Keys.UPDATE_DOWNLOAD_ID] = id
+                prefs[Keys.UPDATE_DOWNLOAD_VERSION] = version
+                prefs[Keys.UPDATE_DOWNLOAD_SHA256] = sha256
+            }
+        }
+
+        suspend fun clearUpdateDownload() {
+            dataStore.edit { prefs ->
+                prefs.remove(Keys.UPDATE_DOWNLOAD_ID)
+                prefs.remove(Keys.UPDATE_DOWNLOAD_VERSION)
+                prefs.remove(Keys.UPDATE_DOWNLOAD_SHA256)
+            }
         }
 
         private object SecureKeys {
@@ -196,3 +283,6 @@ class AppPreferences
     }
 
 private const val DEFAULT_ARTWORK_CACHE_MB = 128
+
+/** Stored download id meaning "no update download in progress or kept". */
+const val NO_DOWNLOAD = -1L
