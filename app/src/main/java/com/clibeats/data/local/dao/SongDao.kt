@@ -59,17 +59,19 @@ interface SongDao {
     )
     fun searchLocalAsFlow(query: String): Flow<List<SongEntity>>
 
-    /** Online songs the user actually played, most recent first. */
+    /** Online songs the user played after [sinceEpochMs] (Library "clear" moves it), most recent first. */
     @Query(
         """
         SELECT s.* FROM songs s
-        INNER JOIN (SELECT song_id, MAX(played_at) AS last_played FROM history GROUP BY song_id) h
-            ON s.id = h.song_id
+        INNER JOIN (
+            SELECT song_id, MAX(played_at) AS last_played FROM history
+            WHERE played_at > :sinceEpochMs GROUP BY song_id
+        ) h ON s.id = h.song_id
         WHERE s.provider_id != 'local'
         ORDER BY h.last_played DESC
         """,
     )
-    fun getPlayedOnlineAsFlow(): Flow<List<SongEntity>>
+    fun getPlayedOnlineAsFlow(sinceEpochMs: Long = 0L): Flow<List<SongEntity>>
 
     @Query("SELECT * FROM songs WHERE provider_id = 'local'")
     suspend fun getLocalSongs(): List<SongEntity>

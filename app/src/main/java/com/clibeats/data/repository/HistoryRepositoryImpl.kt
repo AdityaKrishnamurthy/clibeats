@@ -31,6 +31,14 @@ class HistoryRepositoryImpl
                 entities.map { it.toDomainTrack() }
             }
 
+        override fun getRecentlyPlayedTracksSince(
+            sinceEpochMs: Long,
+            limit: Int,
+        ): Flow<List<Track>> =
+            historyDao.getRecentlyPlayedTracksSinceAsFlow(sinceEpochMs, limit).map { entities ->
+                entities.map { it.toDomainTrack() }
+            }
+
         override suspend fun recordPlay(
             songId: String,
             providerId: String,

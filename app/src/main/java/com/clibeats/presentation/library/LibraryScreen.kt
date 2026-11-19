@@ -91,7 +91,21 @@ fun LibraryScreen(
             .padding(12.dp),
     ) {
         LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
-        Spacer(modifier = Modifier.height(8.dp))
+        // Online: clears only the Library's played list (Home "Recently played" has its own [ CLEAR ]).
+        if (mode == LibraryMode.ONLINE && state is LibraryUiState.Success) {
+            Text(
+                text = "[ CLEAR ]",
+                style = MaterialTheme.typography.labelMedium,
+                color = CliBeatsTextSecondary,
+                modifier =
+                    Modifier
+                        .align(Alignment.End)
+                        .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
+                        .padding(8.dp),
+            )
+        } else {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
 
         val trackCount = (state as? LibraryUiState.Success)?.tracks?.size ?: 0
         val modeLabel =

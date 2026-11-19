@@ -19,8 +19,8 @@ interface SongRepository {
 
     fun searchLocalTracksAsFlow(query: String): Flow<List<Track>>
 
-    /** Online tracks with at least one play in history, most recently played first. */
-    fun getPlayedOnlineTracksAsFlow(): Flow<List<Track>>
+    /** Online songs played after [sinceEpochMs] (0 = all), most recently played first. */
+    fun getPlayedOnlineTracksAsFlow(sinceEpochMs: Long = 0L): Flow<List<Track>>
 
     suspend fun getTrackById(id: String): Track?
 

@@ -25,8 +25,7 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 private const val TRENDING_LIMIT = 15
-private const val RECENT_FETCH = 50
-private const val RECENT_SHOWN = 10
+private const val RECENT_SHOWN = 5
 
 @HiltViewModel
 class HomeViewModel
@@ -48,8 +47,14 @@ class HomeViewModel
                 .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
 
         val recentlyPlayed: StateFlow<List<Track>> =
-            (historyRepository?.getRecentlyPlayedTracks(RECENT_FETCH) ?: flowOf(emptyList()))
-                .map { tracks -> tracks.distinctBy { it.id }.take(RECENT_SHOWN) }
+            // Home's [ CLEAR ] hides plays up to that moment without touching the Library's history.
+            (
+                historyRepository?.let { history ->
+                    appPreferences.homeRecentsClearedAt.flatMapLatest { since ->
+                        history.getRecentlyPlayedTracksSince(since, RECENT_SHOWN)
+                    }
+                } ?: flowOf(emptyList())
+            )
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         fun setActiveProvider(id: String) {
@@ -76,7 +81,7 @@ class HomeViewModel
         }
 
         fun clearRecentlyPlayed() {
-            viewModelScope.launch { historyRepository?.clearAllHistory() }
+            viewModelScope.launch { appPreferences.setHomeRecentsClearedAt(System.currentTimeMillis()) }
         }
 
         private val activeProvider: kotlinx.coroutines.flow.Flow<MusicProvider> =
