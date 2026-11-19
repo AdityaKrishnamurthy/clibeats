@@ -35,6 +35,7 @@ class PlayerViewModelTest {
         )
 
     private val pauseAtEnd = MutableStateFlow(false)
+    private val sleepCountdown = MutableStateFlow<Int?>(null)
 
     @Before
     fun setup() {
@@ -43,6 +44,7 @@ class PlayerViewModelTest {
         whenever(repository.playbackState).thenReturn(stateFlow)
         whenever(repository.playerMessages).thenReturn(emptyFlow())
         whenever(repository.pauseAtEndOfTrack).thenReturn(pauseAtEnd)
+        whenever(repository.sleepTimerCountdown).thenReturn(sleepCountdown)
         viewModel = PlayerViewModel(repository)
     }
 
@@ -92,6 +94,7 @@ class PlayerViewModelTest {
     @Test
     fun cancellingEndOfTrackSleep_disarmsPlayer() {
         whenever(repository.setPauseAtEndOfTrack(true)).then { pauseAtEnd.value = true }
+        whenever(repository.setPauseAtEndOfTrack(false)).then { pauseAtEnd.value = false }
         viewModel.setSleepTimer(null)
         viewModel.setSleepTimer(0)
         verify(repository).setPauseAtEndOfTrack(false)

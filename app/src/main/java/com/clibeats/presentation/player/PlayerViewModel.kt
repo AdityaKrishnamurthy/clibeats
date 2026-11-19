@@ -78,7 +78,7 @@ class PlayerViewModel
                     endOfTrack -> SleepTimer.EndOfTrack
                     else -> SleepTimer.Off
                 }
-            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), SleepTimer.Off)
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, SleepTimer.Off)
 
         /** Short-lived player message (e.g. a song that couldn't be played), shown above the player bar. */
         @Suppress("OPT_IN_USAGE")
