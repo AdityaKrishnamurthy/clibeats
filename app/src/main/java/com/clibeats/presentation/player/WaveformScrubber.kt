@@ -195,7 +195,7 @@ internal fun waveformFor(
     }
 }
 
-private const val WAVEFORM_HEIGHT_DP = 132
+private const val WAVEFORM_HEIGHT_DP = 176
 private const val BAR_COUNT = 64
 private const val BAR_FILL = 0.62f
 private const val BAR_MAX_HEIGHT = 0.92f
