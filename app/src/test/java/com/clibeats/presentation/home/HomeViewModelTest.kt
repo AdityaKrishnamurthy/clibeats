@@ -2,6 +2,7 @@
 
 package com.clibeats.presentation.home
 
+import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
@@ -10,6 +11,7 @@ import com.clibeats.domain.provider.ProviderResult
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -45,7 +47,10 @@ class HomeViewModelTest {
         whenever(providerRegistry.providers).thenReturn(listOf(musicProvider))
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("audius"))
 
-        viewModel = HomeViewModel(providerRegistry, appPreferences)
+        val networkMonitor: NetworkMonitor = mock()
+        whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+
+        viewModel = HomeViewModel(providerRegistry, appPreferences, networkMonitor)
     }
 
     @After

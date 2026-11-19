@@ -20,7 +20,7 @@ class PlaylistRepositoryImplTest {
     @Before
     fun setUp() {
         playlistDao = mock()
-        repository = PlaylistRepositoryImpl(playlistDao)
+        repository = PlaylistRepositoryImpl(playlistDao, mock())
     }
 
     @Test

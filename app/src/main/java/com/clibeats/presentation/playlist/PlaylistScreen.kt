@@ -9,7 +9,10 @@
 
 package com.clibeats.presentation.playlist
 
+import android.net.Uri
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,10 +23,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -36,7 +42,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -96,6 +105,7 @@ fun PlaylistScreen(
     var showCreateDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
+    var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
 
     Column(
         modifier = Modifier
@@ -176,6 +186,13 @@ fun PlaylistScreen(
                                 } else {
                                     null
                                 },
+                            coverUrl = s.covers[selected.id],
+                            onChangeCoverClick =
+                                if (!readOnly) {
+                                    { coverChangePlaylist = selected }
+                                } else {
+                                    null
+                                },
                         )
                     }
                     else ->
@@ -198,6 +215,20 @@ fun PlaylistScreen(
             onCreate = { name, desc ->
                 viewModel.createPlaylist(name, desc)
                 showCreateDialog = false
+            },
+        )
+    }
+    coverChangePlaylist?.let { playlist ->
+        ChangeCoverDialog(
+            playlist = playlist,
+            onDismiss = { coverChangePlaylist = null },
+            onPickImage = { uri ->
+                viewModel.setPlaylistCoverImage(playlist.id, uri.toString())
+                coverChangePlaylist = null
+            },
+            onSave = { newUrl ->
+                viewModel.updatePlaylistArtwork(playlist.id, newUrl)
+                coverChangePlaylist = null
             },
         )
     }
@@ -405,6 +436,8 @@ private fun PlaylistDetailView(
     onSwipeLeft: (Track) -> Unit,
     onLongPress: (Track) -> Unit,
     headerAction: Pair<String, () -> Unit>? = null,
+    coverUrl: String? = null,
+    onChangeCoverClick: (() -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -421,6 +454,29 @@ private fun PlaylistDetailView(
                     tint = CliBeatsTextPrimary,
                 )
             }
+            if (onChangeCoverClick != null) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(CliBeatsSurfaceVariant)
+                        .border(1.dp, CliBeatsAccent, RoundedCornerShape(4.dp))
+                        .clickable(onClick = onChangeCoverClick),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (coverUrl.isNullOrBlank()) {
+                        Text(text = "♫", style = MaterialTheme.typography.titleMedium, color = CliBeatsAccent)
+                    } else {
+                        AsyncImage(
+                            model = artworkUrlFor(coverUrl, ARTWORK_THUMB_PX * 2),
+                            contentDescription = "Change playlist cover",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
@@ -430,6 +486,15 @@ private fun PlaylistDetailView(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
+            }
+            if (onChangeCoverClick != null) {
+                IconButton(onClick = onChangeCoverClick) {
+                    Icon(
+                        imageVector = Icons.Outlined.Edit,
+                        contentDescription = "Change playlist cover",
+                        tint = CliBeatsAccent,
+                    )
+                }
             }
         }
         if (headerAction != null) {
@@ -515,6 +580,73 @@ private fun CreatePlaylistDialog(
                 enabled = name.isNotBlank(),
             ) {
                 Text("Create", color = CliBeatsAccent)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = CliBeatsTextSecondary)
+            }
+        },
+        containerColor = CliBeatsSurface,
+    )
+}
+
+@Composable
+private fun ChangeCoverDialog(
+    playlist: Playlist,
+    onDismiss: () -> Unit,
+    onPickImage: (Uri) -> Unit,
+    onSave: (String?) -> Unit,
+) {
+    var urlText by remember { mutableStateOf("") }
+    // The copy into app storage happens off the main thread in the repository.
+    val pickImageLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+            if (uri != null) onPickImage(uri)
+        }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = Modifier.border(1.dp, CliBeatsAccent),
+        title = { Text(text = "> edit --cover", style = MaterialTheme.typography.titleMedium) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Change thumbnail for \"${playlist.name}\"",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = CliBeatsTextSecondary,
+                )
+                Button(
+                    onClick = { pickImageLauncher.launch("image/*") },
+                    colors = ButtonDefaults.buttonColors(containerColor = CliBeatsAccent),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("CHOOSE FROM DEVICE")
+                }
+                OutlinedTextField(
+                    value = urlText,
+                    onValueChange = { urlText = it },
+                    label = { Text("Image URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                // Only a custom cover can be reset; otherwise the first song's art is already shown.
+                if (!playlist.artworkUrl.isNullOrBlank()) {
+                    TextButton(
+                        onClick = { onSave(null) },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Reset to default cover", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(urlText.trim().ifBlank { null }) },
+                enabled = urlText.isNotBlank(),
+            ) {
+                Text("Save", color = CliBeatsAccent)
             }
         },
         dismissButton = {

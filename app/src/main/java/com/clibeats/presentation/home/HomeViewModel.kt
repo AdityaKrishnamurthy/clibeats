@@ -4,6 +4,7 @@ package com.clibeats.presentation.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
@@ -33,10 +34,13 @@ class HomeViewModel
     constructor(
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
+        private val networkMonitor: NetworkMonitor,
         private val historyRepository: HistoryRepository? = null,
         private val playbackRepository: PlaybackRepository? = null,
     ) : ViewModel() {
         val providers: List<MusicProvider> = providerRegistry.providers
+
+        val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
         val activeProviderId: StateFlow<String> =
             appPreferences.activeProviderId

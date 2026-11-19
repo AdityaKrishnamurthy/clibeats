@@ -9,8 +9,10 @@
 
 package com.clibeats.data.provider.youtube
 
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.util.DiagnosticLogger
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -31,6 +33,7 @@ class NewPipeExtractorResolver
     @Inject
     constructor(
         private val okHttpClient: OkHttpClient,
+        private val appPreferences: AppPreferences,
     ) {
         private val isInitialized = AtomicBoolean(false)
 
@@ -90,8 +93,15 @@ class NewPipeExtractorResolver
                         return@withContext null
                     }
 
-                    // Prefer M4A/AAC format with highest bitrate, or highest available audio stream
-                    val selectedStream = audioStreams.maxByOrNull { it.averageBitrate } ?: audioStreams.first()
+                    val isHighQuality = appPreferences.highQualityStreaming.first()
+                    // High quality: highest bitrate. Data saver: lowest *known* bitrate (unknown is reported as <= 0).
+                    val known = audioStreams.filter { it.averageBitrate > 0 }.ifEmpty { audioStreams }
+                    val selectedStream =
+                        if (isHighQuality) {
+                            known.maxByOrNull { it.averageBitrate } ?: audioStreams.first()
+                        } else {
+                            known.minByOrNull { it.averageBitrate } ?: audioStreams.first()
+                        }
                     val streamUrl = selectedStream.content
                     if (streamUrl.isBlank()) {
                         DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "EMPTY_STREAM_URL")

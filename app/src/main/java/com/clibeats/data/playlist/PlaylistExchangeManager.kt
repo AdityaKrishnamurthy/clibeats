@@ -60,6 +60,10 @@ class PlaylistExchangeManager
                                     name = name,
                                     tracks =
                                         songs.map { song ->
+                                            val safeSourceUrl =
+                                                song.streamUrl?.takeIf {
+                                                    song.providerId == "local" || !it.contains("expire")
+                                                }
                                             CliBeatsTrack(
                                                 providerId = song.providerId,
                                                 sourceId = ProviderId.rawSourceId(song.providerId, song.id),
@@ -68,7 +72,7 @@ class PlaylistExchangeManager
                                                 album = song.album,
                                                 durationMs = song.durationMs,
                                                 artworkUrl = song.artworkUrl,
-                                                sourceUrl = song.streamUrl,
+                                                sourceUrl = safeSourceUrl,
                                             )
                                         },
                                 )
