@@ -205,4 +205,53 @@ class PlaybackRepositoryImplTest {
         repository.setRepeatMode(RepeatMode.ONE)
         verify(playerAdapter).setRepeatMode(RepeatMode.ONE)
     }
+
+    private fun track(
+        id: String,
+        providerId: String = "youtube_music",
+    ) = Track(id, "Song $id", "Artist", "Album", 1_000L, null, null, providerId)
+
+    private fun nowPlaying(track: Track) {
+        playbackStateFlow.value = playbackStateFlow.value.copy(currentTrack = track)
+    }
+
+    @Test
+    fun `previous plays the song from an earlier queue before the current one`() {
+        val local = track("a", providerId = "local")
+        val online = track("b")
+        nowPlaying(local)
+        queueFlow.value = listOf(online) // a new song was tapped, starting a new queue
+        nowPlaying(online)
+        whenever(playerAdapter.currentIndex()).thenReturn(0)
+
+        repository.skipToPrevious()
+
+        verify(playerAdapter).playBeforeCurrent(local)
+        verify(playerAdapter, never()).skipToPrevious()
+    }
+
+    @Test
+    fun `previous steps back in the queue when the previous song is right before`() {
+        val first = track("a")
+        val second = track("b")
+        queueFlow.value = listOf(first, second)
+        nowPlaying(first)
+        nowPlaying(second)
+        whenever(playerAdapter.currentIndex()).thenReturn(1)
+
+        repository.skipToPrevious()
+
+        verify(playerAdapter).skipToPrevious()
+        verify(playerAdapter, never()).playBeforeCurrent(any())
+    }
+
+    @Test
+    fun `previous falls back to the queue when nothing played before`() {
+        nowPlaying(track("a"))
+
+        repository.skipToPrevious()
+
+        verify(playerAdapter).skipToPrevious()
+        verify(playerAdapter, never()).playBeforeCurrent(any())
+    }
 }

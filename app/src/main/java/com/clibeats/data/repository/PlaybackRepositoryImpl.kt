@@ -77,6 +77,12 @@ class PlaybackRepositoryImpl
 
         private val repositoryScope = CoroutineScope(SupervisorJob() + ioDispatcher)
 
+        /** Songs in the order they played (oldest first, last = playing now), across queues and sources. */
+        private val playedHistory = ArrayDeque<Track>()
+
+        /** Set while "previous" switches songs, so that switch isn't recorded as a new play. */
+        @Volatile private var goingBack = false
+
         override val playbackState: StateFlow<PlaybackState> = playerAdapter.playbackState
 
         override val queueState: StateFlow<List<Track>> = playerAdapter.queueFlow
@@ -113,6 +119,7 @@ class PlaybackRepositoryImpl
                     .distinctUntilChanged { a, b -> a?.id == b?.id }
                     .collectLatest { current ->
                         if (current == null) return@collectLatest
+                        rememberPlayed(current)
                         runCatching { historyRepository?.recordPlay(current.id, current.providerId) }
                         prefetchAfter(current)
                     }
@@ -261,7 +268,55 @@ class PlaybackRepositoryImpl
 
         override fun skipToNext() = playerAdapter.skipToNext()
 
-        override fun skipToPrevious() = playerAdapter.skipToPrevious()
+        /**
+         * Plays whatever played before the current song, local or online, even if it was in an earlier
+         * queue. Falls back to the previous item in the queue when there's no history yet.
+         */
+        override fun skipToPrevious() {
+            val previous =
+                synchronized(playedHistory) {
+                    if (playedHistory.size < 2) {
+                        null
+                    } else {
+                        playedHistory.removeLast()
+                        playedHistory.last()
+                    }
+                }
+            if (previous == null) {
+                playerAdapter.skipToPrevious()
+                return
+            }
+            goingBack = true
+            val index = playerAdapter.currentIndex()
+            val queue = playerAdapter.queueFlow.value
+            if (index > 0 && queue.getOrNull(index - 1)?.id == previous.id) {
+                playerAdapter.skipToPrevious()
+            } else {
+                playerAdapter.playBeforeCurrent(previous)
+            }
+        }
+
+        private suspend fun rememberPlayed(current: Track) {
+            if (goingBack) {
+                goingBack = false
+                return
+            }
+            // After a restart, start from the saved listening history so "previous" works straight away.
+            val seed =
+                if (synchronized(playedHistory) { playedHistory.isEmpty() }) {
+                    runCatching { historyRepository?.getRecentlyPlayedTracks(HISTORY_LIMIT)?.first() }
+                        .getOrNull()
+                        .orEmpty()
+                        .asReversed()
+                } else {
+                    emptyList()
+                }
+            synchronized(playedHistory) {
+                if (playedHistory.isEmpty()) seed.filter { it.id != current.id }.forEach(playedHistory::addLast)
+                if (playedHistory.lastOrNull()?.id != current.id) playedHistory.addLast(current)
+                while (playedHistory.size > HISTORY_LIMIT) playedHistory.removeFirst()
+            }
+        }
 
         override fun setRepeatMode(mode: RepeatMode) = playerAdapter.setRepeatMode(mode)
 
@@ -269,6 +324,7 @@ class PlaybackRepositoryImpl
 
         private companion object {
             const val PREFETCH_COUNT = 2
+            const val HISTORY_LIMIT = 100
             const val POSITION_SAVE_STEP_MS = 5_000L
         }
     }
