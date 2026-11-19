@@ -74,6 +74,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Online:** YouTube Music, Internet Archive, Jamendo, Audius — pick from the `ONLINE ▾` drop-down.
 - **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A/AAC, OGG/Opus, ALAC, AIFF**.
 - **Regional results** — YouTube Music uses your device's country and language; trending shows your country's top songs.
+- **Data saver** — turn off *High quality streaming* (Settings → Audio Quality) to stream the lowest-bitrate audio.
 
 ### Local library
 - Add **one or more music folders** (system picker, no storage permission); **Rescan** picks up changes.
@@ -84,6 +85,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 ### Library, playlists & favourites
 - **Library:** `[ ONLINE ]` shows only songs you've played; `[ OFFLINE ]` shows your device music. Tracks / Artists / Albums.
 - **Playlists grid:** ♥ Favorites, Most Played, your playlists (most recent first), a **+** tile, then local playlists.
+- **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home, with `[ CLEAR ]`.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
