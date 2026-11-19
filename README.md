@@ -86,7 +86,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ### Library, playlists & favourites
 - **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
-- **Playlists grid:** ♥ Favorites, Most Played, your playlists (most recent first), a **+** tile, then local playlists.
+- **Playlists grid:** ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
@@ -133,7 +133,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
 | Bottom bar · **Home** | Tap again (on Home) | Switch the source Online ↔ Local |
-| Bottom bar · **Search** | Tap again (on Search) | Focus the search box and open the keyboard |
+| Bottom bar · **Search** | Tap again (on Search) | Switch the source Online ↔ Local |
+| Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
 | Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
