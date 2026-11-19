@@ -57,6 +57,7 @@ class SearchViewModel
             index: Int,
         ) {
             viewModelScope.launch {
+                appPreferences.addRecentSearchTrack(tracks[index])
                 // "Auto-queue related" off: play only the tapped song, no suggestions after it.
                 if (appPreferences.autoQueueRelated.first()) {
                     playbackRepository.setQueue(tracks, index)
@@ -112,9 +113,26 @@ class SearchViewModel
 
         fun onAddToQueue(track: Track) {
             playbackRepository.addToQueue(track)
+            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
 
         fun onPlayNext(track: Track) {
             playbackRepository.playNext(track)
+            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
+
+        /** Songs picked from search results, shown while the search box is empty. */
+        val recentSearches: StateFlow<List<Track>> =
+            appPreferences.recentSearchTracks
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        fun clearRecentSearches() {
+            viewModelScope.launch { appPreferences.clearRecentSearchTracks() }
+        }
+
+        /** Plays a song from Recent searches (the rest of the list follows only with auto-queue on). */
+        fun onPlayRecent(
+            tracks: List<Track>,
+            index: Int,
+        ) = onPlay(tracks, index)
     }
