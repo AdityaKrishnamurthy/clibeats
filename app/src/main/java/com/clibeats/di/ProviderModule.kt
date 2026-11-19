@@ -35,7 +35,13 @@ object ProviderModule {
         local: LocalMusicProvider,
     ): ProviderRegistry =
         MusicProviderRegistry(
-            listOf(youtube, internetArchive, audius, jamendo, local),
+            listOfNotNull(
+                youtube,
+                internetArchive,
+                audius,
+                jamendo.takeIf { BuildConfig.JAMENDO_CLIENT_ID.isNotBlank() },
+                local,
+            ),
         )
 
     /** Optional free Jamendo API key (developer.jamendo.com); empty when unset. */
