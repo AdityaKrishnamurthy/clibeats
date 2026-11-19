@@ -1,4 +1,5 @@
 @file:Suppress(
+    "FunctionNaming",
     "ktlint:standard:function-naming",
     "ktlint:standard:multiline-expression-wrapping",
     "MagicNumber",
@@ -23,10 +24,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
-import androidx.compose.material3.TabRowDefaults
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,6 +48,8 @@ import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.playlist.PlaylistFilter
+import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -65,6 +64,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     toggleModeRequested: Boolean = false,
     onToggleModeHandled: () -> Unit = {},
+    initialTab: Int = 0,
 ) {
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
@@ -77,7 +77,16 @@ fun LibraryScreen(
         }
     }
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
-    var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var selectedTabIndex by remember { mutableIntStateOf(initialTab) }
+    LaunchedEffect(initialTab) {
+        if (initialTab in 0..3) {
+            selectedTabIndex = initialTab
+        }
+    }
+
+    var playlistFilter by remember { mutableStateOf(PlaylistFilter.ALL) }
+    var triggerCreatePlaylist by remember { mutableStateOf(false) }
+
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -85,26 +94,75 @@ fun LibraryScreen(
     val tabs = listOf("Tracks", "Artists", "Albums", "Playlists")
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CliBeatsBackground)
-            .padding(12.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(CliBeatsBackground)
+                .padding(12.dp),
     ) {
-        LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
-        // Online: clears only the Library's played list (Home "Recently played" has its own [ CLEAR ]).
-        if (mode == LibraryMode.ONLINE && state is LibraryUiState.Success) {
-            Text(
-                text = "[ CLEAR ]",
-                style = MaterialTheme.typography.labelMedium,
-                color = CliBeatsTextSecondary,
+        if (selectedTabIndex == 3) {
+            Row(
                 modifier =
                     Modifier
-                        .align(Alignment.End)
-                        .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
-                        .padding(8.dp),
-            )
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "[ + NEW ]",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsAccent,
+                    textAlign = TextAlign.Center,
+                    modifier =
+                        Modifier
+                            .border(1.dp, CliBeatsAccent)
+                            .clickable(role = Role.Button) { triggerCreatePlaylist = true }
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                )
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    PlaylistFilter.entries.forEach { option ->
+                        val selected = option == playlistFilter
+                        val label =
+                            when (option) {
+                                PlaylistFilter.ALL -> if (selected) "[● ALL]" else "[ ALL ]"
+                                PlaylistFilter.LOCAL_M3U -> if (selected) "[● LOCAL M3U]" else "[ LOCAL M3U ]"
+                            }
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
+                                    .clickable(role = Role.Tab) { playlistFilter = option }
+                                    .padding(horizontal = 8.dp, vertical = 10.dp),
+                        )
+                    }
+                }
+            }
         } else {
-            Spacer(modifier = Modifier.height(8.dp))
+            LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
+            if (mode == LibraryMode.ONLINE && state is LibraryUiState.Success) {
+                Text(
+                    text = "[ CLEAR ]",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsTextSecondary,
+                    modifier =
+                        Modifier
+                            .align(Alignment.End)
+                            .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
+                            .padding(8.dp),
+                )
+            } else {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
         }
 
         val trackCount = (state as? LibraryUiState.Success)?.tracks?.size ?: 0
@@ -114,40 +172,50 @@ fun LibraryScreen(
             } else {
                 "Offline · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
             }
+        val titleText =
+            if (selectedTabIndex == 3) {
+                "Library — Playlists"
+            } else {
+                "Library — $modeLabel (${tabs[selectedTabIndex]})"
+            }
         TuiBlock(
-            title = "Library — $modeLabel (${tabs[selectedTabIndex]})",
+            title = titleText,
             isActive = true,
             modifier = Modifier.weight(1f),
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
-                TabRow(
-                    selectedTabIndex = selectedTabIndex,
-                    containerColor = CliBeatsSurface,
-                    contentColor = CliBeatsAccent,
-                    indicator = { tabPositions ->
-                        TabRowDefaults.SecondaryIndicator(
-                            modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTabIndex]),
-                            color = CliBeatsAccent,
-                        )
-                    },
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTabIndex == index,
-                            onClick = { selectedTabIndex = index },
-                            text = {
-                                Text(
-                                    text = title,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = if (selectedTabIndex == index) CliBeatsAccent else CliBeatsTextSecondary,
-                                )
-                            },
+                        val selected = selectedTabIndex == index
+                        val label = if (selected) "[● ${title.uppercase()}]" else "[ ${title.uppercase()} ]"
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
+                            maxLines = 1,
+                            textAlign = TextAlign.Center,
+                            modifier =
+                                Modifier
+                                    .weight(1f)
+                                    .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
+                                    .clickable(role = Role.Tab) { selectedTabIndex = index }
+                                    .padding(vertical = 8.dp),
                         )
                     }
                 }
 
                 if (selectedTabIndex == 3) {
-                    com.clibeats.presentation.playlist.PlaylistScreen()
+                    PlaylistScreen(
+                        filter = playlistFilter,
+                        triggerCreateDialog = triggerCreatePlaylist,
+                        onCreateDialogHandled = { triggerCreatePlaylist = false },
+                    )
                 } else {
                     when (val currentState = state) {
                         is LibraryUiState.Loading -> {
@@ -250,12 +318,13 @@ private fun LibraryModeToggle(
                 color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
                 maxLines = 1,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { this.selected = selected }
-                    .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
-                    .clickable(role = Role.Tab) { onSelect(option) }
-                    .padding(horizontal = 10.dp, vertical = 10.dp),
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .semantics { this.selected = selected }
+                        .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
+                        .clickable(role = Role.Tab) { onSelect(option) }
+                        .padding(horizontal = 10.dp, vertical = 10.dp),
             )
         }
     }
@@ -265,27 +334,28 @@ private fun LibraryModeToggle(
 @Composable
 private fun ArtistsList(artists: List<ArtistGroup>) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = artists, key = { _, artist -> artist.name }) { _, artist ->
+        itemsIndexed(items = artists, key = { _, item -> item.artist }) { index, artist ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = artist.name,
+                    text = "${index + 1}. ${artist.artist}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = CliBeatsTextPrimary,
-                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
                 )
                 Text(
-                    text = "${artist.trackCount} tracks",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "${artist.trackCount} ${if (artist.trackCount == 1) "track" else "tracks"}",
+                    style = MaterialTheme.typography.labelSmall,
                     color = CliBeatsTextSecondary,
                 )
             }
-            HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
+            HorizontalDivider(thickness = 1.dp, color = CliBeatsSurface)
         }
     }
 }
@@ -294,33 +364,36 @@ private fun ArtistsList(artists: List<ArtistGroup>) {
 @Composable
 private fun AlbumsList(albums: List<AlbumGroup>) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = albums, key = { index, album -> "${album.title}_$index" }) { _, album ->
+        itemsIndexed(items = albums, key = { _, item -> item.album }) { index, album ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .padding(horizontal = 16.dp),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = album.title,
+                        text = "${index + 1}. ${album.album}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CliBeatsTextPrimary,
+                        maxLines = 1,
                     )
                     Text(
                         text = album.artist,
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = CliBeatsTextSecondary,
+                        maxLines = 1,
                     )
                 }
                 Text(
-                    text = "${album.trackCount} tracks",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = "${album.trackCount} ${if (album.trackCount == 1) "track" else "tracks"}",
+                    style = MaterialTheme.typography.labelSmall,
                     color = CliBeatsTextSecondary,
                 )
             }
-            HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
+            HorizontalDivider(thickness = 1.dp, color = CliBeatsSurface)
         }
     }
 }

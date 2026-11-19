@@ -51,6 +51,10 @@ class QueueViewModel
             playbackRepository.clearQueue()
         }
 
+        fun onShuffle() {
+            playbackRepository.toggleShuffle()
+        }
+
         @Suppress("UnusedParameter")
         fun onTrackClick(
             track: Track,

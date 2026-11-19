@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -112,6 +113,7 @@ fun MainLayout(
         ) {
             CliBeatsTopAppBar(
                 onSearchClick = { handleDestinationSelected(NavDestination.Search) },
+                onQueueClick = { showQueue = true },
             )
 
             HorizontalDivider(
@@ -130,8 +132,9 @@ fun MainLayout(
 
             // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
             PlayerBarHost(
-                playerViewModel,
+                playerViewModel = playerViewModel,
                 onExpandClick = { showNowPlaying = true },
+                onQueueClick = { showQueue = true },
             )
 
             // ── Custom TUI Bottom Navigation Bar
@@ -248,6 +251,7 @@ private const val NOW_PLAYING_ANIM_MS = 250
 private fun PlayerBarHost(
     playerViewModel: PlayerViewModel,
     onExpandClick: () -> Unit,
+    onQueueClick: () -> Unit = {},
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
     val hint by playerViewModel.hint.collectAsState()
@@ -293,6 +297,7 @@ private fun PlayerBarHost(
         onRepeatClick = playerViewModel::onRepeatClick,
         repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
         onExpandClick = onExpandClick,
+        onQueueClick = onQueueClick,
     )
 }
 
@@ -324,7 +329,10 @@ private fun PlayerMessageLine(message: String?) {
 @Suppress("FunctionNaming")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CliBeatsTopAppBar(onSearchClick: () -> Unit = {}) {
+private fun CliBeatsTopAppBar(
+    onSearchClick: () -> Unit = {},
+    onQueueClick: () -> Unit = {},
+) {
     TopAppBar(
         modifier = Modifier.height(48.dp),
         title = {
@@ -343,6 +351,13 @@ private fun CliBeatsTopAppBar(onSearchClick: () -> Unit = {}) {
             }
         },
         actions = {
+            IconButton(onClick = onQueueClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
+                    contentDescription = "Open queue",
+                    tint = CliBeatsTextSecondary,
+                )
+            }
             IconButton(onClick = onSearchClick) {
                 Icon(
                     imageVector = Icons.Outlined.Search,

@@ -95,4 +95,10 @@ class QueueViewModelTest {
         viewModel.onMove(0, 2)
         verify(playbackRepository).moveTrackInQueue(0, 2)
     }
+
+    @Test
+    fun `onShuffle delegates to playbackRepository`() {
+        viewModel.onShuffle()
+        verify(playbackRepository).toggleShuffle()
+    }
 }

@@ -5,6 +5,7 @@
     "LongMethod",
     "FunctionNaming",
     "LongParameterList",
+    "MatchingDeclarationName",
 )
 
 package com.clibeats.presentation.playlist
@@ -86,11 +87,16 @@ import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
+enum class PlaylistFilter { ALL, LOCAL_M3U }
+
 @Suppress("CyclomaticComplexMethod")
 @Composable
 fun PlaylistScreen(
     showGridRequested: Boolean = false,
     onShowGridHandled: () -> Unit = {},
+    filter: PlaylistFilter = PlaylistFilter.ALL,
+    triggerCreateDialog: Boolean = false,
+    onCreateDialogHandled: () -> Unit = {},
     viewModel: PlaylistViewModel = hiltViewModel(),
 ) {
     // Re-tapping the Playlists tab while inside a playlist goes back to the grid.
@@ -98,6 +104,12 @@ fun PlaylistScreen(
         if (showGridRequested) {
             viewModel.selectPlaylist(null)
             onShowGridHandled()
+        }
+    }
+    LaunchedEffect(triggerCreateDialog) {
+        if (triggerCreateDialog) {
+            showCreateDialog = true
+            onCreateDialogHandled()
         }
     }
     val favorites: FavoritesViewModel = hiltViewModel()
@@ -203,6 +215,7 @@ fun PlaylistScreen(
                     else ->
                         PlaylistGridView(
                             state = s,
+                            filter = filter,
                             onFavoritesClick = viewModel::openFavorites,
                             onMostPlayedClick = viewModel::openMostPlayed,
                             onCreateClick = { showCreateDialog = true },
@@ -288,6 +301,7 @@ fun PlaylistScreen(
 @Composable
 private fun PlaylistGridView(
     state: PlaylistUiState.Success,
+    filter: PlaylistFilter,
     onFavoritesClick: () -> Unit,
     onMostPlayedClick: () -> Unit,
     onCreateClick: () -> Unit,
@@ -303,38 +317,40 @@ private fun PlaylistGridView(
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        item(key = "fav") {
-            PlaylistTile(
-                title = "♥ FAVORITES",
-                subtitle = "${state.favoritesCount} tracks",
-                coverUrl = state.favoritesCover,
-                glyph = "♥",
-                highlight = true,
-                onClick = onFavoritesClick,
-            )
+        if (filter == PlaylistFilter.ALL) {
+            item(key = "fav") {
+                PlaylistTile(
+                    title = "♥ FAVORITES",
+                    subtitle = "${state.favoritesCount} tracks",
+                    coverUrl = state.favoritesCover,
+                    glyph = "♥",
+                    highlight = true,
+                    onClick = onFavoritesClick,
+                )
+            }
+            item(key = "most") {
+                PlaylistTile(
+                    title = "MOST PLAYED",
+                    subtitle = "${state.mostPlayedCount} tracks",
+                    coverUrl = state.mostPlayedCover,
+                    glyph = "▲",
+                    highlight = true,
+                    onClick = onMostPlayedClick,
+                )
+            }
+            items(app, key = { it.id }) { playlist ->
+                PlaylistTile(
+                    title = playlist.name,
+                    subtitle = "${playlist.trackCount} tracks",
+                    coverUrl = state.covers[playlist.id],
+                    glyph = "♫",
+                    onClick = { onPlaylistClick(playlist) },
+                    onLongClick = { onDeleteClick(playlist) },
+                    longClickLabel = "Delete playlist",
+                )
+            }
+            item(key = "new") { NewPlaylistTile(onClick = onCreateClick) }
         }
-        item(key = "most") {
-            PlaylistTile(
-                title = "MOST PLAYED",
-                subtitle = "${state.mostPlayedCount} tracks",
-                coverUrl = state.mostPlayedCover,
-                glyph = "▲",
-                highlight = true,
-                onClick = onMostPlayedClick,
-            )
-        }
-        items(app, key = { it.id }) { playlist ->
-            PlaylistTile(
-                title = playlist.name,
-                subtitle = "${playlist.trackCount} tracks",
-                coverUrl = state.covers[playlist.id],
-                glyph = "♫",
-                onClick = { onPlaylistClick(playlist) },
-                onLongClick = { onDeleteClick(playlist) },
-                longClickLabel = "Delete playlist",
-            )
-        }
-        item(key = "new") { NewPlaylistTile(onClick = onCreateClick) }
 
         item(key = "local_label", span = fullSpan) {
             Column {

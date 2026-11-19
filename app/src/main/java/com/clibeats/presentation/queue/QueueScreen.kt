@@ -7,29 +7,29 @@
 package com.clibeats.presentation.queue
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.DragHandle
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -66,15 +67,17 @@ fun QueueScreen(
     val state by viewModel.uiState.collectAsState()
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CliBeatsBackground),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(CliBeatsBackground),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CliBeatsSurface)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(CliBeatsSurface)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -97,21 +100,6 @@ fun QueueScreen(
                     color = CliBeatsTextPrimary,
                 )
             }
-
-            if (state is QueueUiState.Success) {
-                OutlinedButton(
-                    onClick = viewModel::onClear,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = CliBeatsTextSecondary,
-                    ),
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.DeleteSweep,
-                        contentDescription = null,
-                    )
-                    Text(text = " Clear upcoming", style = MaterialTheme.typography.bodySmall)
-                }
-            }
         }
 
         when (val currentState = state) {
@@ -128,32 +116,139 @@ fun QueueScreen(
                 }
             }
 
-            is QueueUiState.Success -> ReorderableQueue(currentState, viewModel)
+            is QueueUiState.Success -> SplitQueueView(currentState, viewModel)
+        }
+    }
+}
+
+@Suppress("FunctionNaming", "LongMethod")
+@Composable
+private fun SplitQueueView(
+    state: QueueUiState.Success,
+    viewModel: QueueViewModel,
+) {
+    val tracks = state.tracks
+    val currentIndex = tracks.indexOfFirst { it.id == state.currentTrackId }
+    val nowPlayingTrack = if (currentIndex in tracks.indices) tracks[currentIndex] else tracks.firstOrNull()
+    val upcomingStartIndex = if (currentIndex >= 0) currentIndex + 1 else 0
+    val upcoming = if (currentIndex >= 0) tracks.drop(currentIndex + 1) else emptyList()
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(bottom = 8.dp),
+    ) {
+        if (nowPlayingTrack != null) {
+            TuiBlock(
+                title = "Now Playing",
+                isActive = true,
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 6.dp),
+            ) {
+                SongTableRow(
+                    trackTitle = nowPlayingTrack.title,
+                    artist = nowPlayingTrack.artist,
+                    duration = formatDuration(nowPlayingTrack.durationMs),
+                    index = if (currentIndex >= 0) currentIndex + 1 else 1,
+                    isNowPlaying = true,
+                    onClick = {
+                        if (currentIndex >= 0) {
+                            viewModel.onTrackClick(nowPlayingTrack, currentIndex)
+                        }
+                    },
+                )
+            }
+        }
+
+        TuiBlock(
+            title = "Up Next (${upcoming.size})",
+            isActive = false,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 6.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "[ SHUFFLE ]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CliBeatsAccent,
+                        modifier =
+                            Modifier
+                                .clickable { viewModel.onShuffle() }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "[ CLEAR ]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color =
+                            if (upcoming.isNotEmpty()) {
+                                CliBeatsTextSecondary
+                            } else {
+                                CliBeatsTextSecondary.copy(alpha = 0.5f)
+                            },
+                        modifier =
+                            Modifier
+                                .clickable(enabled = upcoming.isNotEmpty()) { viewModel.onClear() }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                    )
+                }
+
+                if (upcoming.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = "No upcoming tracks",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = CliBeatsTextSecondary,
+                        )
+                    }
+                } else {
+                    ReorderableUpcomingList(
+                        upcoming = upcoming,
+                        startIndex = upcomingStartIndex,
+                        viewModel = viewModel,
+                    )
+                }
+            }
         }
     }
 }
 
 /**
- * Queue list reordered by dragging a row's handle. The order changes locally while dragging and is
- * committed to the player as a single move when the finger lifts, so playback isn't disturbed mid-drag.
+ * Reorderable upcoming list.
  */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
-private fun ReorderableQueue(
-    state: QueueUiState.Success,
+private fun ReorderableUpcomingList(
+    upcoming: List<com.clibeats.domain.model.Track>,
+    startIndex: Int,
     viewModel: QueueViewModel,
 ) {
-    val tracks = state.tracks
-    // Stable keys that survive reordering; the same song can be queued more than once.
     val keys =
-        remember(tracks) {
+        remember(upcoming) {
             val seen = HashMap<String, Int>()
-            tracks.map { track ->
+            upcoming.map { track ->
                 val n = seen.merge(track.id, 1, Int::plus) ?: 1
                 "${track.id}#$n"
             }
         }
-    var order by remember(tracks) { mutableStateOf(tracks.indices.toList()) }
+    var order by remember(upcoming) { mutableStateOf(upcoming.indices.toList()) }
     var dragKey by remember { mutableStateOf<String?>(null) }
     var dragFrom by remember { mutableIntStateOf(-1) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
@@ -165,9 +260,9 @@ private fun ReorderableQueue(
         val to = order.indexOfFirst { keys[it] == dragKey }
         val moved = dragFrom >= 0 && to >= 0 && to != dragFrom
         if (commit && moved) {
-            viewModel.onMove(dragFrom, to)
+            viewModel.onMove(dragFrom + startIndex, to + startIndex)
         } else {
-            order = tracks.indices.toList()
+            order = upcoming.indices.toList()
         }
         dragKey = null
         dragFrom = -1
@@ -191,9 +286,7 @@ private fun ReorderableQueue(
         dragOffset += amountY
         val info = listState.layoutInfo
         val current = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return
-        // Wait until the list has laid out the last swap; acting on stale positions swapped rows back and forth.
         if (current.index != order.indexOfFirst { keys[it] == key }) return
-        // Keep scrolling while the row is held near the top or bottom.
         val top = current.offset + dragOffset
         val bottom = top + current.size
         val nearEnd = bottom > info.viewportEndOffset - edge && amountY > 0
@@ -204,7 +297,6 @@ private fun ReorderableQueue(
             info.visibleItemsInfo.firstOrNull {
                 it.key != key && center >= it.offset && center <= it.offset + it.size
             } ?: return
-        // Moving the first visible row would make the list scroll to follow it; keep the view where it is.
         val firstIndex = listState.firstVisibleItemIndex
         val firstOffset = listState.firstVisibleItemScrollOffset
         order = order.toMutableList().apply { add(target.index, removeAt(current.index)) }
@@ -216,9 +308,10 @@ private fun ReorderableQueue(
 
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         itemsIndexed(items = order, key = { _, i -> keys[i] }) { position, i ->
-            val track = tracks[i]
+            val track = upcoming[i]
             val key = keys[i]
             val dragging = key == dragKey
+            val originalIndex = i + startIndex
             Box(
                 modifier =
                     (
@@ -233,7 +326,6 @@ private fun ReorderableQueue(
                             Modifier.animateItem()
                         }
                     ).pointerInput(key) {
-                        // Hold anywhere on the row (number, title, ...) and move it up or down.
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -252,12 +344,11 @@ private fun ReorderableQueue(
                     trackTitle = track.title,
                     artist = track.artist,
                     duration = formatDuration(track.durationMs),
-                    index = position + 1,
-                    isNowPlaying = track.id == state.currentTrackId,
-                    onClick = { if (dragKey == null) viewModel.onTrackClick(track, i) },
+                    index = originalIndex + 1,
+                    isNowPlaying = false,
+                    onClick = { if (dragKey == null) viewModel.onTrackClick(track, originalIndex) },
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // The handle drags straight away, without the long press.
                             Icon(
                                 imageVector = Icons.Outlined.DragHandle,
                                 contentDescription = "Drag to reorder",
@@ -278,7 +369,7 @@ private fun ReorderableQueue(
                                         }.padding(8.dp),
                             )
                             IconButton(
-                                onClick = { viewModel.onRemove(i) },
+                                onClick = { viewModel.onRemove(originalIndex) },
                                 enabled = dragKey == null,
                                 modifier = Modifier.size(28.dp),
                             ) {

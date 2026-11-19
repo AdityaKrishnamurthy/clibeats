@@ -92,7 +92,12 @@ private fun AppContent() {
     val scope = rememberCoroutineScope()
     LaunchedEffect(pagerState.currentPage) { savedPage = pagerState.currentPage }
 
+    var libraryInitialTab by remember { mutableIntStateOf(0) }
+
     val navigate: (NavDestination) -> Unit = { destination ->
+        if (destination == NavDestination.Playlists) {
+            libraryInitialTab = PLAYLISTS_SUB_TAB_INDEX
+        }
         val resolved =
             when (destination) {
                 NavDestination.Playlists -> NavDestination.Library
@@ -183,6 +188,7 @@ private fun AppContent() {
                     LibraryScreen(
                         toggleModeRequested = toggleLibraryMode,
                         onToggleModeHandled = { toggleLibraryMode = false },
+                        initialTab = libraryInitialTab,
                     )
                 NavDestination.Settings -> SettingsScreen()
                 else -> Unit
@@ -192,3 +198,4 @@ private fun AppContent() {
 }
 
 private const val DOUBLE_TAP_MS = 300L
+private const val PLAYLISTS_SUB_TAB_INDEX = 3
