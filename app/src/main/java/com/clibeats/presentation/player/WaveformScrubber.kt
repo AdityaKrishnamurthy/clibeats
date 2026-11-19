@@ -57,6 +57,8 @@ fun WaveformScrubber(
     content: @Composable BoxScope.() -> Unit,
 ) {
     val accent = CliBeatsAccent
+    // Played bars in the text colour (white on dark themes), the rest dimmed; the accent marks only the scrub.
+    val playedColor = CliBeatsTextPrimary.copy(alpha = PLAYED_BAR_ALPHA)
     val idle = CliBeatsTextSecondary.copy(alpha = IDLE_BAR_ALPHA)
     val liveMarker = CliBeatsTextPrimary.copy(alpha = LIVE_MARKER_ALPHA)
     val bars = remember(trackKey) { waveformFor(trackKey) }
@@ -121,7 +123,7 @@ fun WaveformScrubber(
                 val color =
                     when {
                         inScrubRange -> accent.copy(alpha = SCRUB_RANGE_ALPHA)
-                        played -> accent
+                        played -> playedColor
                         else -> idle
                     }
                 val height = maxHeight * amplitude
@@ -207,7 +209,8 @@ private const val FADE_FRACTION = 0.08f
 private const val MIN_EDGE_LEVEL = 0.35f
 private const val SNAP_DP = 14
 private const val IDLE_BAR_ALPHA = 0.28f
-private const val SCRUB_RANGE_ALPHA = 0.45f
+private const val PLAYED_BAR_ALPHA = 0.92f
+private const val SCRUB_RANGE_ALPHA = 0.7f
 private const val LIVE_MARKER_ALPHA = 0.7f
 private const val CHIP_ALPHA = 0.85f
 private const val MS_PER_SECOND = 1000

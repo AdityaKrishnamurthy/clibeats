@@ -62,6 +62,7 @@ private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
+private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
 private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
 private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
@@ -398,8 +399,20 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                DeveloperLine(name = "Omprakash Panda", url = GITHUB_URL)
+                DeveloperLine(name = "Omprakash Panda", url = OMPRAKASH_GITHUB_URL)
                 DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "source: github.com/Omprakash-p06/clibeats · MIT",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .semantics { contentDescription = "Source code on GitHub" }
+                            .clickable(role = Role.Button) {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }
+                            }.padding(vertical = 4.dp),
+                )
             }
         }
     }
