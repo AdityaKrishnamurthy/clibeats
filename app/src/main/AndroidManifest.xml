@@ -12,6 +12,7 @@
     <application
         android:name=".CLIBeatsApp"
         android:allowBackup="true"
+        android:appCategory="audio"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
@@ -26,7 +27,8 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
-                <!-- Categorizes the app as "Music & Audio" on Android (like Spotify, YT Music). -->
+                <!-- Lets the system and other apps find CLIBeats as a music player (the appCategory
+                     attribute above groups it under Audio in system settings and launchers). -->
                 <category android:name="android.intent.category.APP_MUSIC" />
             </intent-filter>
         </activity>
