@@ -13,7 +13,7 @@ Swipe left / right anywhere outside a song row to move between tabs.
 
 | Tab | What it does |
 |---|---|
-| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. |
+| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. Tap the tab again to switch Online ↔ Local. |
 | **Search** | Search the active source. With the box empty it lists songs you picked from earlier searches (`[ CLEAR ]`). Tap the tab again to jump into the search box. |
 | **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
 | **Queue** | Hold a song (or drag its ≡ handle) and move it to reorder; remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |

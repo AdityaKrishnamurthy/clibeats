@@ -103,14 +103,16 @@ private fun AppContent() {
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
-    // Re-tapping the tab you're on: Search = focus the search box (keyboard opens),
+    // Re-tapping the tab you're on: Home = switch Online <-> Local, Search = focus the search box (keyboard opens),
     // Library = switch Online <-> Offline, Playlists = back to the grid.
     var focusSearch by remember { mutableStateOf(false) }
+    var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
     var showPlaylistGrid by remember { mutableStateOf(false) }
     val onTabClick: (NavDestination) -> Unit = { destination ->
         if (destination == tabs[pagerState.currentPage]) {
             when (destination) {
+                NavDestination.Home -> toggleHomeSource = true
                 NavDestination.Search -> focusSearch = true
                 NavDestination.Library -> toggleLibraryMode = true
                 NavDestination.Playlists -> showPlaylistGrid = true
@@ -136,7 +138,12 @@ private fun AppContent() {
             modifier = Modifier.fillMaxSize(),
         ) { page ->
             when (tabs[page]) {
-                NavDestination.Home -> HomeScreen(onNavigate = navigate)
+                NavDestination.Home ->
+                    HomeScreen(
+                        onNavigate = navigate,
+                        toggleSourceRequested = toggleHomeSource,
+                        onToggleSourceHandled = { toggleHomeSource = false },
+                    )
                 NavDestination.Search ->
                     SearchScreen(focusRequested = focusSearch, onFocusHandled = { focusSearch = false })
                 NavDestination.Queue -> QueueScreen()

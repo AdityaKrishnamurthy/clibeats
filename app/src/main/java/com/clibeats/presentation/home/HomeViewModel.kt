@@ -26,6 +26,7 @@ import javax.inject.Inject
 
 private const val TRENDING_LIMIT = 15
 private const val RECENT_SHOWN = 5
+private const val LOCAL_ID = "local"
 
 @HiltViewModel
 class HomeViewModel
@@ -57,8 +58,23 @@ class HomeViewModel
             )
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
+        /** Online provider to return to when switching back from Local. */
+        private var lastOnlineProviderId = ProviderRegistry.DEFAULT_PROVIDER_ID
+
         fun setActiveProvider(id: String) {
+            if (id != LOCAL_ID) lastOnlineProviderId = id
             viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Re-tapping the Home tab: Online <-> Local (back to the online provider used last). */
+        fun toggleSource() {
+            val current = activeProviderId.value
+            if (current == LOCAL_ID) {
+                setActiveProvider(lastOnlineProviderId)
+            } else {
+                lastOnlineProviderId = current
+                setActiveProvider(LOCAL_ID)
+            }
         }
 
         /** Plays [tracks] from [index]; queues the rest only if "auto-queue related" is on. */

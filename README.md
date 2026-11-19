@@ -132,6 +132,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
+| Bottom bar · **Home** | Tap again (on Home) | Switch the source Online ↔ Local |
 | Bottom bar · **Search** | Tap again (on Search) | Focus the search box and open the keyboard |
 | Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
