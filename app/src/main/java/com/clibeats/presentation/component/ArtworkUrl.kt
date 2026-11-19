@@ -1,5 +1,7 @@
 package com.clibeats.presentation.component
 
+import android.net.Uri
+
 private val GOOGLE_SIZE_SPEC = Regex("""=(?:w\d+-h\d+|s\d+)[^/=]*$""")
 private val YTIMG_THUMB = Regex("""(/vi(?:_webp)?/[^/]+/)[^/]+\.(?:jpg|webp)""")
 private const val YTIMG_HQ_MAX_PX = 480
@@ -16,6 +18,10 @@ fun artworkUrlFor(
     sizePx: Int,
 ): String? {
     if (url.isNullOrBlank()) return url
+    // Imported JSON is untrusted: only image sources an image loader should open. `file` is allowed
+    // for covers CLIBeats copied into its own filesDir; imports are filtered to http(s)/content.
+    val scheme = runCatching { Uri.parse(url).scheme?.lowercase() }.getOrNull()
+    if (scheme !in ALLOWED_ARTWORK_SCHEMES) return null
     return when {
         "googleusercontent.com" in url || "ggpht.com" in url ->
             if (GOOGLE_SIZE_SPEC.containsMatchIn(url)) {
@@ -39,3 +45,5 @@ const val ARTWORK_THUMB_PX = 128
 
 /** Now Playing / large artwork size. */
 const val ARTWORK_FULL_PX = 1080
+
+private val ALLOWED_ARTWORK_SCHEMES = setOf("http", "https", "content", "file")

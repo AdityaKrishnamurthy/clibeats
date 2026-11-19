@@ -108,11 +108,13 @@ internal fun iaStreamUrl(
     identifier: String,
     fileName: String,
 ): String {
+    val encodedId = URLEncoder.encode(identifier, "UTF-8").replace("+", "%20")
     val encodedName = URLEncoder.encode(fileName, "UTF-8").replace("+", "%20")
-    return "https://archive.org/download/$identifier/$encodedName"
+    return "https://archive.org/download/$encodedId/$encodedName"
 }
 
-internal fun iaArtworkUrl(identifier: String): String = "https://archive.org/services/img/$identifier"
+internal fun iaArtworkUrl(identifier: String): String =
+    "https://archive.org/services/img/" + URLEncoder.encode(identifier, "UTF-8").replace("+", "%20")
 
 /** Maps a scored IA item to a domain [Track]. */
 internal fun IaMetadataResponse.toDomainTrack(
