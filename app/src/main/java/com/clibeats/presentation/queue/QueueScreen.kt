@@ -8,6 +8,7 @@ package com.clibeats.presentation.queue
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,8 +41,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -138,6 +141,7 @@ private fun ReorderableQueue(
     var dragOffset by remember { mutableFloatStateOf(0f) }
     val listState = rememberLazyListState()
     val edge = with(LocalDensity.current) { AUTO_SCROLL_EDGE_DP.dp.toPx() }
+    val haptics = LocalHapticFeedback.current
 
     fun endDrag(commit: Boolean) {
         val to = order.indexOfFirst { keys[it] == dragKey }
@@ -152,6 +156,37 @@ private fun ReorderableQueue(
         dragOffset = 0f
     }
 
+    fun startDrag(
+        key: String,
+        index: Int,
+    ) {
+        dragKey = key
+        dragFrom = order.indexOf(index)
+        dragOffset = 0f
+    }
+
+    fun dragBy(
+        key: String,
+        amountY: Float,
+    ) {
+        dragOffset += amountY
+        val info = listState.layoutInfo
+        val current = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return
+        // Keep scrolling while the row is held near the top or bottom.
+        val top = current.offset + dragOffset
+        val bottom = top + current.size
+        val nearEnd = bottom > info.viewportEndOffset - edge && amountY > 0
+        val nearStart = top < info.viewportStartOffset + edge && amountY < 0
+        if (nearEnd || nearStart) dragOffset += listState.dispatchRawDelta(amountY)
+        val center = current.offset + dragOffset + current.size / 2f
+        val target =
+            info.visibleItemsInfo.firstOrNull {
+                it.key != key && center >= it.offset && center <= it.offset + it.size
+            } ?: return
+        order = order.toMutableList().apply { add(target.index, removeAt(current.index)) }
+        dragOffset += current.offset - target.offset
+    }
+
     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         itemsIndexed(items = order, key = { _, i -> keys[i] }) { position, i ->
             val track = tracks[i]
@@ -159,15 +194,31 @@ private fun ReorderableQueue(
             val dragging = key == dragKey
             Box(
                 modifier =
-                    if (dragging) {
-                        Modifier
-                            .zIndex(1f)
-                            .graphicsLayer {
-                                translationY = dragOffset
-                                shadowElevation = 8f
-                            }
-                    } else {
-                        Modifier.animateItem()
+                    (
+                        if (dragging) {
+                            Modifier
+                                .zIndex(1f)
+                                .graphicsLayer {
+                                    translationY = dragOffset
+                                    shadowElevation = 8f
+                                }
+                        } else {
+                            Modifier.animateItem()
+                        }
+                    ).pointerInput(key) {
+                        // Hold anywhere on the row (number, title, ...) and move it up or down.
+                        detectDragGesturesAfterLongPress(
+                            onDragStart = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                startDrag(key, i)
+                            },
+                            onDrag = { change, amount ->
+                                change.consume()
+                                dragBy(key, amount.y)
+                            },
+                            onDragEnd = { endDrag(commit = true) },
+                            onDragCancel = { endDrag(commit = false) },
+                        )
                     },
             ) {
                 SongTableRow(
@@ -179,6 +230,7 @@ private fun ReorderableQueue(
                     onClick = { if (dragKey == null) viewModel.onTrackClick(track, i) },
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // The handle drags straight away, without the long press.
                             Icon(
                                 imageVector = Icons.Outlined.DragHandle,
                                 contentDescription = "Drag to reorder",
@@ -188,41 +240,10 @@ private fun ReorderableQueue(
                                         .size(36.dp)
                                         .pointerInput(key) {
                                             detectDragGestures(
-                                                onDragStart = {
-                                                    dragKey = key
-                                                    dragFrom = order.indexOf(i)
-                                                    dragOffset = 0f
-                                                },
+                                                onDragStart = { startDrag(key, i) },
                                                 onDrag = { change, amount ->
                                                     change.consume()
-                                                    dragOffset += amount.y
-                                                    val info = listState.layoutInfo
-                                                    val current =
-                                                        info.visibleItemsInfo.firstOrNull { it.key == key }
-                                                            ?: return@detectDragGestures
-                                                    // Keep scrolling while the row is held near the top or bottom.
-                                                    val top = current.offset + dragOffset
-                                                    val bottom = top + current.size
-                                                    val nearEnd =
-                                                        bottom > info.viewportEndOffset - edge && amount.y > 0
-                                                    val nearStart =
-                                                        top < info.viewportStartOffset + edge && amount.y < 0
-                                                    if (nearEnd || nearStart) {
-                                                        dragOffset += listState.dispatchRawDelta(amount.y)
-                                                    }
-                                                    val center = current.offset + dragOffset + current.size / 2f
-                                                    val target =
-                                                        info.visibleItemsInfo.firstOrNull {
-                                                            it.key != key && center >= it.offset &&
-                                                                center <= it.offset + it.size
-                                                        }
-                                                    if (target != null) {
-                                                        order =
-                                                            order.toMutableList().apply {
-                                                                add(target.index, removeAt(current.index))
-                                                            }
-                                                        dragOffset += current.offset - target.offset
-                                                    }
+                                                    dragBy(key, amount.y)
                                                 },
                                                 onDragEnd = { endDrag(commit = true) },
                                                 onDragCancel = { endDrag(commit = false) },
