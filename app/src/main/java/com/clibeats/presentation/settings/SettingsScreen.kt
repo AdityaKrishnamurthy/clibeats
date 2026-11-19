@@ -55,7 +55,7 @@ import com.clibeats.presentation.update.UpdateSection
 private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
-private const val ADITYA_GITHUB_URL = "https://github.com/adityakrishnamurthy"
+private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
 private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
@@ -68,6 +68,7 @@ private fun folderLabel(treeUri: String): String =
         .getOrDefault(treeUri)
 
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
+@OptIn(ExperimentalLayoutApi::class) // FlowRow in the About credits
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
