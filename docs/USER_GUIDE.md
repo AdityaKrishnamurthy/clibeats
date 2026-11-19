@@ -53,6 +53,15 @@ Settings → Storage has two caches, each with a size limit and `[ CLEAR ]`:
 Playback continues in the background with notification and lock-screen controls. After the app is closed,
 the media card in Quick Settings resumes the last song from where you left off.
 
+## Updates
+
+When a new version is released, a pop-up offers **DOWNLOAD** or **LATER** (hides it for a day). The APK is
+saved to your Downloads folder and checked against the release's checksum; then tap **INSTALL** and confirm
+Android's update screen. The first time, Android asks you to allow installs from CLIBeats.
+
+Settings → Updates sets how often the app checks (**Daily**, **Weekly** or **Off**) and has **CHECK NOW** to
+check, download and install by hand. The downloaded APK is deleted after the update is installed.
+
 ## Playlist exchange
 
 Settings → Playlist exchange exports your playlists and Favorites to a `clibeats.json` file anywhere you

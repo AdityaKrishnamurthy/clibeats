@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.0.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.1.0-1DB954)](#)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
@@ -98,6 +98,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Background playback** and lock-screen / notification controls with **high-res artwork**.
 - Tapping the notification opens the app; the session survives swiping the app away.
 - **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
+- **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
+  Downloads, then INSTALL. Settings → Updates: auto-check daily / weekly / off and CHECK NOW.
 
 ### Storage & performance
 - **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);
@@ -196,12 +198,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.0.0.apk` on Windows).
+`Get-FileHash CLIBeats-v2.1.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+Every release is signed with the CLIBeats key, certificate SHA-256
+`bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.0.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.1.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
-`KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD` (falls back to the debug key if they're missing).
-The version comes from the tag (`2.0.0` → versionCode `20000`); local builds default to 2.0.0.
+`KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
+debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
+left untouched. The version comes from the tag (`2.1.0` → versionCode `20100`); local builds default to 2.1.0.
 
 ---
 
