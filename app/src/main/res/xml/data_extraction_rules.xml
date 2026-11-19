@@ -3,9 +3,11 @@
     <cloud-backup>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
         <exclude domain="file" path="datastore/clibeats_prefs.preferences_pb" />
+        <exclude domain="database" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
         <exclude domain="file" path="datastore/clibeats_prefs.preferences_pb" />
+        <exclude domain="database" path="." />
     </device-transfer>
 </data-extraction-rules>
