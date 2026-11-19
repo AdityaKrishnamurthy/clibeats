@@ -17,8 +17,10 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
+import coil.ImageLoader
 import com.clibeats.R
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.playback.ArtworkBitmapLoader
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -49,6 +51,8 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var playbackRepository: PlaybackRepository
 
+    @Inject lateinit var imageLoader: ImageLoader
+
     private var librarySession: MediaLibrarySession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -61,7 +65,12 @@ class PlaybackService : MediaLibraryService() {
         )
         val session =
             MediaLibrarySession.Builder(this, previousFromHistory(player), LibraryCallback())
-                .apply { sessionActivity()?.let(::setSessionActivity) }
+                .setBitmapLoader(
+                    // Cached covers with fallbacks; re-draw the notification when the high-res one arrives.
+                    ArtworkBitmapLoader(this, imageLoader) {
+                        scope.launch { librarySession?.let { onUpdateNotification(it) } }
+                    },
+                ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;

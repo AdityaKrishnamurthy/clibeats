@@ -476,7 +476,12 @@ class PlayerAdapter
                         .setAlbumTitle(album)
                         // High-res cover for the notification, lock screen and Bluetooth displays.
                         .setArtworkUri(artworkUrlFor(artworkUrl, ARTWORK_FULL_PX)?.let { android.net.Uri.parse(it) })
-                        .build(),
+                        // Original URL, so ArtworkBitmapLoader can fall back to smaller sizes of the same cover.
+                        .setExtras(
+                            android.os.Bundle().apply {
+                                putString(ArtworkBitmapLoader.ARTWORK_SOURCE_KEY, artworkUrl)
+                            },
+                        ).build(),
                 )
                 .build()
         }
