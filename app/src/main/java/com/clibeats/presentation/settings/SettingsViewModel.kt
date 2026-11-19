@@ -224,17 +224,17 @@ class SettingsViewModel
 
         /** Triggers a GitHub Releases check. No-op if one is already in progress. */
         fun checkForUpdate() {
-            viewModelScope.launch { updateManager.checkForUpdate() }
+            viewModelScope.launch { updateManager?.checkForUpdate() }
         }
 
         /** Downloads the APK at [apkUrl] and launches the system installer. */
         fun downloadAndInstall(apkUrl: String) {
-            viewModelScope.launch { updateManager.downloadAndInstall(apkUrl) }
+            viewModelScope.launch { updateManager?.downloadAndInstall(apkUrl) }
         }
 
         /** Resets the update state (e.g. user dismissed the dialog). */
         fun resetUpdateState() {
-            updateManager.reset()
+            updateManager?.reset()
         }
 
         companion object {
