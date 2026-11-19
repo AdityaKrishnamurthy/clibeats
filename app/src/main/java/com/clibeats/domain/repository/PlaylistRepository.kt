@@ -46,4 +46,10 @@ interface PlaylistRepository {
         name: String,
         songIds: List<String>,
     ): String
+
+    /**
+     * Sets a custom artwork URL on a playlist tile. Pass [artworkUrl] = null to clear the override
+     * and fall back to the first-song cover.
+     */
+    suspend fun updatePlaylistArtwork(playlistId: String, artworkUrl: String?)
 }

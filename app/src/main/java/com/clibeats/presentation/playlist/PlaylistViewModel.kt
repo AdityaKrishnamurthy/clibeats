@@ -168,6 +168,16 @@ class PlaylistViewModel
             }
         }
 
+        /**
+         * Sets a custom cover image for [playlistId].
+         * Pass [artworkUrl] = null to clear the custom cover and revert to the first-song thumbnail.
+         */
+        fun updatePlaylistArtwork(playlistId: String, artworkUrl: String?) {
+            viewModelScope.launch {
+                playlistRepository.updatePlaylistArtwork(playlistId, artworkUrl)
+            }
+        }
+
         private companion object {
             const val FAVORITES_ID = "__favorites__"
             const val MOST_PLAYED_ID = "__most_played__"

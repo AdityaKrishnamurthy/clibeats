@@ -64,11 +64,18 @@ interface PlaylistDao {
         now: Long = System.currentTimeMillis(),
     )
 
-    /** First song's artwork per playlist (by position), used as the playlist tile cover. */
+    /** Playlist tile cover: uses custom artwork_url if set, otherwise first song's artwork. */
     @Query(
-        "SELECT c.playlist_id AS playlist_id, s.artwork_url AS artwork_url FROM playlist_song_cross_ref c " +
-            "INNER JOIN songs s ON s.id = c.song_id " +
-            "WHERE c.position = (SELECT MIN(position) FROM playlist_song_cross_ref WHERE playlist_id = c.playlist_id)",
+        """
+        SELECT p.id AS playlist_id,
+               COALESCE(p.artwork_url, (
+                   SELECT s.artwork_url FROM playlist_song_cross_ref c
+                   INNER JOIN songs s ON s.id = c.song_id
+                   WHERE c.playlist_id = p.id
+                   ORDER BY c.position ASC LIMIT 1
+               )) AS artwork_url
+        FROM playlists p
+        """,
     )
     fun getPlaylistCoversAsFlow(): Flow<List<PlaylistCover>>
 
@@ -81,6 +88,14 @@ interface PlaylistDao {
     /** Ids of playlists mirrored from M3U/PLS files in the music folder (read-only in the app). */
     @Query("SELECT id FROM playlists WHERE id LIKE 'localpl:%'")
     suspend fun getLocalFilePlaylistIds(): List<String>
+
+    /** Directly updates the custom artwork URL on a playlist row. */
+    @Query("UPDATE playlists SET artwork_url = :artworkUrl, updated_at = :now WHERE id = :playlistId")
+    suspend fun updateArtworkUrl(
+        playlistId: String,
+        artworkUrl: String?,
+        now: Long = System.currentTimeMillis(),
+    )
 
     @androidx.room.Transaction
     suspend fun replaceLocalPlaylist(
