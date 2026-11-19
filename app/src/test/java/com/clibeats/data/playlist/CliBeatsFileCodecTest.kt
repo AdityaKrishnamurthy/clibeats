@@ -43,6 +43,39 @@ class CliBeatsFileCodecTest {
     }
 
     @Test
+    fun `v1 files still decode with the v2 fields defaulted`() {
+        val raw =
+            """
+            {"version":1,"playlists":[{"name":"P","tracks":[{"providerId":"audius","sourceId":"abc",
+            "title":"T","artist":"A","album":"","durationMs":0}]}]}
+            """.trimIndent()
+
+        val decoded = CliBeatsFileCodec.decode(raw)
+
+        assertThat(decoded.version).isEqualTo(1)
+        assertThat(decoded.prefs).isNull()
+        assertThat(decoded.albums).isEmpty()
+        assertThat(decoded.artists).isEmpty()
+    }
+
+    @Test
+    fun `v2 roundtrips prefs, albums and artists`() {
+        val file =
+            CliBeatsFile(
+                prefs = CliBeatsPrefs(themeMode = "DARK", accentColorName = "GREEN", onboardingDone = true),
+                albums = listOf(CliBeatsAlbum("a1", "Album", "Artist", 2024, null, 9, "audius")),
+                artists = listOf(CliBeatsArtist("r1", "Artist", null, "audius")),
+            )
+
+        val decoded = CliBeatsFileCodec.decode(CliBeatsFileCodec.encode(file))
+
+        assertThat(decoded.version).isEqualTo(CliBeatsFile.CURRENT_VERSION)
+        assertThat(decoded.prefs?.onboardingDone).isTrue()
+        assertThat(decoded.albums.single().trackCount).isEqualTo(9)
+        assertThat(decoded.artists.single().name).isEqualTo("Artist")
+    }
+
+    @Test
     fun `decode ignores unknown keys`() {
         val raw =
             """

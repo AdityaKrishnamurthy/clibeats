@@ -36,8 +36,8 @@ class PlaylistExchangeManager
         private val playlistRepository: PlaylistRepository,
         private val songRepository: SongRepository,
         private val providerRegistry: ProviderRegistry,
-        private val database: CliBeatsDatabase? = null,
-        private val libraryRepository: LibraryRepository? = null,
+        private val database: CliBeatsDatabase,
+        private val libraryRepository: LibraryRepository,
     ) {
         /**
          * Writes the app's own playlists plus ♥ Favorites to [target]; returns the number exported.
@@ -50,7 +50,7 @@ class PlaylistExchangeManager
                 val named =
                     appPlaylists.map { it.name to playlistRepository.getSongsForPlaylistAsFlow(it.id).first() } +
                         listOfNotNull(
-                            libraryRepository?.getLikedSongs()?.first()?.takeIf { it.isNotEmpty() }?.let {
+                            libraryRepository.getLikedSongs().first().takeIf { it.isNotEmpty() }?.let {
                                 FAVORITES_NAME to it
                             },
                         )
@@ -122,7 +122,7 @@ class PlaylistExchangeManager
                                 }.distinctBy { it.id }
                         songRepository.upsertTracks(tracks)
                         importedTracks += tracks.size
-                        if (playlistData.name == FAVORITES_NAME && libraryRepository != null) {
+                        if (playlistData.name == FAVORITES_NAME) {
                             tracks.forEach { libraryRepository.addToFavorites(it) }
                             return@forEach
                         }
@@ -142,7 +142,7 @@ class PlaylistExchangeManager
                     }
                 }
                 // All-or-nothing: a malformed entry must not leave half-imported playlists.
-                if (database != null) database.withTransaction { write() } else write()
+                database.withTransaction { write() }
                 importedTracks
             }
 
