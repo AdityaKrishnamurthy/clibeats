@@ -30,6 +30,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Privacy & Legal](#privacy--legal)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
+- [Developers](#developers)
 - [License](#license)
 
 ---
@@ -65,7 +66,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Fast start** — playback begins after ~0.5 s of buffer; next 2 songs are pre-resolved and their covers prefetched.
 - **Repeat** (off → all → one) and **shuffle**, with a tiny `ONE` / `ALL` / `OFF` label above the button.
 - **Sleep timer** — 15 / 30 / 45 / 60 min or end of track (also with repeat-one).
-- **Auto-queue related songs** (optional) — tapping a song queues the rest of that list after it.
+- **Auto-queue related songs** (optional, off by default) — tapping a song queues the rest of that list after it.
+- **Previous always goes back** to the song that played before — local or online, from any queue — in the app, notification and lock screen.
 - **Clear upcoming** keeps the song that's playing.
 - Expired YouTube links are refreshed automatically; one silent retry on stream errors.
 - **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
@@ -125,10 +127,12 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
-| Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
+| Bottom bar · **Search** | Tap again (on Search) | Focus the search box and open the keyboard |
+| Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
+| Queue | **Drag** a song's ≡ handle | Reorder the queue |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
 | Back | — | Close player / playlist, then return to Home |
@@ -144,7 +148,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Home** — source switch, recently played, trending, mini player.
 - **Search** — search the active source; play next / add to playlist / add to queue on each result.
 - **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
-- **Queue** — reorder, remove, clear upcoming; tap to jump.
+- **Queue** — drag to reorder, remove, clear upcoming; tap to jump.
 - **Playlists** — Favorites, Most Played, app playlists, local M3U playlists.
 - **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange, about.
 
@@ -254,6 +258,13 @@ responsible for complying with providers' terms of service and copyright law in 
 2. Add or update tests for behaviour changes.
 3. Run the quality gates (tests, ktlint, detekt, lint) before opening a PR.
 4. Keep UI changes consistent with the terminal design system.
+
+---
+
+## Developers
+
+Developed by **[Omprakash Panda](https://github.com/Omprakash-p06)** and
+**[Aditya Krishnamurthy](https://github.com/AdityaKrishnamurthy)**.
 
 ---
 
