@@ -17,11 +17,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 </div>
 
-> [!NOTE]
-> **v2.0** is a full overhaul: gapless queue playback, a real local library (FLAC 16/24-bit, WAV, MP3, …),
-> M3U playlists, a full-screen player, favourites, swipe gestures, light/dark/AMOLED themes, smart caching,
-> and system media controls with playback resumption.
-
 ## Contents
 
 - [Screenshots](#screenshots)
