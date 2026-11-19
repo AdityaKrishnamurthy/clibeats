@@ -56,6 +56,7 @@ class SettingsViewModel
             viewModelScope.launch {
                 appPreferences.setCacheMaxMb(mb)
                 cacheManager.maxCacheSizeBytes = mb * BYTES_IN_MB
+                runCatching { cacheManager.evictLruIfNeeded() }
                 runCatching { mediaCaches?.setSongLimitMb(mb) }
             }
         }
