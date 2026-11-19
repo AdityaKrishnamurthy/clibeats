@@ -28,13 +28,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,11 +46,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
-import com.clibeats.data.update.UpdateState
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.presentation.update.UpdateSection
 
 private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
@@ -80,7 +78,6 @@ fun SettingsScreen(
     val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
-    val updateState by viewModel.updateState.collectAsState()
     val accent = LocalAccentColor.current
     val context = LocalContext.current
 
@@ -376,121 +373,8 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Updates ─────────────────────────────────────────────────
-        TuiBlock(title = "Updates") {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                when (val state = updateState) {
-                    is UpdateState.Idle -> {
-                        Button(
-                            onClick = { viewModel.checkForUpdate() },
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                        ) {
-                            Text("CHECK FOR UPDATES")
-                        }
-                    }
-                    is UpdateState.Checking -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            LinearProgressIndicator(
-                                modifier = Modifier.weight(1f),
-                                color = accent,
-                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            )
-                            Text(
-                                "Checking...",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                    }
-                    is UpdateState.UpToDate -> {
-                        Text(
-                            text = "[ OK ] You are on the latest version (v${BuildConfig.VERSION_NAME})",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = { viewModel.checkForUpdate() },
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                        ) {
-                            Text("CHECK AGAIN")
-                        }
-                    }
-                    is UpdateState.UpdateAvailable -> {
-                        Text(
-                            text = "> Update available: ${state.version}",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = accent,
-                        )
-                        if (state.changelog.isNotBlank()) {
-                            Text(
-                                text = state.changelog,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = { viewModel.downloadAndInstall(state.apkUrl) },
-                                colors = ButtonDefaults.buttonColors(containerColor = accent),
-                            ) {
-                                Text("DOWNLOAD & INSTALL")
-                            }
-                            Button(
-                                onClick = { viewModel.resetUpdateState() },
-                                colors =
-                                    ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                                    ),
-                            ) {
-                                Text("DISMISS", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                    }
-                    is UpdateState.Downloading -> {
-                        Text(
-                            text = "> Downloading update... ${state.progress}%",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        LinearProgressIndicator(
-                            progress = { state.progress / 100f },
-                            modifier = Modifier.fillMaxWidth(),
-                            color = accent,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        )
-                    }
-                    is UpdateState.ReadyToInstall -> {
-                        Text(
-                            text = "[ OK ] Update downloaded — installer launched.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Button(
-                            onClick = { viewModel.resetUpdateState() },
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                        ) {
-                            Text("DONE")
-                        }
-                    }
-                    is UpdateState.Error -> {
-                        Text(
-                            text = "! ${state.message}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                        Button(
-                            onClick = { viewModel.checkForUpdate() },
-                            colors = ButtonDefaults.buttonColors(containerColor = accent),
-                        ) {
-                            Text("RETRY")
-                        }
-                    }
-                }
-            }
-        }
+        // ── Section: Updates (GitHub Releases) ──────────────────────────────
+        UpdateSection()
 
         // ── Section: About (developer credit; name links to GitHub) ─────────
         TuiBlock(title = "About") {

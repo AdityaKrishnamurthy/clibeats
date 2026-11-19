@@ -1,217 +1,377 @@
-@file:Suppress("ForbiddenImport", "MagicNumber", "TooManyFunctions")
+// ForbiddenImport: the detekt rule is meant for the presentation layer; data classes may use data.
+@file:Suppress("ForbiddenImport")
 
 package com.clibeats.data.update
 
+import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
-import androidx.core.content.FileProvider
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.Settings
 import com.clibeats.BuildConfig
+import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.data.preferences.NO_DOWNLOAD
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.io.File
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.security.MessageDigest
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Checks GitHub Releases for a newer version and, if found, downloads the APK and
- * hands it to the system package installer — all without leaving the app.
+ * In-app updater backed by GitHub Releases.
  *
- * Flow:
- *  1. [checkForUpdate] hits the GitHub Releases API (latest release endpoint).
- *  2. If the remote tag is newer than [BuildConfig.VERSION_NAME], emits [UpdateState.UpdateAvailable].
- *  3. [downloadAndInstall] streams the APK into `filesDir/updates/` while emitting [UpdateState.Downloading].
- *  4. On completion it fires an `ACTION_VIEW` intent via [FileProvider] so the system installer
- *     takes over without the user ever leaving the app context.
- *
- * The class is [Singleton] so the same state is shared between the Settings screen and any
- * notification/background trigger.
+ * - On launch it checks at most once per [UpdateFrequency] interval; failures stay silent.
+ * - The APK is downloaded by the system DownloadManager into Downloads (survives leaving the app),
+ *   the previous update APK it downloaded is deleted, and the file must match the release's
+ *   `SHA256SUMS.txt` before it can be installed.
+ * - Installing hands the file to Android's package installer ("Do you want to update this app?").
  */
+@Suppress("TooManyFunctions")
 @Singleton
 class UpdateManager
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-        private val okHttpClient: OkHttpClient,
+        private val client: GitHubReleaseClient,
+        private val preferences: AppPreferences,
     ) {
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val checkMutex = Mutex()
+        private val started = AtomicBoolean(false)
+        private var pollJob: Job? = null
+        private val downloadManager: DownloadManager? = context.getSystemService(DownloadManager::class.java)
+
         private val _state = MutableStateFlow<UpdateState>(UpdateState.Idle)
         val state: StateFlow<UpdateState> = _state.asStateFlow()
 
-        // ── GitHub API ──────────────────────────────────────────────────────────
+        /** True while the launch pop-up should be on screen. */
+        private val _promptVisible = MutableStateFlow(false)
+        val promptVisible: StateFlow<Boolean> = _promptVisible.asStateFlow()
 
-        @Serializable
-        private data class GitHubRelease(
-            @SerialName("tag_name") val tagName: String,
-            @SerialName("body") val body: String? = null,
-            @SerialName("assets") val assets: List<GitHubAsset> = emptyList(),
-        )
+        val frequency: Flow<UpdateFrequency> = preferences.updateFrequency.map(::frequencyOf)
 
-        @Serializable
-        private data class GitHubAsset(
-            @SerialName("name") val name: String,
-            @SerialName("browser_download_url") val downloadUrl: String,
-            @SerialName("content_type") val contentType: String = "",
-        )
+        val installedVersion: String = BuildConfig.VERSION_NAME
 
-        private val json = Json { ignoreUnknownKeys = true }
+        /** Called once per app launch: restores a known update, then checks GitHub if a check is due. */
+        fun onAppStart() {
+            if (!started.compareAndSet(false, true)) return
+            scope.launch {
+                var record = preferences.updateRecord()
+                // The update was installed: delete its APK from Downloads.
+                if (record.downloadId != NO_DOWNLOAD &&
+                    UpdateRules.isLeftoverDownload(record.downloadVersion, installedVersion)
+                ) {
+                    removeDownload(record.downloadId)
+                    record = preferences.updateRecord()
+                }
+                val frequency = frequencyOf(record.frequency)
+                if (frequency == UpdateFrequency.OFF) return@launch
+                val cached = UpdateRules.decode(record.cachedReleaseJson)
+                if (cached != null && UpdateRules.isNewer(cached.version, installedVersion)) {
+                    present(cached, prompt = true)
+                }
+                if (UpdateRules.isCheckDue(System.currentTimeMillis(), record.lastCheckAt, frequency)) {
+                    check(userInitiated = false)
+                }
+            }
+        }
+
+        /** "Check now" in Settings: always hits GitHub and reports errors. */
+        fun checkNow() {
+            scope.launch { check(userInitiated = true) }
+        }
+
+        fun setFrequency(frequency: UpdateFrequency) {
+            scope.launch { preferences.setUpdateFrequency(frequency.name) }
+            if (frequency == UpdateFrequency.OFF) _promptVisible.value = false
+        }
+
+        /** "Later": hide the pop-up for a day. Settings → Updates still works meanwhile. */
+        fun later() {
+            _promptVisible.value = false
+            scope.launch { preferences.setUpdateSnoozeUntil(System.currentTimeMillis() + DAY_MS) }
+        }
+
+        /** Hides the pop-up without snoozing (e.g. while the download continues in the background). */
+        fun hidePrompt() {
+            _promptVisible.value = false
+        }
+
+        fun download() {
+            val release = releaseOf(_state.value) ?: return
+            if (_state.value is UpdateState.Downloading || _state.value is UpdateState.Verifying) return
+            scope.launch { startDownload(release) }
+        }
 
         /**
-         * Fetches the latest GitHub release and updates [state].
-         * Safe to call from any coroutine context; IO is dispatched internally.
+         * Opens Android's installer for the verified APK. If CLIBeats isn't yet allowed to install apps,
+         * opens that settings page first; the user comes back and taps Install again.
          */
-        suspend fun checkForUpdate() {
-            if (_state.value is UpdateState.Checking) return
-            _state.value = UpdateState.Checking
-            withContext(Dispatchers.IO) {
+        fun install() {
+            val ready = _state.value as? UpdateState.ReadyToInstall ?: return
+            scope.launch {
+                val record = preferences.updateRecord()
+                val uri =
+                    record.downloadId
+                        .takeIf { it != NO_DOWNLOAD }
+                        ?.let { runCatching { downloadManager?.getUriForDownloadedFile(it) }.getOrNull() }
+                if (uri == null) {
+                    preferences.clearUpdateDownload()
+                    _state.value = UpdateState.Failed("The downloaded file is gone. Download it again.", ready.release)
+                    return@launch
+                }
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    launch(
+                        Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")),
+                    )
+                    return@launch
+                }
+                val installIntent =
+                    Intent(Intent.ACTION_VIEW)
+                        .setDataAndType(uri, APK_MIME_TYPE)
+                        .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                launch(installIntent)
+            }
+        }
+
+        private suspend fun check(userInitiated: Boolean) {
+            checkMutex.withLock {
+                val current = _state.value
+                if (current is UpdateState.Downloading || current is UpdateState.Verifying) return
+                if (userInitiated) _state.value = UpdateState.Checking
+                val record = preferences.updateRecord()
+                val cached = UpdateRules.decode(record.cachedReleaseJson)
+                val now = System.currentTimeMillis()
+                // Only send the ETag when we still hold the release it describes.
+                val etag = record.etag.takeIf { cached != null }
+                when (val result = client.fetchLatest(etag)) {
+                    is GitHubReleaseClient.Result.NotModified -> {
+                        preferences.setUpdateLastCheckAt(now)
+                        evaluate(cached, userInitiated)
+                    }
+                    is GitHubReleaseClient.Result.Found -> {
+                        preferences.saveUpdateCheck(now, result.etag, result.release?.let(UpdateRules::encode))
+                        evaluate(result.release, userInitiated)
+                    }
+                    is GitHubReleaseClient.Result.Failed ->
+                        if (userInitiated) {
+                            _state.value = UpdateState.Failed("Couldn't check for updates (${result.message})")
+                        }
+                }
+            }
+        }
+
+        private suspend fun evaluate(
+            release: ReleaseInfo?,
+            userInitiated: Boolean,
+        ) {
+            if (release != null && UpdateRules.isNewer(release.version, installedVersion)) {
+                present(release, prompt = !userInitiated)
+            } else {
+                _promptVisible.value = false
+                _state.value = if (userInitiated) UpdateState.UpToDate else UpdateState.Idle
+            }
+        }
+
+        /** Shows [release], resuming a download that already exists for it. */
+        private suspend fun present(
+            release: ReleaseInfo,
+            prompt: Boolean,
+        ) {
+            val record = preferences.updateRecord()
+            val existing =
+                record.downloadId.takeIf { it != NO_DOWNLOAD && record.downloadVersion == release.version }
+            val status = existing?.let(::queryDownload)
+            when {
+                existing == null || status == null -> _state.value = UpdateState.Available(release)
+                status.status == DownloadManager.STATUS_SUCCESSFUL -> verify(release, existing, record.downloadSha256)
+                status.status == DownloadManager.STATUS_FAILED -> {
+                    removeDownload(existing)
+                    _state.value = UpdateState.Available(release)
+                }
+                else -> {
+                    _state.value = UpdateState.Downloading(release, status.progress)
+                    poll(release, existing)
+                }
+            }
+            if (prompt && !UpdateRules.isSnoozed(System.currentTimeMillis(), record.snoozeUntil)) {
+                _promptVisible.value = true
+            }
+        }
+
+        @Suppress("ReturnCount")
+        private suspend fun startDownload(release: ReleaseInfo) {
+            val manager = downloadManager
+            if (manager == null) {
+                _state.value = UpdateState.Failed("Downloads aren't available on this device", release)
+                return
+            }
+            _state.value = UpdateState.Downloading(release, UNKNOWN_PROGRESS)
+            val checksums = release.checksumsUrl?.let { client.fetchText(it) }
+            val expected = checksums?.let { UpdateRules.sha256For(it, release.apkName) }
+            if (expected == null) {
+                _state.value = UpdateState.Failed(NO_CHECKSUM_MESSAGE, release)
+                return
+            }
+            // Keep only one update APK: delete the one we downloaded last time.
+            preferences.updateRecord().downloadId.takeIf { it != NO_DOWNLOAD }?.let { removeDownload(it) }
+
+            val id =
                 runCatching {
                     val request =
-                        Request.Builder()
-                            .url(RELEASES_API_URL)
-                            .header("Accept", "application/vnd.github+json")
-                            .header("X-GitHub-Api-Version", "2022-11-28")
-                            .build()
-
-                    okHttpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            _state.value = UpdateState.Error("Server error ${response.code}")
-                            return@withContext
-                        }
-                        val body =
-                            response.body?.string() ?: run {
-                                _state.value = UpdateState.Error("Empty response from server")
-                                return@withContext
-                            }
-                        val release = json.decodeFromString<GitHubRelease>(body)
-                        val remoteVersion = release.tagName.trimStart('v', 'V')
-                        val localVersion = BuildConfig.VERSION_NAME
-
-                        if (isNewerVersion(remoteVersion, localVersion)) {
-                            val apkAsset =
-                                release.assets.firstOrNull { asset ->
-                                    asset.name.endsWith(".apk", ignoreCase = true)
-                                }
-                            if (apkAsset == null) {
-                                _state.value = UpdateState.Error("No APK in release ${release.tagName}")
-                            } else {
-                                _state.value =
-                                    UpdateState.UpdateAvailable(
-                                        version = release.tagName,
-                                        apkUrl = apkAsset.downloadUrl,
-                                        changelog = (release.body ?: "").take(CHANGELOG_MAX_CHARS),
-                                    )
-                            }
-                        } else {
-                            _state.value = UpdateState.UpToDate
-                        }
+                        DownloadManager
+                            .Request(Uri.parse(release.apkUrl))
+                            .setTitle("CLIBeats v${release.version}")
+                            .setDescription("Downloading update")
+                            .setMimeType(APK_MIME_TYPE)
+                            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, release.apkName)
+                    } else {
+                        // Android 8–9 need a storage permission for public Downloads; use the app's own folder.
+                        val downloads = Environment.DIRECTORY_DOWNLOADS
+                        request.setDestinationInExternalFilesDir(context, downloads, release.apkName)
                     }
-                }.onFailure { e ->
-                    _state.value = UpdateState.Error(e.message ?: "Unknown error")
+                    manager.enqueue(request)
+                }.getOrElse { e ->
+                    _state.value = UpdateState.Failed("Couldn't start the download (${e.message})", release)
+                    return
                 }
-            }
+            preferences.saveUpdateDownload(id, release.version, expected)
+            poll(release, id)
         }
 
-        /**
-         * Downloads the APK from [apkUrl] into the app's private storage and launches
-         * the system installer. Progress is reflected in [state].
-         *
-         * On Android 8+ the user is prompted to allow installs from this source once;
-         * the [REQUEST_INSTALL_PACKAGES] permission in the manifest makes this possible.
-         */
-        suspend fun downloadAndInstall(apkUrl: String) {
-            _state.value = UpdateState.Downloading(0)
-            withContext(Dispatchers.IO) {
+        private fun poll(
+            release: ReleaseInfo,
+            id: Long,
+        ) {
+            pollJob?.cancel()
+            pollJob =
+                scope.launch {
+                    while (isActive) {
+                        val status = queryDownload(id)
+                        when (status?.status) {
+                            null -> {
+                                // Cancelled from the notification or the Downloads app.
+                                preferences.clearUpdateDownload()
+                                _state.value = UpdateState.Available(release)
+                                return@launch
+                            }
+                            DownloadManager.STATUS_SUCCESSFUL -> {
+                                verify(release, id, preferences.updateRecord().downloadSha256)
+                                return@launch
+                            }
+                            DownloadManager.STATUS_FAILED -> {
+                                removeDownload(id)
+                                _state.value = UpdateState.Failed(DOWNLOAD_FAILED_MESSAGE, release)
+                                return@launch
+                            }
+                            else -> _state.value = UpdateState.Downloading(release, status.progress)
+                        }
+                        delay(POLL_INTERVAL_MS)
+                    }
+                }
+        }
+
+        private suspend fun verify(
+            release: ReleaseInfo,
+            id: Long,
+            expectedSha256: String?,
+        ) {
+            _state.value = UpdateState.Verifying(release)
+            val actual =
                 runCatching {
-                    val updateDir = File(context.filesDir, "updates").also { it.mkdirs() }
-                    val apkFile = File(updateDir, "clibeats-update.apk")
-
-                    val request = Request.Builder().url(apkUrl).build()
-                    okHttpClient.newCall(request).execute().use { response ->
-                        if (!response.isSuccessful) {
-                            _state.value = UpdateState.Error("Download failed: HTTP ${response.code}")
-                            return@withContext
+                    val uri = downloadManager?.getUriForDownloadedFile(id) ?: return@runCatching null
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        val digest = MessageDigest.getInstance("SHA-256")
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            digest.update(buffer, 0, read)
                         }
-                        val body =
-                            response.body ?: run {
-                                _state.value = UpdateState.Error("Empty download response")
-                                return@withContext
-                            }
-                        val totalBytes = body.contentLength()
-                        var downloadedBytes = 0L
-
-                        apkFile.outputStream().buffered().use { out ->
-                            body.byteStream().buffered().use { input ->
-                                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                                var read: Int
-                                while (input.read(buffer).also { read = it } != -1) {
-                                    out.write(buffer, 0, read)
-                                    downloadedBytes += read
-                                    if (totalBytes > 0) {
-                                        val pct = ((downloadedBytes * 100) / totalBytes).toInt()
-                                        _state.value = UpdateState.Downloading(pct)
-                                    }
-                                }
-                            }
-                        }
+                        digest.digest().joinToString("") { "%02x".format(it) }
                     }
+                }.getOrNull()
+            if (actual != null && actual == expectedSha256) {
+                _state.value = UpdateState.ReadyToInstall(release)
+                // A download started from the pop-up brings it back when it's ready.
+                if (_promptVisible.value || startedFromPrompt) _promptVisible.value = true
+            } else {
+                removeDownload(id)
+                _state.value =
+                    UpdateState.Failed(DAMAGED_MESSAGE, release)
+            }
+            startedFromPrompt = false
+        }
 
-                    // Hand off to the system installer via a content:// URI (required for Android 7+).
-                    val apkUri =
-                        FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            apkFile,
-                        )
-                    val installIntent =
-                        Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(apkUri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                    context.startActivity(installIntent)
-                    _state.value = UpdateState.ReadyToInstall
-                }.onFailure { e ->
-                    _state.value = UpdateState.Error(e.message ?: "Download error")
+        /** Set by the pop-up's Download button so the finished download re-opens it with Install. */
+        @Volatile
+        var startedFromPrompt: Boolean = false
+
+        private suspend fun removeDownload(id: Long) {
+            runCatching { downloadManager?.remove(id) }
+            preferences.clearUpdateDownload()
+        }
+
+        private data class DownloadStatus(
+            val status: Int,
+            val progress: Int,
+        )
+
+        private fun queryDownload(id: Long): DownloadStatus? =
+            runCatching {
+                downloadManager?.query(DownloadManager.Query().setFilterById(id))?.use { cursor ->
+                    if (!cursor.moveToFirst()) return@use null
+                    val status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
+                    val doneColumn = DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR
+                    val done = cursor.getLong(cursor.getColumnIndexOrThrow(doneColumn))
+                    val total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val progress = if (total > 0) ((done * PERCENT) / total).toInt() else UNKNOWN_PROGRESS
+                    DownloadStatus(status, progress)
                 }
+            }.getOrNull()
+
+        private fun launch(intent: Intent) {
+            runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                .onFailure { e -> _state.value = UpdateState.Failed("Couldn't open the installer (${e.message})") }
+        }
+
+        private fun releaseOf(state: UpdateState): ReleaseInfo? =
+            when (state) {
+                is UpdateState.Available -> state.release
+                is UpdateState.Failed -> state.release
+                is UpdateState.ReadyToInstall -> state.release
+                else -> null
             }
-        }
 
-        /** Resets to [UpdateState.Idle], e.g. when the user dismisses the dialog. */
-        fun reset() {
-            _state.value = UpdateState.Idle
-        }
+        private fun frequencyOf(name: String?): UpdateFrequency =
+            UpdateFrequency.entries.firstOrNull { it.name == name } ?: UpdateFrequency.DAILY
 
-        // ── Helpers ─────────────────────────────────────────────────────────────
-
-        /**
-         * Compares semantic version strings (major.minor.patch).
-         * Returns true only when [remote] is strictly newer than [local].
-         */
-        private fun isNewerVersion(
-            remote: String,
-            local: String,
-        ): Boolean {
-            val remoteParts = remote.split('.').mapNotNull { it.toIntOrNull() }
-            val localParts = local.split('.').mapNotNull { it.toIntOrNull() }
-            val count = maxOf(remoteParts.size, localParts.size)
-            for (i in 0 until count) {
-                val diff = remoteParts.getOrElse(i) { 0 } - localParts.getOrElse(i) { 0 }
-                if (diff != 0) return diff > 0
-            }
-            return false
-        }
-
-        companion object {
-            private const val RELEASES_API_URL =
-                "https://api.github.com/repos/Omprakash-p06/clibeats/releases/latest"
-            private const val CHANGELOG_MAX_CHARS = 2_000
-            private const val DEFAULT_BUFFER_SIZE = 8_192
+        private companion object {
+            const val APK_MIME_TYPE = "application/vnd.android.package-archive"
+            const val POLL_INTERVAL_MS = 500L
+            const val BUFFER_SIZE = 64 * 1024
+            const val PERCENT = 100
+            const val UNKNOWN_PROGRESS = -1
+            const val NO_CHECKSUM_MESSAGE = "Couldn't get this release's checksum, so it can't be verified"
+            const val DOWNLOAD_FAILED_MESSAGE = "Download failed. Check your connection and retry."
+            const val DAMAGED_MESSAGE = "The download was damaged (checksum mismatch) and was deleted. Try again."
         }
     }

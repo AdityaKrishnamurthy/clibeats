@@ -41,6 +41,8 @@ import com.clibeats.presentation.settings.SettingsScreen
 import com.clibeats.presentation.theme.CliBeatsTheme
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.ThemeViewModel
+import com.clibeats.presentation.update.UpdatePrompt
+import com.clibeats.presentation.update.UpdateViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -80,7 +82,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongMethod")
 @Composable
 private fun AppContent() {
     val tabs = NavDestination.mainTabs
@@ -119,6 +121,11 @@ private fun AppContent() {
         lastTabAt = now
         navigate(destination)
     }
+
+    // In-app updater: check GitHub on launch (at most once per chosen interval) and show the pop-up.
+    val updateViewModel: UpdateViewModel = hiltViewModel()
+    LaunchedEffect(Unit) { updateViewModel.onAppStart() }
+    UpdatePrompt(viewModel = updateViewModel)
 
     MainLayout(
         selectedDestination = tabs[pagerState.currentPage],
