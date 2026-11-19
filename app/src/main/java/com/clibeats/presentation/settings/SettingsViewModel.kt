@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "LongParameterList")
 
 package com.clibeats.presentation.settings
 
@@ -36,12 +36,13 @@ class SettingsViewModel
         private val cacheManager: CacheManager,
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
-        private val updateManager: UpdateManager,
+        private val updateManager: UpdateManager? = null,
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
     ) : ViewModel() {
         /** Live update status — drives the "Updates" row in Settings. */
-        val updateState: StateFlow<UpdateState> = updateManager.state
+        val updateState: StateFlow<UpdateState> =
+            updateManager?.state ?: MutableStateFlow(UpdateState.Idle)
 
         val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
 

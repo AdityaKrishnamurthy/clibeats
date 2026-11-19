@@ -4,7 +4,6 @@ package com.clibeats.data.update
 
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import androidx.core.content.FileProvider
 import com.clibeats.BuildConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -85,26 +84,29 @@ class UpdateManager
                             _state.value = UpdateState.Error("Server error ${response.code}")
                             return@withContext
                         }
-                        val body = response.body?.string() ?: run {
-                            _state.value = UpdateState.Error("Empty response from server")
-                            return@withContext
-                        }
+                        val body =
+                            response.body?.string() ?: run {
+                                _state.value = UpdateState.Error("Empty response from server")
+                                return@withContext
+                            }
                         val release = json.decodeFromString<GitHubRelease>(body)
                         val remoteVersion = release.tagName.trimStart('v', 'V')
                         val localVersion = BuildConfig.VERSION_NAME
 
                         if (isNewerVersion(remoteVersion, localVersion)) {
-                            val apkAsset = release.assets.firstOrNull { asset ->
-                                asset.name.endsWith(".apk", ignoreCase = true)
-                            }
+                            val apkAsset =
+                                release.assets.firstOrNull { asset ->
+                                    asset.name.endsWith(".apk", ignoreCase = true)
+                                }
                             if (apkAsset == null) {
                                 _state.value = UpdateState.Error("No APK in release ${release.tagName}")
                             } else {
-                                _state.value = UpdateState.UpdateAvailable(
-                                    version = release.tagName,
-                                    apkUrl = apkAsset.downloadUrl,
-                                    changelog = (release.body ?: "").take(CHANGELOG_MAX_CHARS),
-                                )
+                                _state.value =
+                                    UpdateState.UpdateAvailable(
+                                        version = release.tagName,
+                                        apkUrl = apkAsset.downloadUrl,
+                                        changelog = (release.body ?: "").take(CHANGELOG_MAX_CHARS),
+                                    )
                             }
                         } else {
                             _state.value = UpdateState.UpToDate
@@ -136,10 +138,11 @@ class UpdateManager
                             _state.value = UpdateState.Error("Download failed: HTTP ${response.code}")
                             return@withContext
                         }
-                        val body = response.body ?: run {
-                            _state.value = UpdateState.Error("Empty download response")
-                            return@withContext
-                        }
+                        val body =
+                            response.body ?: run {
+                                _state.value = UpdateState.Error("Empty download response")
+                                return@withContext
+                            }
                         val totalBytes = body.contentLength()
                         var downloadedBytes = 0L
 
@@ -160,11 +163,12 @@ class UpdateManager
                     }
 
                     // Hand off to the system installer via a content:// URI (required for Android 7+).
-                    val apkUri = FileProvider.getUriForFile(
-                        context,
-                        "${context.packageName}.fileprovider",
-                        apkFile,
-                    )
+                    val apkUri =
+                        FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            apkFile,
+                        )
                     val installIntent =
                         Intent(Intent.ACTION_VIEW).apply {
                             setDataAndType(apkUri, "application/vnd.android.package-archive")
@@ -190,14 +194,16 @@ class UpdateManager
          * Compares semantic version strings (major.minor.patch).
          * Returns true only when [remote] is strictly newer than [local].
          */
-        private fun isNewerVersion(remote: String, local: String): Boolean {
+        private fun isNewerVersion(
+            remote: String,
+            local: String,
+        ): Boolean {
             val remoteParts = remote.split('.').mapNotNull { it.toIntOrNull() }
             val localParts = local.split('.').mapNotNull { it.toIntOrNull() }
-            for (i in 0 until maxOf(remoteParts.size, localParts.size)) {
-                val r = remoteParts.getOrElse(i) { 0 }
-                val l = localParts.getOrElse(i) { 0 }
-                if (r > l) return true
-                if (r < l) return false
+            val count = maxOf(remoteParts.size, localParts.size)
+            for (i in 0 until count) {
+                val diff = remoteParts.getOrElse(i) { 0 } - localParts.getOrElse(i) { 0 }
+                if (diff != 0) return diff > 0
             }
             return false
         }

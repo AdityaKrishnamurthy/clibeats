@@ -122,7 +122,10 @@ class PlaylistRepositoryImpl
             return id
         }
 
-        override suspend fun updatePlaylistArtwork(playlistId: String, artworkUrl: String?) {
+        override suspend fun updatePlaylistArtwork(
+            playlistId: String,
+            artworkUrl: String?,
+        ) {
             if (isReadOnly(playlistId)) return
             playlistDao.updateArtworkUrl(playlistId, artworkUrl)
         }
