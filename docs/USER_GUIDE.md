@@ -30,7 +30,7 @@ Swipe left / right anywhere outside a song row to move between tabs.
 ## Player
 
 - **Mini player** — tap the song to open Now Playing.
-- **Now Playing** — colours follow the album art. Drag across the waveform behind the controls to scrub: playback
+- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. Drag across the waveform behind the controls to scrub: playback
   keeps going, and dragging back near the current time snaps onto it. Repeat (off → all → one), previous, play/pause,
   next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
