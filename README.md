@@ -7,7 +7,8 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.1.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.2.0-1DB954)](#)
+[![Downloads](https://img.shields.io/github/downloads/Omprakash-p06/clibeats/total?label=downloads&color=1DB954)](https://github.com/Omprakash-p06/clibeats/releases)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
