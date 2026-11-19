@@ -8,6 +8,12 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Easing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -70,7 +76,6 @@ private fun folderLabel(treeUri: String): String =
         .getOrDefault(treeUri)
 
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
-@OptIn(ExperimentalLayoutApi::class) // FlowRow in the About credits
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -388,48 +393,13 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                FlowRow(verticalArrangement = Arrangement.Center) {
-                    Text(
-                        text = "Developed by: ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
-                    Text(
-                        text = "Omprakash Panda",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accent,
-                        textDecoration = TextDecoration.Underline,
-                        modifier =
-                            Modifier
-                                .semantics { contentDescription = "Omprakash Panda on GitHub" }
-                                .clickable(role = Role.Button) {
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
-                                    }
-                                }.padding(vertical = 4.dp),
-                    )
-                    Text(
-                        text = " & ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
-                    Text(
-                        text = "Aditya Krishnamurthy",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = accent,
-                        textDecoration = TextDecoration.Underline,
-                        modifier =
-                            Modifier
-                                .semantics { contentDescription = "Aditya Krishnamurthy on GitHub" }
-                                .clickable(role = Role.Button) {
-                                    runCatching {
-                                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ADITYA_GITHUB_URL)))
-                                    }
-                                }.padding(vertical = 4.dp),
-                    )
-                }
+                Text(
+                    text = "Developed by",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DeveloperLine(name = "Omprakash Panda", url = GITHUB_URL)
+                DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
             }
         }
     }
@@ -534,3 +504,52 @@ private fun AccentColorPicker(
         }
     }
 }
+
+/** One credit line, terminal style: `> Name`, linking to GitHub. The last line carries the prompt cursor. */
+@Suppress("FunctionNaming")
+@Composable
+private fun DeveloperLine(
+    name: String,
+    url: String,
+    cursor: Boolean = false,
+) {
+    val context = LocalContext.current
+    val accent = LocalAccentColor.current
+    val blink by rememberInfiniteTransition(label = "cursor").animateFloat(
+        initialValue = 1f,
+        targetValue = 0f,
+        animationSpec = infiniteRepeatable(tween(CURSOR_BLINK_MS, easing = blinkEasing), RepeatMode.Restart),
+        label = "blink",
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier
+                .semantics { contentDescription = "$name on GitHub" }
+                .clickable(role = Role.Button) {
+                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                }.padding(vertical = 4.dp),
+    ) {
+        Text(
+            text = "> ",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = accent,
+            textDecoration = TextDecoration.Underline,
+            maxLines = 1,
+        )
+        if (cursor) {
+            Text(text = " ▌", style = MaterialTheme.typography.bodyMedium, color = accent.copy(alpha = blink))
+        }
+    }
+}
+
+private const val CURSOR_BLINK_MS = 1_100
+
+/** On for the first half of each cycle, off for the second, like a terminal cursor. */
+private val blinkEasing = Easing { fraction -> if (fraction < HALF_CYCLE) 0f else 1f }
+private const val HALF_CYCLE = 0.5f
