@@ -97,10 +97,14 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - High-res cover art: the low-res thumbnail shows instantly and the full-quality cover fades in.
 - Quality line: source + codec + bitrate + sample rate (+ bit depth for lossless), e.g.
   `[LOCAL] FLAC · 1857 kbps · 48 kHz · 24-bit` or `[ONLINE · YouTube Music] OPUS · 160 kbps · 48 kHz`.
-- Seek bar · repeat · previous · play/pause · next · shuffle · sleep timer · queue · add to playlist · ♥.
+- **Matches the album art:** the background takes a deep tint of the cover and the controls its vivid colour, fading between songs.
+- **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
+  and dragging back near it snaps onto it (letting go there doesn't seek).
+- Repeat · previous · play/pause · next · shuffle · sleep timer · queue · add to playlist · ♥.
 
 ### System integration
-- **Background playback** and lock-screen / notification controls with **high-res artwork**.
+- **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
+  a cached cover shows at once and the high-res one replaces it; missing sizes fall back to smaller ones, then the logo.
 - Tapping the notification opens the app; the session survives swiping the app away.
 - **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
 - **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
@@ -116,7 +120,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - Terminal-style UI (JetBrains Mono, bracketed controls, bordered blocks).
 - **Themes:** Dark · AMOLED · **Light**, with six accent colours; dialogs and menus follow the theme.
 - **First-run setup** (new installs): theme → music folder → default source (Online / Local).
-- **App icon:** terminal window with a prompt and spectrum bars, with a themed (monochrome) variant on Android 13+.
+- **App icon:** round logo (terminal prompt and spectrum bars) that fits round, squircle and square icon shapes, with a themed (monochrome) variant on Android 13+.
 
 ---
 
@@ -133,7 +137,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
-| Queue | **Drag** a song's ≡ handle | Reorder the queue |
+| Queue | **Hold** a song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
+| Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
 | Back | — | Close player / playlist, then return to Home |

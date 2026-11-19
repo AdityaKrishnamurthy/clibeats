@@ -16,7 +16,7 @@ Swipe left / right anywhere outside a song row to move between tabs.
 | **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. |
 | **Search** | Search the active source. With the box empty it lists songs you picked from earlier searches (`[ CLEAR ]`). Tap the tab again to jump into the search box. |
 | **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
-| **Queue** | Drag a song's ≡ handle to reorder; remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
+| **Queue** | Hold a song (or drag its ≡ handle) and move it to reorder; remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
 | **Playlists** | ♥ Favorites, Most Played, your playlists, a **+** tile and local M3U playlists. Tap the tab again to go back to the grid. |
 | **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
 
@@ -30,7 +30,9 @@ Swipe left / right anywhere outside a song row to move between tabs.
 ## Player
 
 - **Mini player** — tap the song to open Now Playing.
-- **Now Playing** — seek bar, repeat (off → all → one), previous, play/pause, next, shuffle, sleep timer,
+- **Now Playing** — colours follow the album art. Drag across the waveform behind the controls to scrub: playback
+  keeps going, and dragging back near the current time snaps onto it. Repeat (off → all → one), previous, play/pause,
+  next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
 - **Previous** — always plays the song that played before, local or online, even from an earlier queue
   (also from the notification and lock screen).
