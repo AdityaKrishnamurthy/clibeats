@@ -34,7 +34,10 @@ class TrackUriResolver(
                 cacheManager.get().getCachedFile(trackId)?.takeIf { it.exists() }?.let { Uri.fromFile(it) }
                     ?: runCatching {
                         streamResolver.get().resolve(placeholderTrack(trackId, providerId)).streamUrl
-                    }.getOrElse { throw IOException("Stream resolution failed for $trackId", it) }
+                    }.getOrElse { error ->
+                        if (error is kotlinx.coroutines.CancellationException) throw error
+                        throw IOException("Stream resolution failed for $trackId", error)
+                    }
                         ?.let { Uri.parse(it) }
             } ?: throw IOException("No stream URL for $trackId")
         return dataSpec.withUri(resolved)
