@@ -13,6 +13,8 @@ import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.domain.provider.ProviderId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,7 +65,12 @@ class LocalMusicScanner
             val playlists: List<AudioDoc>,
         )
 
-        private val emptyListing = Listing(emptyList(), emptyList())
+        /** A failed tree must never be treated as an empty tree: that would delete its songs. */
+        private sealed interface ListResult {
+            data class Ok(val listing: Listing) : ListResult
+
+            data object Failed : ListResult
+        }
 
         /**
          * Scans every chosen music folder in one pass and returns the number of local tracks.
@@ -75,19 +82,44 @@ class LocalMusicScanner
                 mutex.withLock {
                     try {
                         _status.value = ScanStatus.Scanning(0, 0)
-                        // A folder whose permission was revoked lists as empty (its songs are then removed).
-                        val listings =
+                        // A revoked/unreadable tree is a failure, not an empty folder: deleting its
+                        // songs (and cascading to playlists) is exactly the data loss this guards.
+                        val results =
                             treeUris.map { tree ->
-                                tree to (runCatching { listDocuments(tree) }.getOrNull() ?: emptyListing)
+                                tree to
+                                    runCatching { listDocuments(tree) }.fold(
+                                        onSuccess = { ListResult.Ok(it) },
+                                        onFailure = { ListResult.Failed },
+                                    )
                             }
+                        val listings =
+                            results.mapNotNull { (tree, result) ->
+                                (result as? ListResult.Ok)?.let { tree to it.listing }
+                            }
+                        val anyTreeFailed = results.any { (_, result) -> result is ListResult.Failed }
+                        val existing = songDao.getLocalSongs().associateBy { it.id }
+                        // Never wipe a real library because a folder failed or came back empty
+                        // (unmounted SD card, revoked permission, empty response).
+                        if (treeUris.isNotEmpty() && listings.isEmpty()) {
+                            _status.value =
+                                ScanStatus.Failed(
+                                    "Couldn't read any music folder. Your library was left unchanged.",
+                                )
+                            return@withLock existing.size
+                        }
                         // Nested/overlapping folder picks list the same file twice; keep one.
                         val pairs =
                             listings
                                 .flatMap { (tree, listing) -> listing.audio.map { tree to it } }
                                 .distinctBy { it.second.documentId }
-                        val existing = songDao.getLocalSongs().associateBy { it.id }
+                        if (pairs.isEmpty() && existing.isNotEmpty()) {
+                            _status.value =
+                                ScanStatus.Failed("Scan found no songs. Your library was left unchanged.")
+                            return@withLock existing.size
+                        }
                         val found = ArrayList<SongEntity>(pairs.size)
                         pairs.forEachIndexed { index, (treeUri, doc) ->
+                            currentCoroutineContext().ensureActive()
                             val id = ProviderId.composite(LOCAL, doc.documentId)
                             val previous = existing[id]
                             // cached_at = file last-modified for local songs; unchanged files skip tag reads.
@@ -102,9 +134,14 @@ class LocalMusicScanner
                             if (index % PROGRESS_EVERY == 0) _status.value = ScanStatus.Scanning(index + 1, pairs.size)
                         }
                         found.chunked(DB_CHUNK).forEach { songDao.upsertAll(it) }
-                        val foundIds = found.mapTo(HashSet()) { it.id }
-                        // Also drops stale rows for playlist files the old scanner stored as tracks.
-                        existing.keys.filterNot { it in foundIds }.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
+                        if (!anyTreeFailed) {
+                            val foundIds = found.mapTo(HashSet()) { it.id }
+                            // Also drops stale rows for playlist files the old scanner stored as tracks.
+                            existing.keys
+                                .filterNot { it in foundIds }
+                                .chunked(DB_CHUNK)
+                                .forEach { songDao.deleteByIds(it) }
+                        }
                         val keepPlaylistIds = HashSet<String>()
                         listings.forEach { (treeUri, listing) ->
                             val pathToId =
@@ -113,9 +150,11 @@ class LocalMusicScanner
                                 }
                             keepPlaylistIds += syncLocalPlaylists(treeUri, listing, pathToId)
                         }
-                        playlistDao.getLocalFilePlaylistIds()
-                            .filterNot { it in keepPlaylistIds }
-                            .forEach { playlistDao.deleteById(it) }
+                        if (!anyTreeFailed) {
+                            playlistDao.getLocalFilePlaylistIds()
+                                .filterNot { it in keepPlaylistIds }
+                                .forEach { playlistDao.deleteById(it) }
+                        }
                         _status.value = ScanStatus.Done(found.size)
                         found.size
                     } catch (e: Exception) {
