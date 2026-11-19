@@ -29,8 +29,11 @@ android {
         buildConfigField("String", "JAMENDO_CLIENT_ID", "\"${jamendoClientId.replace("\"", "\\\"")}\"")
     }
 
-    // Release signing from env (set by .github/workflows/release.yml). Falls back to the
-    // debug key locally so `assembleRelease` still works without secrets.
+    // Release signing from env (set by .github/workflows/release.yml). A release APK signed with
+    // the debug key cannot update an installed release in place (Android rejects the different
+    // certificate), so missing secrets are a hard error. Local test builds can opt out explicitly
+    // with -PallowDebugSigning=true; that APK must never be published.
+    val allowDebugSigning = providers.gradleProperty("allowDebugSigning").orNull?.toBoolean() == true
     val releaseKeystore = System.getenv("KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         if (releaseKeystore != null) {
@@ -50,7 +53,25 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig =
+                signingConfigs.findByName("release")
+                    ?: if (allowDebugSigning) signingConfigs.getByName("debug") else null
+        }
+    }
+
+    // Fail only when a release artifact is actually built, so debug/test tasks still work on a
+    // machine without the release keystore.
+    tasks.matching {
+        it.name == "assembleRelease" || it.name == "bundleRelease" || it.name == "packageRelease"
+    }.configureEach {
+        doFirst {
+            if (signingConfigs.findByName("release") == null && !allowDebugSigning) {
+                throw GradleException(
+                    "Release builds require KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD " +
+                        "so the APK can update existing installs. For a throwaway local build, pass " +
+                        "-PallowDebugSigning=true (never publish that APK).",
+                )
+            }
         }
     }
 
