@@ -78,11 +78,16 @@ class PoTokenGenerator
         ): PoTokenResult? =
             withContext(Dispatchers.Main) {
                 val deferred = CompletableDeferred<PoTokenResult?>()
+                var webView: WebView? = null
+                val handler = Handler(Looper.getMainLooper())
+
                 try {
-                    val webView = WebView(context)
-                    webView.settings.javaScriptEnabled = true
-                    webView.settings.domStorageEnabled = true
-                    webView.settings.userAgentString =
+                    val wv = WebView(context).also { webView = it }
+                    wv.settings.javaScriptEnabled = true
+                    wv.settings.domStorageEnabled = true
+                    wv.settings.allowFileAccess = false
+                    wv.settings.allowContentAccess = false
+                    wv.settings.userAgentString =
                         "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 
                     val jsInterface =
@@ -92,7 +97,7 @@ class PoTokenGenerator
                                 token: String,
                                 visitorData: String,
                             ) {
-                                if (deferred.isActive) {
+                                if (token.isNotBlank() && deferred.isActive) {
                                     deferred.complete(
                                         PoTokenResult(
                                             poToken = token,
@@ -104,15 +109,14 @@ class PoTokenGenerator
                             }
                         }
 
-                    webView.addJavascriptInterface(jsInterface, "PoTokenBridge")
+                    wv.addJavascriptInterface(jsInterface, "PoTokenBridge")
 
-                    webView.webViewClient =
+                    wv.webViewClient =
                         object : WebViewClient() {
                             override fun onPageFinished(
                                 view: WebView?,
                                 url: String?,
                             ) {
-                                val handler = Handler(Looper.getMainLooper())
                                 var attempts = 0
                                 val maxAttempts = 20 // 20 * 500ms = 10s max
 
@@ -152,22 +156,29 @@ class PoTokenGenerator
                         }
 
                     val targetUrl = "https://www.youtube.com/embed/" + (hint ?: "NJAv_7lHUIU")
-                    webView.loadUrl(targetUrl)
+                    wv.loadUrl(targetUrl)
 
                     // Overall timeout fallback
-                    Handler(Looper.getMainLooper()).postDelayed({
+                    handler.postDelayed({
                         if (deferred.isActive) {
                             deferred.complete(null)
                         }
                     }, tokenTimeoutMs)
+
+                    deferred.await()
                 } catch (e: Exception) {
                     DiagnosticLogger.logError(traceId, "PO_TOKEN_FAILED", e.message ?: "WebView error")
-                    if (deferred.isActive) {
-                        deferred.complete(null)
+                    null
+                } finally {
+                    handler.removeCallbacksAndMessages(null)
+                    runCatching {
+                        webView?.apply {
+                            stopLoading()
+                            removeJavascriptInterface("PoTokenBridge")
+                            destroy()
+                        }
                     }
                 }
-
-                deferred.await()
             }
 
         fun invalidate() {
