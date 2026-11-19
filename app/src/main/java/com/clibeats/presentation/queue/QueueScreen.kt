@@ -165,6 +165,7 @@ private fun ReorderableQueue(
         dragOffset = 0f
     }
 
+    @Suppress("ReturnCount")
     fun dragBy(
         key: String,
         amountY: Float,
@@ -172,6 +173,8 @@ private fun ReorderableQueue(
         dragOffset += amountY
         val info = listState.layoutInfo
         val current = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return
+        // Wait until the list has laid out the last swap; acting on stale positions swapped rows back and forth.
+        if (current.index != order.indexOfFirst { keys[it] == key }) return
         // Keep scrolling while the row is held near the top or bottom.
         val top = current.offset + dragOffset
         val bottom = top + current.size
@@ -183,7 +186,13 @@ private fun ReorderableQueue(
             info.visibleItemsInfo.firstOrNull {
                 it.key != key && center >= it.offset && center <= it.offset + it.size
             } ?: return
+        // Moving the first visible row would make the list scroll to follow it; keep the view where it is.
+        val firstIndex = listState.firstVisibleItemIndex
+        val firstOffset = listState.firstVisibleItemScrollOffset
         order = order.toMutableList().apply { add(target.index, removeAt(current.index)) }
+        if (target.index == firstIndex || current.index == firstIndex) {
+            listState.requestScrollToItem(firstIndex, firstOffset)
+        }
         dragOffset += current.offset - target.offset
     }
 
