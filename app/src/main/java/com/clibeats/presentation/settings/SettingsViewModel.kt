@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "LongParameterList")
 
 package com.clibeats.presentation.settings
 
@@ -13,6 +13,7 @@ import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.domain.provider.ProviderRegistry
+import com.clibeats.domain.repository.SongRepository
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -34,6 +35,7 @@ class SettingsViewModel
         private val cacheManager: CacheManager,
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
+        private val songRepository: SongRepository,
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
     ) : ViewModel() {
@@ -75,13 +77,18 @@ class SettingsViewModel
 
         val autoQueueRelated: StateFlow<Boolean> =
             appPreferences.autoQueueRelated
-                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), false)
 
         val localMusicFolders: StateFlow<List<String>> =
             appPreferences.localMusicTreeUris
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         val scanStatus: StateFlow<ScanStatus> = localMusicScanner?.status ?: MutableStateFlow(ScanStatus.Idle)
+
+        /** Songs in the local library, read from the database so it's right after a restart too. */
+        val localTrackCount: StateFlow<Int> =
+            songRepository.getLocalTrackCountAsFlow()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0)
 
         fun setAutoQueueRelated(enabled: Boolean) {
             viewModelScope.launch { appPreferences.setAutoQueueRelated(enabled) }

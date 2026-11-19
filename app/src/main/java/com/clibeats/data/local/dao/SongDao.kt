@@ -44,6 +44,9 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE provider_id = 'local' ORDER BY title COLLATE NOCASE ASC")
     fun getLocalAsFlow(): Flow<List<SongEntity>>
 
+    @Query("SELECT COUNT(*) FROM songs WHERE provider_id = 'local'")
+    fun countLocalAsFlow(): Flow<Int>
+
     @Query(
         """
         SELECT * FROM songs

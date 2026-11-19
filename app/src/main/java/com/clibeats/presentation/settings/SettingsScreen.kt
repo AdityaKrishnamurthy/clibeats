@@ -62,6 +62,8 @@ private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
 
+private fun trackCountLabel(count: Int): String = if (count == 1) "1 track in library" else "$count tracks in library"
+
 /** "primary:Music/FLAC" -> "Music/FLAC" for display. */
 private fun folderLabel(treeUri: String): String =
     runCatching { DocumentsContract.getTreeDocumentId(Uri.parse(treeUri)).substringAfter(':').ifBlank { "/" } }
@@ -79,6 +81,7 @@ fun SettingsScreen(
     val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val localTrackCount by viewModel.localTrackCount.collectAsState()
     val accent = LocalAccentColor.current
     val context = LocalContext.current
 
@@ -187,14 +190,14 @@ fun SettingsScreen(
                 Text(
                     text =
                         when (val status = scanStatus) {
-                            is ScanStatus.Idle -> LOCAL_HINT
+                            is ScanStatus.Idle, is ScanStatus.Done ->
+                                if (localFolders.isEmpty()) LOCAL_HINT else trackCountLabel(localTrackCount)
                             is ScanStatus.Scanning ->
                                 if (status.total == 0) {
                                     "Scanning..."
                                 } else {
                                     "Scanning ${status.processed}/${status.total}..."
                                 }
-                            is ScanStatus.Done -> "${status.trackCount} track(s) in library"
                             is ScanStatus.Failed -> "Scan failed: ${status.message}"
                         },
                     style = MaterialTheme.typography.labelSmall,
