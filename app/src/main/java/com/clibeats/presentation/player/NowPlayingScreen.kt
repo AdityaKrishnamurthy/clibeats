@@ -2,6 +2,8 @@
 
 package com.clibeats.presentation.player
 
+import android.os.Build
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -52,6 +54,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -159,169 +163,182 @@ fun NowPlayingScreen(
     var showPlaylistDialog by remember { mutableStateOf(false) }
 
     CompositionLocalProvider(LocalAccentColor provides accent) {
-        Column(
+        Box(
             modifier =
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { translationY = dragOffset.value }
-                    .background(Brush.verticalGradient(0f to topTint, GRADIENT_END to themeBackground))
-                    .clickable(enabled = false) {} // swallow taps so the screen below doesn't receive them
-                    .safeDrawingPadding()
-                    .padding(horizontal = 24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                    // Swallow taps so the screen below doesn't receive them.
+                    .clickable(enabled = false) {},
         ) {
-            // ── Header ──
+            GlassBackground(
+                artworkUrl = artworkUrlFor(track?.artworkUrl, ARTWORK_THUMB_PX),
+                topTint = topTint,
+                base = themeBackground,
+                lightTheme = lightTheme,
+            )
             Column(
-                modifier = Modifier.fillMaxWidth().then(dragToDismiss).then(closeAction).padding(vertical = 8.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                // Grab handle hints that the screen can be dragged down.
-                Box(
-                    Modifier
-                        .size(width = 36.dp, height = 4.dp)
-                        .background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)),
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = "> now_playing",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsAccent,
-                )
-            }
-
-            Spacer(Modifier.height(12.dp))
-
-            // ── Artwork ──
-            // Two layers: the small thumbnail (already cached by the lists, so near-instant) underneath,
-            // and the high-res cover on top, transparent until loaded, then crossfading in. Never blank;
-            // a failed hi-res attempt (e.g. missing ytimg maxres) just keeps the thumbnail showing.
-            // (Don't pass AsyncImage(placeholder=...) here: it replaces the cached-thumbnail placeholder.)
-            var artFallback by remember(track?.artworkUrl) { mutableStateOf(false) }
-            val artSize = if (artFallback) FALLBACK_ART_PX else ARTWORK_FULL_PX
-            val context = LocalContext.current
-            val artUrl = artworkUrlFor(track?.artworkUrl, artSize)
-            val thumbUrl = artworkUrlFor(track?.artworkUrl, ARTWORK_THUMB_PX)
-            val hiResRequest =
-                remember(artUrl) {
-                    ImageRequest.Builder(context).data(artUrl).crossfade(ART_CROSSFADE_MS).build()
-                }
-            Box(
                 modifier =
                     Modifier
-                        .weight(1f, fill = false)
-                        .fillMaxWidth()
-                        .aspectRatio(1f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
-                        .then(dragToDismiss)
-                        .then(closeAction)
-                        .semantics { contentDescription = track?.let { "Artwork for ${it.title}" } ?: "No artwork" },
+                        .fillMaxSize()
+                        .safeDrawingPadding()
+                        .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                if (thumbUrl != null) {
-                    AsyncImage(
-                        model = thumbUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
+                // ── Header ──
+                Column(
+                    modifier = Modifier.fillMaxWidth().then(dragToDismiss).then(closeAction).padding(vertical = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    // Grab handle hints that the screen can be dragged down.
+                    Box(
+                        Modifier
+                            .size(width = 36.dp, height = 4.dp)
+                            .background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "> now_playing",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = CliBeatsAccent,
                     )
                 }
-                if (artUrl != null && artUrl != thumbUrl) {
-                    AsyncImage(
-                        model = hiResRequest,
-                        onError = { if (!artFallback) artFallback = true },
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                }
-            }
 
-            Spacer(Modifier.height(20.dp))
+                Spacer(Modifier.height(12.dp))
 
-            // ── Title / artist / quality ──
-            Text(
-                text = track?.title ?: "Nothing playing",
-                style = MaterialTheme.typography.headlineSmall,
-                color = CliBeatsTextPrimary,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                textAlign = TextAlign.Center,
-            )
-            if (!track?.artist.isNullOrBlank()) {
-                Text(
-                    text = track!!.artist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = CliBeatsTextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = qualityLine(state),
-                style = MaterialTheme.typography.labelSmall,
-                color = CliBeatsAccent,
-                textAlign = TextAlign.Center,
-            )
-
-            Spacer(Modifier.height(16.dp))
-
-            // ── Waveform seek (scrub without interrupting playback; snaps back to "now") with the controls on top ──
-            WaveformScrubber(
-                trackKey = track?.id,
-                positionMs = state.positionMs,
-                durationMs = state.durationMs,
-                onSeek = viewModel::seekTo,
-            ) {
-                TransportControls(
-                    state = state,
-                    hint = hint,
-                    viewModel = viewModel,
-                    backdropColor = themeBackground,
-                    modifier = Modifier.fillMaxWidth().align(Alignment.Center),
-                )
-            }
-
-            Spacer(Modifier.height(40.dp))
-
-            // ── Bottom actions: sleep timer · queue · add to playlist · favourite ──
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val sleepLabel =
-                    when (val t = sleepTimer) {
-                        SleepTimer.Off -> null
-                        is SleepTimer.Countdown -> "${t.remainingMin}m"
-                        SleepTimer.EndOfTrack -> "end"
+                // ── Artwork ──
+                // Two layers: the small thumbnail (already cached by the lists, so near-instant) underneath,
+                // and the high-res cover on top, transparent until loaded, then crossfading in. Never blank;
+                // a failed hi-res attempt (e.g. missing ytimg maxres) just keeps the thumbnail showing.
+                // (Don't pass AsyncImage(placeholder=...) here: it replaces the cached-thumbnail placeholder.)
+                var artFallback by remember(track?.artworkUrl) { mutableStateOf(false) }
+                val artworkDescription = track?.let { "Artwork for ${it.title}" } ?: "No artwork"
+                val artSize = if (artFallback) FALLBACK_ART_PX else ARTWORK_FULL_PX
+                val context = LocalContext.current
+                val artUrl = artworkUrlFor(track?.artworkUrl, artSize)
+                val thumbUrl = artworkUrlFor(track?.artworkUrl, ARTWORK_THUMB_PX)
+                val hiResRequest =
+                    remember(artUrl) {
+                        ImageRequest.Builder(context).data(artUrl).crossfade(ART_CROSSFADE_MS).build()
                     }
+                Box(
+                    modifier =
+                        Modifier
+                            .weight(1f, fill = false)
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
+                            .then(dragToDismiss)
+                            .then(closeAction)
+                            .semantics { contentDescription = artworkDescription },
+                ) {
+                    if (thumbUrl != null) {
+                        AsyncImage(
+                            model = thumbUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                    if (artUrl != null && artUrl != thumbUrl) {
+                        AsyncImage(
+                            model = hiResRequest,
+                            onError = { if (!artFallback) artFallback = true },
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                // ── Title / artist / quality ──
+                Text(
+                    text = track?.title ?: "Nothing playing",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = CliBeatsTextPrimary,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+                if (!track?.artist.isNullOrBlank()) {
+                    Text(
+                        text = track!!.artist,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = CliBeatsTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = qualityLine(state),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CliBeatsAccent,
+                    textAlign = TextAlign.Center,
+                )
+
+                Spacer(Modifier.height(16.dp))
+
+                // ── Waveform seek: scrub without interrupting playback, snaps back to "now"; controls on top ──
+                WaveformScrubber(
+                    trackKey = track?.id,
+                    positionMs = state.positionMs,
+                    durationMs = state.durationMs,
+                    onSeek = viewModel::seekTo,
+                ) {
+                    TransportControls(
+                        state = state,
+                        hint = hint,
+                        viewModel = viewModel,
+                        backdropColor = themeBackground,
+                        modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+                    )
+                }
+
+                Spacer(Modifier.height(40.dp))
+
+                // ── Bottom actions: sleep timer · queue · add to playlist · favourite ──
                 Row(
-                    modifier = Modifier.clickable { showSleepDialog = true }.padding(12.dp),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Outlined.Bedtime,
-                        contentDescription = "Sleep timer" + (sleepLabel?.let { ": $it" } ?: ""),
-                        tint = if (sleepLabel != null) CliBeatsAccent else CliBeatsTextSecondary,
-                    )
-                    if (sleepLabel != null) {
-                        Text(" $sleepLabel", style = MaterialTheme.typography.labelSmall, color = CliBeatsAccent)
+                    val sleepLabel =
+                        when (val t = sleepTimer) {
+                            SleepTimer.Off -> null
+                            is SleepTimer.Countdown -> "${t.remainingMin}m"
+                            SleepTimer.EndOfTrack -> "end"
+                        }
+                    Row(
+                        modifier = Modifier.clickable { showSleepDialog = true }.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(
+                            Icons.Outlined.Bedtime,
+                            contentDescription = "Sleep timer" + (sleepLabel?.let { ": $it" } ?: ""),
+                            tint = if (sleepLabel != null) CliBeatsAccent else CliBeatsTextSecondary,
+                        )
+                        if (sleepLabel != null) {
+                            Text(" $sleepLabel", style = MaterialTheme.typography.labelSmall, color = CliBeatsAccent)
+                        }
                     }
-                }
-                IconButton(onClick = onOpenQueue) {
-                    Icon(Icons.AutoMirrored.Outlined.QueueMusic, "Open queue", tint = CliBeatsTextSecondary)
-                }
-                IconButton(onClick = { showPlaylistDialog = true }, enabled = track != null) {
-                    Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, "Add to playlist", tint = CliBeatsTextSecondary)
-                }
-                IconButton(onClick = viewModel::toggleLike, enabled = track != null) {
-                    Icon(
-                        imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = if (isLiked) "Remove from Favorites" else "Add to Favorites",
-                        tint = if (isLiked) CliBeatsAccent else CliBeatsTextSecondary,
-                    )
+                    IconButton(onClick = onOpenQueue) {
+                        Icon(Icons.AutoMirrored.Outlined.QueueMusic, "Open queue", tint = CliBeatsTextSecondary)
+                    }
+                    IconButton(onClick = { showPlaylistDialog = true }, enabled = track != null) {
+                        Icon(Icons.AutoMirrored.Outlined.PlaylistAdd, "Add to playlist", tint = CliBeatsTextSecondary)
+                    }
+                    IconButton(onClick = viewModel::toggleLike, enabled = track != null) {
+                        Icon(
+                            imageVector = if (isLiked) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = if (isLiked) "Remove from Favorites" else "Add to Favorites",
+                            tint = if (isLiked) CliBeatsAccent else CliBeatsTextSecondary,
+                        )
+                    }
                 }
             }
         }
@@ -425,6 +442,48 @@ private fun TransportControls(
     }
 }
 
+/**
+ * Frosted-glass background: the cover itself, filling the screen, heavily blurred, under a wash that keeps
+ * text readable and leans toward the album colour. Uses the small cached thumbnail (instant; the blur hides
+ * its size). Android 11 and older can't blur, so they keep the album-tinted gradient.
+ */
+@Suppress("FunctionNaming")
+@Composable
+private fun GlassBackground(
+    artworkUrl: String?,
+    topTint: Color,
+    base: Color,
+    lightTheme: Boolean,
+) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0f to topTint, GRADIENT_END to base)))
+    if (artworkUrl == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
+    Crossfade(targetState = artworkUrl, animationSpec = tween(COLOR_FADE_MS), label = "glass") { url ->
+        AsyncImage(
+            model = url,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        scaleX = GLASS_SCALE
+                        scaleY = GLASS_SCALE
+                    }.blur(GLASS_BLUR_DP.dp, BlurredEdgeTreatment.Rectangle),
+        )
+    }
+    val wash = if (lightTheme) base else lerp(base, topTint, WASH_TINT)
+    val (top, middle, bottom) = if (lightTheme) LIGHT_WASH else DARK_WASH
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(
+                0f to wash.copy(alpha = top),
+                WASH_MIDDLE to wash.copy(alpha = middle),
+                1f to base.copy(alpha = bottom),
+            ),
+        ),
+    )
+}
+
 /** Dark disc behind a control drawn over the waveform. */
 private fun Modifier.controlBackdrop(color: Color): Modifier {
     val fill = color.copy(alpha = CONTROL_BACKDROP_ALPHA)
@@ -472,3 +531,9 @@ private const val DARK_TINT = 0.6f
 private const val LIGHT_TINT = 0.28f
 private const val GRADIENT_END = 0.8f
 private const val CONTROL_BACKDROP_ALPHA = 0.85f
+private const val GLASS_BLUR_DP = 56
+private const val GLASS_SCALE = 1.15f
+private const val WASH_TINT = 0.35f
+private const val WASH_MIDDLE = 0.55f
+private val DARK_WASH = Triple(0.42f, 0.6f, 0.9f)
+private val LIGHT_WASH = Triple(0.62f, 0.74f, 0.92f)
