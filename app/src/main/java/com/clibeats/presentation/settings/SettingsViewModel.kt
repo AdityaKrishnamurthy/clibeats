@@ -5,6 +5,7 @@ package com.clibeats.presentation.settings
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.backup.LibrarySnapshotManager
 import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.cache.MediaCaches
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -34,6 +36,7 @@ class SettingsViewModel
         private val cacheManager: CacheManager,
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
+        private val snapshotManager: LibrarySnapshotManager? = null,
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
     ) : ViewModel() {
@@ -201,6 +204,28 @@ class SettingsViewModel
 
         fun clearExchangeMessage() {
             _exchangeMessage.value = null
+        }
+
+        /** File handed to the share sheet; cleared once the screen has launched the chooser. */
+        private val _shareFile = MutableStateFlow<File?>(null)
+        val shareFile: StateFlow<File?> = _shareFile.asStateFlow()
+
+        /** Takes a fresh snapshot and exposes it for ACTION_SEND (Drive, email, nearby, ...). */
+        fun shareSnapshot() {
+            val manager = snapshotManager ?: return
+            viewModelScope.launch {
+                manager.snapshotIfDue(force = true)
+                val shared = manager.prepareShareFile()
+                _shareFile.value = shared
+                if (shared == null) {
+                    _exchangeMessage.value =
+                        "Nothing to share yet: save a song or create a playlist first"
+                }
+            }
+        }
+
+        fun clearShareFile() {
+            _shareFile.value = null
         }
 
         companion object {

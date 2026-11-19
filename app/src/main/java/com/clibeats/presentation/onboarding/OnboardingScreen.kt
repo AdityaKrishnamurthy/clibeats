@@ -56,6 +56,8 @@ fun OnboardingScreen(
     var step by rememberSaveable { mutableIntStateOf(0) }
     var useLocal by rememberSaveable { mutableStateOf(false) }
     val folderName by viewModel.folderName.collectAsState()
+    val canRestore by viewModel.canRestore.collectAsState()
+    val restoreMessage by viewModel.restoreMessage.collectAsState()
     val context = LocalContext.current
     val folderPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -129,6 +131,26 @@ fun OnboardingScreen(
                             selected = folderName != null,
                             onClick = { folderPicker.launch(null) },
                         )
+                        if (canRestore) {
+                            Choice(
+                                label = "[ RESTORE FROM BACKUP ]",
+                                selected = false,
+                                onClick = { viewModel.restoreSnapshot() },
+                            )
+                            Text(
+                                "A backup from your previous install was found. Restoring brings back " +
+                                    "playlists, favorites and saved albums.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsTextSecondary,
+                            )
+                        }
+                        restoreMessage?.let { message ->
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsAccent,
+                            )
+                        }
                         Text(
                             "Optional. You can do this later in Settings → Local Music.",
                             style = MaterialTheme.typography.labelSmall,

@@ -5,6 +5,8 @@ package com.clibeats.presentation.onboarding
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.backup.LibrarySnapshotManager
+import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.domain.provider.ProviderRegistry
@@ -23,9 +25,39 @@ class OnboardingViewModel
     constructor(
         private val appPreferences: AppPreferences,
         private val localMusicScanner: LocalMusicScanner,
+        private val snapshotManager: LibrarySnapshotManager? = null,
+        private val playlistExchangeManager: PlaylistExchangeManager? = null,
     ) : ViewModel() {
         private val _folderName = MutableStateFlow<String?>(null)
         val folderName: StateFlow<String?> = _folderName.asStateFlow()
+
+        /** True when a previous install left a snapshot the user can bring back. */
+        private val _canRestore = MutableStateFlow(snapshotManager?.hasSnapshot() == true)
+        val canRestore: StateFlow<Boolean> = _canRestore.asStateFlow()
+
+        private val _restoreMessage = MutableStateFlow<String?>(null)
+        val restoreMessage: StateFlow<String?> = _restoreMessage.asStateFlow()
+
+        fun restoreSnapshot() {
+            val manager = snapshotManager ?: return
+            val exchange = playlistExchangeManager ?: return
+            viewModelScope.launch {
+                val file = manager.latestFile
+                if (!file.isFile) {
+                    _restoreMessage.value = "No backup found on this device"
+                    _canRestore.value = false
+                    return@launch
+                }
+                _restoreMessage.value =
+                    exchange.import(Uri.fromFile(file)).fold(
+                        onSuccess = { count ->
+                            _canRestore.value = false
+                            "Restored $count track(s) from backup"
+                        },
+                        onFailure = { error -> "Restore failed: ${error.message}" },
+                    )
+            }
+        }
 
         fun setTheme(mode: CliBeatsThemeMode) {
             viewModelScope.launch { appPreferences.setThemeMode(mode.name) }
