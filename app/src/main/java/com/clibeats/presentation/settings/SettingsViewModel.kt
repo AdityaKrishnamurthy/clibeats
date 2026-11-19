@@ -12,6 +12,8 @@ import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.data.scan.ScanStatus
+import com.clibeats.data.update.UpdateManager
+import com.clibeats.data.update.UpdateState
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
@@ -34,9 +36,13 @@ class SettingsViewModel
         private val cacheManager: CacheManager,
         private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
+        private val updateManager: UpdateManager,
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
     ) : ViewModel() {
+        /** Live update status — drives the "Updates" row in Settings. */
+        val updateState: StateFlow<UpdateState> = updateManager.state
+
         val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
 
         val artworkCacheMb: StateFlow<Int> =
@@ -210,6 +216,23 @@ class SettingsViewModel
 
         fun clearExchangeMessage() {
             _exchangeMessage.value = null
+        }
+
+        // ── Update actions ───────────────────────────────────────────────────
+
+        /** Triggers a GitHub Releases check. No-op if one is already in progress. */
+        fun checkForUpdate() {
+            viewModelScope.launch { updateManager.checkForUpdate() }
+        }
+
+        /** Downloads the APK at [apkUrl] and launches the system installer. */
+        fun downloadAndInstall(apkUrl: String) {
+            viewModelScope.launch { updateManager.downloadAndInstall(apkUrl) }
+        }
+
+        /** Resets the update state (e.g. user dismissed the dialog). */
+        fun resetUpdateState() {
+            updateManager.reset()
         }
 
         companion object {
