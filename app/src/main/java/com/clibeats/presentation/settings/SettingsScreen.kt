@@ -385,7 +385,7 @@ fun SettingsScreen(
                             onClick = { viewModel.checkForUpdate() },
                             colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) {
-                            Text("Check for Updates")
+                            Text("CHECK FOR UPDATES")
                         }
                     }
                     is UpdateState.Checking -> {
@@ -393,9 +393,13 @@ fun SettingsScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            LinearProgressIndicator(modifier = Modifier.weight(1f), color = accent)
+                            LinearProgressIndicator(
+                                modifier = Modifier.weight(1f),
+                                color = accent,
+                                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            )
                             Text(
-                                "Checking…",
+                                "Checking...",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -403,7 +407,7 @@ fun SettingsScreen(
                     }
                     is UpdateState.UpToDate -> {
                         Text(
-                            text = "✓ You are on the latest version (v${BuildConfig.VERSION_NAME})",
+                            text = "[ OK ] You are on the latest version (v${BuildConfig.VERSION_NAME})",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -411,13 +415,13 @@ fun SettingsScreen(
                             onClick = { viewModel.checkForUpdate() },
                             colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) {
-                            Text("Check Again")
+                            Text("CHECK AGAIN")
                         }
                     }
                     is UpdateState.UpdateAvailable -> {
                         Text(
-                            text = "Update available: ${state.version}",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = "> Update available: ${state.version}",
+                            style = MaterialTheme.typography.titleSmall,
                             color = accent,
                         )
                         if (state.changelog.isNotBlank()) {
@@ -432,7 +436,7 @@ fun SettingsScreen(
                                 onClick = { viewModel.downloadAndInstall(state.apkUrl) },
                                 colors = ButtonDefaults.buttonColors(containerColor = accent),
                             ) {
-                                Text("Download & Install")
+                                Text("DOWNLOAD & INSTALL")
                             }
                             Button(
                                 onClick = { viewModel.resetUpdateState() },
@@ -441,13 +445,13 @@ fun SettingsScreen(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                                     ),
                             ) {
-                                Text("Dismiss", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("DISMISS", color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                     is UpdateState.Downloading -> {
                         Text(
-                            text = "Downloading update… ${state.progress}%",
+                            text = "> Downloading update... ${state.progress}%",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
@@ -455,11 +459,12 @@ fun SettingsScreen(
                             progress = { state.progress / 100f },
                             modifier = Modifier.fillMaxWidth(),
                             color = accent,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         )
                     }
                     is UpdateState.ReadyToInstall -> {
                         Text(
-                            text = "✓ Update downloaded — the installer has been launched.",
+                            text = "[ OK ] Update downloaded — installer launched.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -467,12 +472,12 @@ fun SettingsScreen(
                             onClick = { viewModel.resetUpdateState() },
                             colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) {
-                            Text("Done")
+                            Text("DONE")
                         }
                     }
                     is UpdateState.Error -> {
                         Text(
-                            text = "⚠ ${state.message}",
+                            text = "! ${state.message}",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
@@ -480,7 +485,7 @@ fun SettingsScreen(
                             onClick = { viewModel.checkForUpdate() },
                             colors = ButtonDefaults.buttonColors(containerColor = accent),
                         ) {
-                            Text("Retry")
+                            Text("RETRY")
                         }
                     }
                 }
@@ -495,11 +500,12 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(verticalArrangement = Arrangement.Center) {
                     Text(
                         text = "Developed by: ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.CenterVertically),
                     )
                     Text(
                         text = "Omprakash Panda",
@@ -519,6 +525,7 @@ fun SettingsScreen(
                         text = " & ",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.align(Alignment.CenterVertically),
                     )
                     Text(
                         text = "Aditya Krishnamurthy",

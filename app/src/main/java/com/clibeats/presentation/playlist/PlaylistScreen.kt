@@ -615,7 +615,8 @@ private fun ChangeCoverDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(text = "> edit cover", style = MaterialTheme.typography.titleMedium) },
+        modifier = Modifier.border(1.dp, CliBeatsAccent),
+        title = { Text(text = "> edit --cover", style = MaterialTheme.typography.titleMedium) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
@@ -628,12 +629,12 @@ private fun ChangeCoverDialog(
                     colors = ButtonDefaults.buttonColors(containerColor = CliBeatsAccent),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text("Choose from Device", color = CliBeatsBackground)
+                    Text("CHOOSE FROM DEVICE")
                 }
                 OutlinedTextField(
                     value = urlText,
                     onValueChange = { urlText = it },
-                    label = { Text("Or enter Image URL") },
+                    label = { Text("Image URL") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -642,7 +643,7 @@ private fun ChangeCoverDialog(
                         onClick = { onSave(null) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Reset to Default Cover", color = MaterialTheme.colorScheme.error)
+                        Text("Reset to default cover", color = MaterialTheme.colorScheme.error)
                     }
                 }
             }
@@ -652,7 +653,7 @@ private fun ChangeCoverDialog(
                 onClick = { onSave(urlText.trim().ifBlank { null }) },
                 enabled = urlText.isNotBlank(),
             ) {
-                Text("Save URL", color = CliBeatsAccent)
+                Text("Save", color = CliBeatsAccent)
             }
         },
         dismissButton = {
