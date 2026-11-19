@@ -40,6 +40,8 @@ class LibraryRepositoryImpl
             if (!likedSongDao.isLiked(track.id)) toggleLike(track)
         }
 
+        override suspend fun clearFavorites() = likedSongDao.deleteAll()
+
         override suspend fun toggleLike(track: Track) {
             val currentlyLiked = likedSongDao.isLiked(track.id)
             if (currentlyLiked) {

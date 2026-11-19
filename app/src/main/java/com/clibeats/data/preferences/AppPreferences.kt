@@ -47,6 +47,8 @@ class AppPreferences
             val HOME_RECENTS_CLEARED_AT = longPreferencesKey("home_recents_cleared_at")
             val LIBRARY_HISTORY_CLEARED_AT = longPreferencesKey("library_history_cleared_at")
             val RECENT_SEARCH_TRACKS = stringPreferencesKey("recent_search_tracks")
+            val MOST_PLAYED_CLEARED_AT = longPreferencesKey("most_played_cleared_at")
+            val MOST_PLAYED_SONG_RESETS = stringSetPreferencesKey("most_played_song_resets")
             val UPDATE_FREQUENCY = stringPreferencesKey("update_frequency")
             val UPDATE_LAST_CHECK_AT = longPreferencesKey("update_last_check_at")
             val UPDATE_ETAG = stringPreferencesKey("update_etag")
@@ -69,6 +71,36 @@ class AppPreferences
 
         suspend fun setLibraryHistoryClearedAt(epochMs: Long) {
             dataStore.edit { it[Keys.LIBRARY_HISTORY_CLEARED_AT] = epochMs }
+        }
+
+        /** Most Played counts only plays after this time ([ CLEAR ALL ] moves it). */
+        val mostPlayedClearedAt: Flow<Long> = dataStore.data.map { it[Keys.MOST_PLAYED_CLEARED_AT] ?: 0L }
+
+        /** Per-song reset times for songs removed from Most Played ("<epochMs>|<songId>"). */
+        val mostPlayedSongResets: Flow<Map<String, Long>> =
+            dataStore.data.map { prefs ->
+                prefs[Keys.MOST_PLAYED_SONG_RESETS].orEmpty().mapNotNull { entry ->
+                    val time = entry.substringBefore('|').toLongOrNull() ?: return@mapNotNull null
+                    entry.substringAfter('|') to time
+                }.toMap()
+            }
+
+        suspend fun clearMostPlayed(epochMs: Long) {
+            dataStore.edit {
+                it[Keys.MOST_PLAYED_CLEARED_AT] = epochMs
+                it.remove(Keys.MOST_PLAYED_SONG_RESETS) // older per-song resets no longer matter
+            }
+        }
+
+        suspend fun resetMostPlayedSong(
+            songId: String,
+            epochMs: Long,
+        ) {
+            dataStore.edit { prefs ->
+                val current = prefs[Keys.MOST_PLAYED_SONG_RESETS].orEmpty()
+                val others = current.filterNot { it.substringAfter('|') == songId }
+                prefs[Keys.MOST_PLAYED_SONG_RESETS] = others.toSet() + "$epochMs|$songId"
+            }
         }
 
         /** Songs picked from search results, most recent first (shown when the search box is empty). */

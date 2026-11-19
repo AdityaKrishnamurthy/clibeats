@@ -106,6 +106,7 @@ fun PlaylistScreen(
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
 
     Column(
         modifier = Modifier
@@ -136,6 +137,8 @@ fun PlaylistScreen(
                             onSwipeRight = viewModel::addToQueue,
                             onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
+                            headerAction =
+                                clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.FAVORITES },
                         )
                     }
                     s.isMostPlayedOpen -> {
@@ -147,11 +150,13 @@ fun PlaylistScreen(
                             emptyText = "Nothing played yet. Your most played songs will show up here.",
                             onBackClick = { viewModel.selectPlaylist(null) },
                             onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
-                            onRemoveClick = null,
-                            removeLabel = "",
+                            onRemoveClick = viewModel::removeFromMostPlayed,
+                            removeLabel = "Remove from Most Played",
                             onSwipeRight = viewModel::addToQueue,
                             onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
+                            headerAction =
+                                clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.MOST_PLAYED },
                         )
                     }
                     selected != null -> {
@@ -230,6 +235,33 @@ fun PlaylistScreen(
                 viewModel.updatePlaylistArtwork(playlist.id, newUrl)
                 coverChangePlaylist = null
             },
+        )
+    }
+    // Clearing a whole list always asks first, so it can't happen by a stray tap.
+    pendingClear?.let { target ->
+        AlertDialog(
+            onDismissRequest = { pendingClear = null },
+            modifier = Modifier.border(1.dp, CliBeatsAccent),
+            title = { Text(if (target == ClearTarget.FAVORITES) "> clear --favorites" else "> clear --most-played") },
+            text = {
+                Text(
+                    if (target == ClearTarget.FAVORITES) {
+                        "Remove every song from ♥ Favorites?"
+                    } else {
+                        "Reset Most Played? It starts counting again from now. Your listening history is kept."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (target == ClearTarget.FAVORITES) viewModel.clearFavorites() else viewModel.clearMostPlayed()
+                        pendingClear = null
+                    },
+                ) { Text("Clear all", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { pendingClear = null }) { Text("Cancel") } },
+            containerColor = CliBeatsSurface,
         )
     }
     pendingDelete?.let { playlist ->
@@ -659,3 +691,10 @@ private fun ChangeCoverDialog(
 }
 
 private const val TILE_MIN_DP = 100 // 3 columns on most phones
+
+private enum class ClearTarget { FAVORITES, MOST_PLAYED }
+
+private fun clearAllAction(
+    enabled: Boolean,
+    onClick: () -> Unit,
+): Pair<String, () -> Unit>? = if (enabled) "[ CLEAR ALL ]" to onClick else null

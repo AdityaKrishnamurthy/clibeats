@@ -11,6 +11,7 @@ import com.clibeats.data.local.entity.HistoryEntity
 import com.clibeats.data.local.entity.SongEntity
 import kotlinx.coroutines.flow.Flow
 
+@Suppress("TooManyFunctions")
 @Dao
 interface HistoryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -42,6 +43,13 @@ interface HistoryDao {
 
     @Query("SELECT * FROM history ORDER BY played_at DESC")
     fun getAllAsFlow(): Flow<List<HistoryEntity>>
+
+    /** Every play after [sinceEpochMs] (song id + time), for counting Most Played with per-song resets. */
+    @Query("SELECT * FROM history WHERE played_at > :sinceEpochMs")
+    fun getPlaysSinceAsFlow(sinceEpochMs: Long): Flow<List<HistoryEntity>>
+
+    @Query("SELECT * FROM songs WHERE id IN (:ids)")
+    suspend fun getSongsByIds(ids: List<String>): List<SongEntity>
 
     @Query("DELETE FROM history WHERE played_at < :beforeEpochMs")
     suspend fun clearBefore(beforeEpochMs: Long)
