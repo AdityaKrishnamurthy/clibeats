@@ -17,6 +17,9 @@ interface LibraryRepository {
     /** Likes [track] if it isn't already (never unlikes). */
     suspend fun addToFavorites(track: Track)
 
+    /** Removes every song from ♥ Favorites. */
+    suspend fun clearFavorites()
+
     fun getSavedAlbums(): Flow<List<Album>>
 
     fun searchSavedAlbums(query: String): Flow<List<Album>>

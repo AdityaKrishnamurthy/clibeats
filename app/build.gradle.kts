@@ -21,8 +21,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20100").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.1.0").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20200").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.2.0").get()
 
         // Optional free Jamendo API key (developer.jamendo.com). Empty by default.
         val jamendoClientId = providers.gradleProperty("JAMENDO_CLIENT_ID").orElse("").get()
@@ -126,6 +126,7 @@ dependencies {
     implementation(libs.retrofit.kotlinx.serialization.converter)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.coil.compose)
+    implementation(libs.palette.ktx)
     implementation(libs.newpipe.extractor)
     detektPlugins(libs.detekt.formatting)
     debugImplementation(libs.compose.ui.tooling)

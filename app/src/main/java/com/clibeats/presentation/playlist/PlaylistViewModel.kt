@@ -1,9 +1,10 @@
-@file:Suppress("ktlint:standard:property-naming", "PropertyName")
+@file:Suppress("ktlint:standard:property-naming", "PropertyName", "ForbiddenImport", "TooManyFunctions")
 
 package com.clibeats.presentation.playlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.HistoryRepository
@@ -34,14 +35,25 @@ class PlaylistViewModel
         private val playbackRepository: PlaybackRepository,
         private val libraryRepository: LibraryRepository? = null,
         private val historyRepository: HistoryRepository? = null,
+        private val appPreferences: AppPreferences? = null,
     ) : ViewModel() {
         private val _selectedPlaylistId = MutableStateFlow<String?>(null)
 
         private val favorites: Flow<List<Track>> =
             libraryRepository?.getLikedSongs() ?: flowOf(emptyList())
 
+        // Most Played has its own clear / per-song reset times; the listening history itself is kept.
+        @OptIn(ExperimentalCoroutinesApi::class)
         private val mostPlayed: Flow<List<Track>> =
-            historyRepository?.getMostPlayedTracks(MOST_PLAYED_LIMIT) ?: flowOf(emptyList())
+            when {
+                historyRepository == null -> flowOf(emptyList())
+                appPreferences == null -> historyRepository.getMostPlayedTracks(MOST_PLAYED_LIMIT)
+                else ->
+                    combine(appPreferences.mostPlayedClearedAt, appPreferences.mostPlayedSongResets, ::Pair)
+                        .flatMapLatest { (since, resets) ->
+                            historyRepository.getMostPlayedTracksSince(since, resets, MOST_PLAYED_LIMIT)
+                        }
+            }
 
         private data class Inputs(
             val playlists: List<Playlist>,
@@ -141,6 +153,19 @@ class PlaylistViewModel
             viewModelScope.launch {
                 playlistRepository.removeSongFromPlaylist(playlistId, songId)
             }
+        }
+
+        /** Takes [track] off Most Played; it comes back only if it's played often again. */
+        fun removeFromMostPlayed(track: Track) {
+            viewModelScope.launch { appPreferences?.resetMostPlayedSong(track.id, System.currentTimeMillis()) }
+        }
+
+        fun clearMostPlayed() {
+            viewModelScope.launch { appPreferences?.clearMostPlayed(System.currentTimeMillis()) }
+        }
+
+        fun clearFavorites() {
+            viewModelScope.launch { libraryRepository?.clearFavorites() }
         }
 
         /** Removes [track] from ♥ Favorites (it is currently liked, so toggling unlikes it). */

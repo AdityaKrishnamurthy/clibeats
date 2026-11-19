@@ -23,6 +23,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
@@ -33,8 +35,9 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 const val LOCAL_PROVIDER_ID = "local"
 
 /**
- * Two-way source switch: [ ONLINE: <provider> ▾ ] | [ LOCAL ].
- * The online segment opens a dropdown of online providers (YouTube Music, Internet Archive, ...).
+ * Two-way source switch with two equal-width segments: [ ONLINE ▾ ] | [ LOCAL ].
+ * The online segment opens a dropdown of online providers (YouTube Music, Internet Archive, ...);
+ * the chosen one is marked with ● in that list.
  */
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
@@ -58,7 +61,7 @@ fun ProviderSwitcher(
     ) {
         Box(modifier = Modifier.weight(1f)) {
             Segment(
-                label = "ONLINE: ${onlineCurrent?.displayName ?: "—"} ▾",
+                label = "ONLINE ▾",
                 selected = !isLocal,
                 onClick = {
                     // First tap switches to online; tapping while online opens the provider list.
@@ -90,6 +93,7 @@ fun ProviderSwitcher(
                 label = "LOCAL",
                 selected = isLocal,
                 onClick = { onSelect(LOCAL_PROVIDER_ID) },
+                modifier = Modifier.weight(1f),
             )
         }
     }
@@ -109,6 +113,8 @@ private fun Segment(
         style = MaterialTheme.typography.labelMedium,
         color = color,
         maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        textAlign = TextAlign.Center,
         modifier =
             modifier
                 .semantics { this.selected = selected }

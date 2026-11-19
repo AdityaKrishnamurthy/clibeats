@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.1.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.2.0-1DB954)](#)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
@@ -30,6 +30,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Privacy & Legal](#privacy--legal)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
+- [Developers](#developers)
 - [License](#license)
 
 ---
@@ -65,7 +66,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Fast start** — playback begins after ~0.5 s of buffer; next 2 songs are pre-resolved and their covers prefetched.
 - **Repeat** (off → all → one) and **shuffle**, with a tiny `ONE` / `ALL` / `OFF` label above the button.
 - **Sleep timer** — 15 / 30 / 45 / 60 min or end of track (also with repeat-one).
-- **Auto-queue related songs** (optional) — tapping a song queues the rest of that list after it.
+- **Auto-queue related songs** (optional, off by default) — tapping a song queues the rest of that list after it.
+- **Previous always goes back** to the song that played before — local or online, from any queue — in the app, notification and lock screen.
 - **Clear upcoming** keeps the song that's playing.
 - Expired YouTube links are refreshed automatically; one silent retry on stream errors.
 - **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
@@ -83,21 +85,27 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   (with **Save as app playlist** to make an editable copy).
 
 ### Library, playlists & favourites
-- **Library:** `[ ONLINE ]` shows only songs you've played; `[ OFFLINE ]` shows your device music. Tracks / Artists / Albums.
-- **Playlists grid:** ♥ Favorites, Most Played, your playlists (most recent first), a **+** tile, then local playlists.
+- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
+- **Playlists grid:** ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
-- **Recently Played** on Home, with `[ CLEAR ]`.
+- **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
+- **Recent searches:** with the search box empty, Search lists the songs you picked from earlier searches.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 
 ### Now Playing
 - High-res cover art: the low-res thumbnail shows instantly and the full-quality cover fades in.
 - Quality line: source + codec + bitrate + sample rate (+ bit depth for lossless), e.g.
   `[LOCAL] FLAC · 1857 kbps · 48 kHz · 24-bit` or `[ONLINE · YouTube Music] OPUS · 160 kbps · 48 kHz`.
-- Seek bar · repeat · previous · play/pause · next · shuffle · sleep timer · queue · add to playlist · ♥.
+- **Matches the album art:** a frosted-glass background made from the cover (blurred, under a readable wash; a tinted
+  gradient on Android 11 and older), with the cover's vivid colour on the controls, fading between songs.
+- **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
+  and dragging back near it snaps onto it (letting go there doesn't seek).
+- Repeat · previous · play/pause · next · shuffle · sleep timer · queue · add to playlist · ♥.
 
 ### System integration
-- **Background playback** and lock-screen / notification controls with **high-res artwork**.
+- **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
+  a cached cover shows at once and the high-res one replaces it; missing sizes fall back to smaller ones, then the logo.
 - Tapping the notification opens the app; the session survives swiping the app away.
 - **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
 - **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
@@ -113,7 +121,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - Terminal-style UI (JetBrains Mono, bracketed controls, bordered blocks).
 - **Themes:** Dark · AMOLED · **Light**, with six accent colours; dialogs and menus follow the theme.
 - **First-run setup** (new installs): theme → music folder → default source (Online / Local).
-- **App icon:** terminal window with a prompt and spectrum bars, with a themed (monochrome) variant on Android 13+.
+- **App icon:** round logo (terminal prompt and spectrum bars) that fits round, squircle and square icon shapes, with a themed (monochrome) variant on Android 13+.
 
 ---
 
@@ -125,10 +133,15 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
+| Bottom bar · **Home** | Tap again (on Home) | Switch the source Online ↔ Local |
+| Bottom bar · **Search** | Tap again (on Search) | Switch the source Online ↔ Local |
 | Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
+| Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
+| Queue | **Hold** a song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
+| Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
 | Back | — | Close player / playlist, then return to Home |
@@ -144,7 +157,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Home** — source switch, recently played, trending, mini player.
 - **Search** — search the active source; play next / add to playlist / add to queue on each result.
 - **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
-- **Queue** — reorder, remove, clear upcoming; tap to jump.
+- **Queue** — drag to reorder, remove, clear upcoming; tap to jump.
 - **Playlists** — Favorites, Most Played, app playlists, local M3U playlists.
 - **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange, about.
 
@@ -200,15 +213,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.1.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.2.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.1.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.2.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.1.0` → versionCode `20100`); local builds default to 2.1.0.
+left untouched. The version comes from the tag (`2.2.0` → versionCode `20200`); local builds default to 2.2.0.
 
 ---
 
@@ -254,6 +267,13 @@ responsible for complying with providers' terms of service and copyright law in 
 2. Add or update tests for behaviour changes.
 3. Run the quality gates (tests, ktlint, detekt, lint) before opening a PR.
 4. Keep UI changes consistent with the terminal design system.
+
+---
+
+## Developers
+
+Developed by **[Omprakash Panda](https://github.com/Omprakash-p06)** and
+**[Aditya Krishnamurthy](https://github.com/AdityaKrishnamurthy)**.
 
 ---
 

@@ -6,8 +6,10 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.util.Log
 import androidx.annotation.OptIn
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.DefaultMediaNotificationProvider
@@ -15,8 +17,10 @@ import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
 import androidx.media3.session.SessionError
+import coil.ImageLoader
 import com.clibeats.R
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.playback.ArtworkBitmapLoader
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -47,6 +51,8 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var playbackRepository: PlaybackRepository
 
+    @Inject lateinit var imageLoader: ImageLoader
+
     private var librarySession: MediaLibrarySession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -58,8 +64,13 @@ class PlaybackService : MediaLibraryService() {
             },
         )
         val session =
-            MediaLibrarySession.Builder(this, player, LibraryCallback())
-                .apply { sessionActivity()?.let(::setSessionActivity) }
+            MediaLibrarySession.Builder(this, previousFromHistory(player), LibraryCallback())
+                .setBitmapLoader(
+                    // Cached covers with fallbacks; re-draw the notification when the high-res one arrives.
+                    ArtworkBitmapLoader(this, imageLoader) {
+                        scope.launch { librarySession?.let { onUpdateNotification(it) } }
+                    },
+                ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
@@ -68,6 +79,28 @@ class PlaybackService : MediaLibraryService() {
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
+
+    /**
+     * Notification, lock-screen and headset "previous" go through the same play history as the in-app
+     * button (whatever played before, from any queue), and stay available even at the start of a queue.
+     */
+    private fun previousFromHistory(player: Player): Player =
+        object : ForwardingPlayer(player) {
+            override fun seekToPrevious() = playbackRepository.skipToPrevious()
+
+            override fun seekToPreviousMediaItem() = playbackRepository.skipToPrevious()
+
+            override fun getAvailableCommands(): Player.Commands =
+                super.getAvailableCommands()
+                    .buildUpon()
+                    .addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .build()
+
+            override fun isCommandAvailable(command: Int): Boolean =
+                command == Player.COMMAND_SEEK_TO_PREVIOUS ||
+                    command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
+                    super.isCommandAvailable(command)
+        }
 
     /**
      * Swiped away from recents: keep the service and session alive (playing or paused) so the media

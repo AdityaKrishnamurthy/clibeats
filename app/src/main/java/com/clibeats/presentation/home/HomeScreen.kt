@@ -26,6 +26,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -61,7 +62,16 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 fun HomeScreen(
     onNavigate: (NavDestination) -> Unit = {},
     homeViewModel: HomeViewModel = hiltViewModel(),
+    toggleSourceRequested: Boolean = false,
+    onToggleSourceHandled: () -> Unit = {},
 ) {
+    // Tapping the Home tab while already on Home switches the source Online <-> Local.
+    LaunchedEffect(toggleSourceRequested) {
+        if (toggleSourceRequested) {
+            homeViewModel.toggleSource()
+            onToggleSourceHandled()
+        }
+    }
     val favorites: FavoritesViewModel = hiltViewModel()
     val uiState by homeViewModel.uiState.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
