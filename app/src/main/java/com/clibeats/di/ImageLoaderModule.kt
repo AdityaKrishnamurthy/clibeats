@@ -12,13 +12,9 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
-import okhttp3.OkHttpClient
-import javax.inject.Singleton
-
 private const val MEMORY_CACHE_PERCENT = 0.25
 private const val BYTES_IN_MB = 1_048_576L
+private const val DEFAULT_ARTWORK_CACHE_MB = 128L
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -28,11 +24,10 @@ object ImageLoaderModule {
     @Singleton
     fun provideArtworkDiskCache(
         @ApplicationContext context: Context,
-        appPreferences: AppPreferences,
     ): ResizableDiskCache =
         ResizableDiskCache(
             dir = context.cacheDir.resolve("image_cache"),
-            maxBytes = runBlocking { appPreferences.artworkCacheMb.first() } * BYTES_IN_MB,
+            maxBytes = DEFAULT_ARTWORK_CACHE_MB * BYTES_IN_MB,
         )
 
     @Provides
