@@ -33,11 +33,14 @@ class CacheManager
             return if (file.exists() && file.length() > 0) file else null
         }
 
+        private fun safeFileName(songId: String): String =
+            java.util.UUID.nameUUIDFromBytes(songId.toByteArray(Charsets.UTF_8)).toString() + ".mp3"
+
         suspend fun saveTrackToCache(
             songId: String,
             inputStream: InputStream,
         ): File {
-            val targetFile = File(cacheDir, "$songId.mp3")
+            val targetFile = File(cacheDir, safeFileName(songId))
             targetFile.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
