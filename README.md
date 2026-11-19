@@ -85,11 +85,12 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   (with **Save as app playlist** to make an editable copy).
 
 ### Library, playlists & favourites
-- **Library:** `[ ONLINE ]` shows only songs you've played; `[ OFFLINE ]` shows your device music. Tracks / Artists / Albums.
+- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
 - **Playlists grid:** ♥ Favorites, Most Played, your playlists (most recent first), a **+** tile, then local playlists.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
-- **Recently Played** on Home, with `[ CLEAR ]`.
+- **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
+- **Recent searches:** with the search box empty, Search lists the songs you picked from earlier searches.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 
 ### Now Playing
