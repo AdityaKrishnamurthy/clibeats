@@ -165,9 +165,9 @@ class AppPreferences
             dataStore.edit { it[Keys.ONBOARDING_DONE] = true }
         }
 
-        /** When true, tapping a song in a list queues the rest of that list after it. */
+        /** When true, tapping a song in a list queues the rest of that list after it. Off by default. */
         val autoQueueRelated: Flow<Boolean> =
-            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: true }
+            dataStore.data.map { prefs -> prefs[Keys.AUTO_QUEUE_RELATED] ?: false }
 
         /** SAF tree URIs of all folders scanned for local music (includes the legacy single folder). */
         val localMusicTreeUris: Flow<List<String>> =

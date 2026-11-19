@@ -86,7 +86,7 @@ class LibraryViewModel
             index: Int,
         ) {
             viewModelScope.launch {
-                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: true
+                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: false
                 if (autoQueue) {
                     playbackRepository.setQueue(tracks, index)
                 } else {

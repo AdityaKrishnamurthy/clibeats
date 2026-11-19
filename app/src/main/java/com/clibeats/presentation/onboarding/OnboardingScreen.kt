@@ -63,8 +63,8 @@ fun OnboardingScreen(
                 runCatching {
                     context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
+                // Picking a folder doesn't change the default source: Online stays selected in step 3.
                 viewModel.onFolderPicked(uri)
-                useLocal = true
             }
         }
     // Android 13+: ask for notification permission at the end of setup (media controls card).
