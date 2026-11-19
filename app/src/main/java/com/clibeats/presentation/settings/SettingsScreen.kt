@@ -50,6 +50,7 @@ import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.presentation.update.UpdateSection
 
 private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
@@ -370,6 +371,9 @@ fun SettingsScreen(
                 }
             }
         }
+
+        // ── Section: Updates (GitHub Releases) ──────────────────────────────
+        UpdateSection()
 
         // ── Section: About (developer credit; name links to GitHub) ─────────
         TuiBlock(title = "About") {
