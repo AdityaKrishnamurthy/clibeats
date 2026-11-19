@@ -28,6 +28,7 @@ import javax.inject.Inject
 
 private const val DEBOUNCE_MS = 300L
 private const val MIN_QUERY_LENGTH = 2
+private const val LOCAL_ID = "local"
 
 @HiltViewModel
 class SearchViewModel
@@ -47,8 +48,23 @@ class SearchViewModel
                 .map { it ?: ProviderRegistry.DEFAULT_PROVIDER_ID }
                 .stateIn(viewModelScope, SharingStarted.Eagerly, ProviderRegistry.DEFAULT_PROVIDER_ID)
 
+        /** Online provider to return to when switching back from Local. */
+        private var lastOnlineProviderId = ProviderRegistry.DEFAULT_PROVIDER_ID
+
         fun setActiveProvider(id: String) {
+            if (id != LOCAL_ID) lastOnlineProviderId = id
             viewModelScope.launch { appPreferences.setActiveProviderId(id) }
+        }
+
+        /** Tapping the Search tab again: Online <-> Local (back to the online provider used last). */
+        fun toggleSource() {
+            val current = activeProviderId.value
+            if (current == LOCAL_ID) {
+                setActiveProvider(lastOnlineProviderId)
+            } else {
+                lastOnlineProviderId = current
+                setActiveProvider(LOCAL_ID)
+            }
         }
 
         /** Plays the tapped result with the rest of the results queued after it. */

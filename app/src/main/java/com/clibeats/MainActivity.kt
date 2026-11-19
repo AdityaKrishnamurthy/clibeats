@@ -3,6 +3,7 @@
 package com.clibeats
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -20,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -42,6 +44,8 @@ import com.clibeats.presentation.theme.ThemeViewModel
 import com.clibeats.presentation.update.UpdatePrompt
 import com.clibeats.presentation.update.UpdateViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -80,7 +84,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 private fun AppContent() {
     val tabs = NavDestination.mainTabs
@@ -103,9 +107,14 @@ private fun AppContent() {
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
-    // Re-tapping the tab you're on: Home = switch Online <-> Local, Search = focus the search box (keyboard opens),
+    // Re-tapping the tab you're on: Home / Search = switch Online <-> Local (double-tap Search = search box),
     // Library = switch Online <-> Offline, Playlists = back to the grid.
     var focusSearch by remember { mutableStateOf(false) }
+    var toggleSearchSource by remember { mutableStateOf(false) }
+    // Search tab: one tap (when already on Search) switches the source after a short wait, which a second
+    // tap cancels to open the search box instead, so a double-tap never flips the source first.
+    var lastSearchTapAt by remember { mutableLongStateOf(0L) }
+    var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
     var showPlaylistGrid by remember { mutableStateOf(false) }
@@ -113,10 +122,26 @@ private fun AppContent() {
         if (destination == tabs[pagerState.currentPage]) {
             when (destination) {
                 NavDestination.Home -> toggleHomeSource = true
-                NavDestination.Search -> focusSearch = true
+                NavDestination.Search -> Unit // handled below (single vs double tap)
                 NavDestination.Library -> toggleLibraryMode = true
                 NavDestination.Playlists -> showPlaylistGrid = true
                 else -> Unit
+            }
+        }
+        if (destination == NavDestination.Search) {
+            val now = SystemClock.uptimeMillis()
+            val doubleTap = now - lastSearchTapAt < DOUBLE_TAP_MS
+            lastSearchTapAt = now
+            pendingSearchToggle?.cancel()
+            pendingSearchToggle = null
+            when {
+                doubleTap -> focusSearch = true
+                tabs[pagerState.currentPage] == NavDestination.Search ->
+                    pendingSearchToggle =
+                        scope.launch {
+                            delay(DOUBLE_TAP_MS)
+                            toggleSearchSource = true
+                        }
             }
         }
         navigate(destination)
@@ -145,7 +170,12 @@ private fun AppContent() {
                         onToggleSourceHandled = { toggleHomeSource = false },
                     )
                 NavDestination.Search ->
-                    SearchScreen(focusRequested = focusSearch, onFocusHandled = { focusSearch = false })
+                    SearchScreen(
+                        focusRequested = focusSearch,
+                        onFocusHandled = { focusSearch = false },
+                        toggleSourceRequested = toggleSearchSource,
+                        onToggleSourceHandled = { toggleSearchSource = false },
+                    )
                 NavDestination.Queue -> QueueScreen()
                 NavDestination.Library ->
                     LibraryScreen(
@@ -162,3 +192,5 @@ private fun AppContent() {
         }
     }
 }
+
+private const val DOUBLE_TAP_MS = 300L
