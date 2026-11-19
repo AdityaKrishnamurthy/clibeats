@@ -144,10 +144,14 @@ class LocalMusicScanner
                         if (!anyTreeFailed) {
                             val foundIds = found.mapTo(HashSet()) { it.id }
                             // Also drops stale rows for playlist files the old scanner stored as tracks.
-                            existing.keys
-                                .filterNot { it in foundIds }
-                                .chunked(DB_CHUNK)
-                                .forEach { songDao.deleteByIds(it) }
+                            val toDelete = existing.keys.filterNot { it in foundIds }
+                            toDelete.forEach { id ->
+                                runCatching {
+                                    val file = artworkFileForId(id)
+                                    if (file.exists()) file.delete()
+                                }
+                            }
+                            toDelete.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
                         }
                         val keepPlaylistIds = HashSet<String>()
                         listings.forEach { (treeUri, listing) ->
@@ -287,13 +291,18 @@ class LocalMusicScanner
             )
         }
 
+        private fun artworkFileForId(id: String): File {
+            val dir = File(context.cacheDir, "local_artwork").apply { mkdirs() }
+            val filename = UUID.nameUUIDFromBytes(id.toByteArray()).toString() + ".img"
+            return File(dir, filename)
+        }
+
         private fun saveArtwork(
             id: String,
             bytes: ByteArray,
         ): String? =
             runCatching {
-                val dir = File(context.filesDir, "local_artwork").apply { mkdirs() }
-                val file = File(dir, UUID.nameUUIDFromBytes(id.toByteArray()).toString() + ".img")
+                val file = artworkFileForId(id)
                 file.writeBytes(bytes)
                 Uri.fromFile(file).toString()
             }.getOrNull()

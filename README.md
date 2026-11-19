@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.2.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.3.0-1DB954)](#)
 [![Downloads](https://img.shields.io/github/downloads/Omprakash-p06/clibeats/total?label=downloads&color=1DB954)](https://github.com/Omprakash-p06/clibeats/releases)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -214,15 +214,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.2.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.3.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.2.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.3.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.2.0` → versionCode `20200`); local builds default to 2.2.0.
+left untouched. The version comes from the tag (`2.3.0` → versionCode `20300`); local builds default to 2.3.0.
 
 ---
 

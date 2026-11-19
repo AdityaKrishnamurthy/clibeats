@@ -143,6 +143,10 @@ val CliBeatsDivider: Color
     @Composable @ReadOnlyComposable
     get() = MaterialTheme.colorScheme.outline
 
+val CliBeatsBorder: Color
+    @Composable @ReadOnlyComposable
+    get() = CliBeatsDivider
+
 val CliBeatsBorderInactive: Color
     @Composable @ReadOnlyComposable
     get() = MaterialTheme.colorScheme.outlineVariant

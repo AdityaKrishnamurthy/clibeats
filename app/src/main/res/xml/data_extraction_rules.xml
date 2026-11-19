@@ -6,6 +6,9 @@
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
+        <exclude domain="database" path="clibeats.db" />
+        <exclude domain="database" path="clibeats.db-wal" />
+        <exclude domain="database" path="clibeats.db-shm" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />

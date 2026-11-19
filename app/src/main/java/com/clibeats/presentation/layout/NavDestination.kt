@@ -63,12 +63,12 @@ sealed class NavDestination(
     )
 
     companion object {
-        /** Bottom navigation tabs. Settings is the gear on the right (replaces the old More menu). */
+        /** Bottom navigation tabs: 4 primary destinations for generous mobile tap targets. */
         val mainTabs: List<NavDestination>
-            get() = listOf(Home, Search, Library, Queue, Playlists, Settings)
+            get() = listOf(Home, Search, Library, Settings)
 
-        /** Every destination in the app. */
+        /** Every destination in the app (including sub-destinations Queue and Playlists). */
         val all: List<NavDestination>
-            get() = mainTabs
+            get() = listOf(Home, Search, Library, Playlists, Queue, Settings)
     }
 }

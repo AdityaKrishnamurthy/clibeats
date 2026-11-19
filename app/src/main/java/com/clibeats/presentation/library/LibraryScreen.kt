@@ -82,7 +82,7 @@ fun LibraryScreen(
     addToPlaylistTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
     }
-    val tabs = listOf("Tracks", "Artists", "Albums")
+    val tabs = listOf("Tracks", "Artists", "Albums", "Playlists")
 
     Column(
         modifier = Modifier
@@ -146,49 +146,53 @@ fun LibraryScreen(
                     }
                 }
 
-                when (val currentState = state) {
-                    is LibraryUiState.Loading -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            CircularProgressIndicator(color = CliBeatsAccent)
+                if (selectedTabIndex == 3) {
+                    com.clibeats.presentation.playlist.PlaylistScreen()
+                } else {
+                    when (val currentState = state) {
+                        is LibraryUiState.Loading -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                CircularProgressIndicator(color = CliBeatsAccent)
+                            }
                         }
-                    }
 
-                    is LibraryUiState.Empty -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text =
-                                    when {
-                                        mode == LibraryMode.ONLINE -> NOTHING_PLAYED
-                                        !localFolderChosen -> NO_FOLDER
-                                        else -> NO_FILES
-                                    },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = CliBeatsTextSecondary,
-                                modifier = Modifier.padding(16.dp),
-                            )
-                        }
-                    }
-
-                    is LibraryUiState.Success -> {
-                        when (selectedTabIndex) {
-                            0 ->
-                                TracksList(
-                                    tracks = currentState.tracks,
-                                    onTrackClick = { track, index ->
-                                        viewModel.onTrackClick(track, currentState.tracks, index)
-                                    },
-                                    onSwipeRight = viewModel::onSwipeAddToQueue,
-                                    onSwipeLeft = favorites::add,
-                                    onLongPress = { addToPlaylistTrack = it },
+                        is LibraryUiState.Empty -> {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Text(
+                                    text =
+                                        when {
+                                            mode == LibraryMode.ONLINE -> NOTHING_PLAYED
+                                            !localFolderChosen -> NO_FOLDER
+                                            else -> NO_FILES
+                                        },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = CliBeatsTextSecondary,
+                                    modifier = Modifier.padding(16.dp),
                                 )
-                            1 -> ArtistsList(artists = currentState.artists)
-                            2 -> AlbumsList(albums = currentState.albums)
+                            }
+                        }
+
+                        is LibraryUiState.Success -> {
+                            when (selectedTabIndex) {
+                                0 ->
+                                    TracksList(
+                                        tracks = currentState.tracks,
+                                        onTrackClick = { track, index ->
+                                            viewModel.onTrackClick(track, currentState.tracks, index)
+                                        },
+                                        onSwipeRight = viewModel::onSwipeAddToQueue,
+                                        onSwipeLeft = favorites::add,
+                                        onLongPress = { addToPlaylistTrack = it },
+                                    )
+                                1 -> ArtistsList(artists = currentState.artists)
+                                2 -> AlbumsList(albums = currentState.albums)
+                            }
                         }
                     }
                 }

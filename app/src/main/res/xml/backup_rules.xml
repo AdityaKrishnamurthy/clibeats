@@ -4,4 +4,7 @@
      The Keystore-encrypted prefs file is excluded: it cannot be decrypted on a new device. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
+    <exclude domain="database" path="clibeats.db" />
+    <exclude domain="database" path="clibeats.db-wal" />
+    <exclude domain="database" path="clibeats.db-shm" />
 </full-backup-content>

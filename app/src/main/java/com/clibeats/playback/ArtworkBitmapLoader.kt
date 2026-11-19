@@ -16,9 +16,9 @@ import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.clibeats.R
-import com.clibeats.presentation.component.ARTWORK_FULL_PX
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
-import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.util.ARTWORK_FULL_PX
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.SettableFuture

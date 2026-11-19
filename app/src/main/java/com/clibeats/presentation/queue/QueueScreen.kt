@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.DragHandle
@@ -58,7 +59,10 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
-fun QueueScreen(viewModel: QueueViewModel = hiltViewModel()) {
+fun QueueScreen(
+    viewModel: QueueViewModel = hiltViewModel(),
+    onClose: (() -> Unit)? = null,
+) {
     val state by viewModel.uiState.collectAsState()
 
     Column(
@@ -74,11 +78,25 @@ fun QueueScreen(viewModel: QueueViewModel = hiltViewModel()) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = "PLAYBACK QUEUE",
-                style = MaterialTheme.typography.titleMedium,
-                color = CliBeatsTextPrimary,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (onClose != null) {
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(32.dp).padding(end = 8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Close queue",
+                            tint = CliBeatsTextPrimary,
+                        )
+                    }
+                }
+                Text(
+                    text = "PLAYBACK QUEUE",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CliBeatsTextPrimary,
+                )
+            }
 
             if (state is QueueUiState.Success) {
                 OutlinedButton(

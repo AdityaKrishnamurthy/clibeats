@@ -22,6 +22,13 @@ interface PlaybackRepository {
     /** Pause when the current song finishes (also with repeat-one). */
     fun setPauseAtEndOfTrack(enabled: Boolean)
 
+    /** Remaining minutes for the active countdown sleep timer, or null if inactive. */
+    val sleepTimerCountdown: StateFlow<Int?>
+
+    fun startSleepTimer(minutes: Int)
+
+    fun cancelSleepTimer()
+
     fun playTrack(track: Track)
 
     fun setQueue(

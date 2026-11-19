@@ -13,9 +13,9 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.playback.service.PlaybackService
-import com.clibeats.presentation.component.ARTWORK_FULL_PX
-import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.util.ARTWORK_FULL_PX
 import com.clibeats.util.DiagnosticLogger
+import com.clibeats.util.artworkUrlFor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +74,10 @@ class PlayerAdapter
         /** True while the "end of track" sleep timer is armed (the player pauses when the song ends). */
         private val _pauseAtEndOfTrack = MutableStateFlow(false)
         val pauseAtEndOfTrack: StateFlow<Boolean> = _pauseAtEndOfTrack.asStateFlow()
+
+        private val _sleepTimerCountdown = MutableStateFlow<Int?>(null)
+        val sleepTimerCountdown: StateFlow<Int?> = _sleepTimerCountdown.asStateFlow()
+        private var sleepCountdownJob: Job? = null
 
         // Songs that failed in a row; stops skipping when a whole queue is unplayable (e.g. offline).
         private var consecutiveFailures = 0
@@ -147,6 +151,10 @@ class PlayerAdapter
                         reason: Int,
                     ) {
                         retriedMediaId = null
+                        val current = player.currentMediaItemIndex
+                        if (current in trackList.indices) {
+                            resolveTrackBitrate(trackList[current])
+                        }
                         updateState()
                     }
 
@@ -386,6 +394,30 @@ class PlayerAdapter
             }
         }
 
+        private val memoizedBitrateKbps = mutableMapOf<String, Int>()
+
+        private fun resolveTrackBitrate(track: Track) {
+            if (memoizedBitrateKbps.containsKey(track.id)) return
+            val durationMs = player.duration.takeIf { it > 0 } ?: track.durationMs
+            scope.launch(Dispatchers.IO) {
+                val bitrate = streamResolver.knownBitrateKbps(track, durationMs)
+                if (bitrate != null && bitrate > 0) {
+                    kotlinx.coroutines.withContext(Dispatchers.Main) {
+                        memoizedBitrateKbps[track.id] = bitrate
+                        updateState()
+                    }
+                }
+            }
+        }
+
+        private fun mappedRepeatMode(): RepeatMode =
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ONE -> RepeatMode.ONE
+                Player.REPEAT_MODE_ALL -> RepeatMode.ALL
+                else -> RepeatMode.OFF
+            }
+
+        @Suppress("CyclomaticComplexMethod")
         private fun updateState() {
             val currentIndex = player.currentMediaItemIndex
             val currentTrack = if (currentIndex in trackList.indices) trackList[currentIndex] else null
@@ -395,12 +427,9 @@ class PlayerAdapter
                     listOf(f.averageBitrate, f.bitrate, f.peakBitrate).firstOrNull { it > 0 }?.div(BITS_PER_KBIT)
                 }
             if (format != null && formatBitrate == null && currentTrack != null) estimateLocalBitrate(currentTrack)
-            val mappedRepeatMode =
-                when (player.repeatMode) {
-                    Player.REPEAT_MODE_ONE -> RepeatMode.ONE
-                    Player.REPEAT_MODE_ALL -> RepeatMode.ALL
-                    else -> RepeatMode.OFF
-                }
+            if (formatBitrate == null && currentTrack != null && !memoizedBitrateKbps.containsKey(currentTrack.id)) {
+                resolveTrackBitrate(currentTrack)
+            }
 
             _playbackState.value =
                 PlaybackState(
@@ -408,13 +437,13 @@ class PlayerAdapter
                     isPlaying = player.isPlaying,
                     positionMs = player.currentPosition.coerceAtLeast(0L),
                     bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
-                    repeatMode = mappedRepeatMode,
+                    repeatMode = mappedRepeatMode(),
                     shuffleEnabled = player.shuffleModeEnabled,
                     codec = format?.sampleMimeType?.let(::codecLabel),
                     bitrateKbps =
                         formatBitrate
                             ?: currentTrack?.let { track ->
-                                localBitrateKbps[track.id] ?: streamResolver.knownBitrateKbps(track, player.duration)
+                                localBitrateKbps[track.id] ?: memoizedBitrateKbps[track.id]
                             },
                     sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
                     bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
@@ -428,6 +457,31 @@ class PlayerAdapter
         fun setPauseAtEndOfTrack(enabled: Boolean) {
             player.pauseAtEndOfMediaItems = enabled
             _pauseAtEndOfTrack.value = enabled
+        }
+
+        fun startSleepTimer(minutes: Int) {
+            sleepCountdownJob?.cancel()
+            setPauseAtEndOfTrack(false)
+            if (minutes <= 0) {
+                _sleepTimerCountdown.value = null
+                return
+            }
+            sleepCountdownJob =
+                scope.launch {
+                    for (left in minutes downTo 1) {
+                        _sleepTimerCountdown.value = left
+                        delay(60_000L)
+                    }
+                    pause()
+                    _sleepTimerCountdown.value = null
+                }
+        }
+
+        fun cancelSleepTimer() {
+            sleepCountdownJob?.cancel()
+            sleepCountdownJob = null
+            _sleepTimerCountdown.value = null
+            setPauseAtEndOfTrack(false)
         }
 
         /**

@@ -101,6 +101,7 @@ fun NowPlayingScreen(
     onOpenQueue: () -> Unit,
 ) {
     val state by viewModel.playbackState.collectAsState()
+    val queue by viewModel.queue.collectAsState()
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
@@ -197,11 +198,25 @@ fun NowPlayingScreen(
                             .background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)),
                     )
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "> now_playing",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = CliBeatsAccent,
-                    )
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = "> now_playing",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = CliBeatsAccent,
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                        val queueLabel = if (queue.isNotEmpty()) "[ QUEUE (${queue.size}) ]" else "[ QUEUE ]"
+                        Text(
+                            text = queueLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = CliBeatsAccent,
+                            modifier =
+                                Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .clickable(onClick = onOpenQueue)
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                        )
+                    }
                 }
 
                 Spacer(Modifier.height(12.dp))
