@@ -82,8 +82,15 @@ fun HomeScreen(
     ) {
         // 1. System Provider Status Block
         item {
+            // Local files don't need the internet, so Local mode shows [ LOCAL ] instead of online/offline.
             val isLocal = activeProviderId == "local"
             val isSystemOnline = isLocal || isOnline
+            val statusLabel =
+                when {
+                    isLocal -> "[ LOCAL ]"
+                    isOnline -> "[ ONLINE ]"
+                    else -> "[ OFFLINE ]"
+                }
             TuiBlock(title = "System Status", isActive = true) {
                 Column {
                     Row(
@@ -97,7 +104,7 @@ fun HomeScreen(
                             color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )
                         Text(
-                            text = if (isSystemOnline) "[ ONLINE ]" else "[ OFFLINE ]",
+                            text = statusLabel,
                             style = MaterialTheme.typography.labelSmall,
                             color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )

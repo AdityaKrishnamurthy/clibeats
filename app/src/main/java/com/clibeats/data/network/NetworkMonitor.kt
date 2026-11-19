@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,20 +24,19 @@ class NetworkMonitor
         val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
 
         init {
-            val request =
-                NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build()
-
-            connectivityManager.registerNetworkCallback(
-                request,
+            // Follow the default network: "online" means the system has verified that the internet
+            // actually works (VALIDATED), so captive portals and Wi-Fi without internet count as offline.
+            connectivityManager.registerDefaultNetworkCallback(
                 object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) {
-                        _isOnline.value = true
+                    override fun onCapabilitiesChanged(
+                        network: Network,
+                        capabilities: NetworkCapabilities,
+                    ) {
+                        _isOnline.value = capabilities.hasWorkingInternet()
                     }
 
                     override fun onLost(network: Network) {
-                        _isOnline.value = checkInitialOnline()
+                        _isOnline.value = false
                     }
                 },
             )
@@ -47,6 +45,10 @@ class NetworkMonitor
         private fun checkInitialOnline(): Boolean {
             val activeNetwork = connectivityManager.activeNetwork
             val capabilities = activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
-            return capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+            return capabilities?.hasWorkingInternet() == true
         }
+
+        private fun NetworkCapabilities.hasWorkingInternet(): Boolean =
+            hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }

@@ -13,7 +13,6 @@ import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -35,14 +34,13 @@ class HomeViewModel
     constructor(
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
+        private val networkMonitor: NetworkMonitor,
         private val historyRepository: HistoryRepository? = null,
         private val playbackRepository: PlaybackRepository? = null,
-        private val networkMonitor: NetworkMonitor? = null,
     ) : ViewModel() {
         val providers: List<MusicProvider> = providerRegistry.providers
 
-        val isOnline: StateFlow<Boolean> =
-            networkMonitor?.isOnline ?: MutableStateFlow(true)
+        val isOnline: StateFlow<Boolean> = networkMonitor.isOnline
 
         val activeProviderId: StateFlow<String> =
             appPreferences.activeProviderId
