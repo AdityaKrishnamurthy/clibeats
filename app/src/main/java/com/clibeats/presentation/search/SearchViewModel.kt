@@ -82,11 +82,11 @@ class SearchViewModel
                 .distinctUntilChanged()
                 .flatMapLatest { q ->
                     if (q.length < MIN_QUERY_LENGTH) {
-                        flowOf(SearchUiState.Idle)
+                        flowOf<SearchUiState>(SearchUiState.Idle)
                     } else {
                         activeProviderId.flatMapLatest { id ->
                             val provider = providerRegistry.getProvider(id) ?: providerRegistry.defaultProvider()
-                            flow {
+                            flow<SearchUiState> {
                                 emit(SearchUiState.Loading)
                                 emit(
                                     when (val result = provider.search(q)) {
