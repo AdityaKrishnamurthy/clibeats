@@ -112,42 +112,38 @@ class SettingsViewModel
             runCatching { localMusicScanner?.scan(folders) }
         }
 
+        private data class RawSettings(
+            val providerId: String?,
+            val cacheMaxMb: Int,
+            val highQualityStreaming: Boolean,
+            val themeModeName: String,
+            val accentColorName: String,
+        )
+
         val uiState: StateFlow<SettingsUiState> =
             combine(
                 appPreferences.activeProviderId,
                 appPreferences.cacheMaxMb,
                 appPreferences.highQualityStreaming,
-                appPreferences.authToken,
-            ) { providerId, cacheMaxMb, highQuality, token ->
-                Triple(
-                    Triple(providerId, cacheMaxMb, highQuality),
-                    token,
-                    Unit,
-                )
-            }.combine(cacheManager.getAllCachedAsFlow()) { (inner, token, _), cachedEntities ->
-                val (providerId, cacheMaxMb, highQuality) = inner
-                val totalBytes = cachedEntities.sumOf { it.fileSizeBytes }
-                Triple(Triple(providerId, cacheMaxMb, highQuality), token, totalBytes)
-            }.combine(appPreferences.themeMode) { (inner, token, totalBytes), modeName ->
-                Triple(Triple(inner.first, inner.second, inner.third), Pair(token, totalBytes), modeName)
-            }.combine(appPreferences.accentColorName) { (inner, extra, modeName), accentName ->
-                val (providerId, cacheMaxMb, highQuality) = inner
-                val (token, totalBytes) = extra
+                appPreferences.themeMode,
+                appPreferences.accentColorName,
+            ) { providerId, cacheMaxMb, highQuality, modeName, accentName ->
+                RawSettings(providerId, cacheMaxMb, highQuality, modeName, accentName)
+            }.combine(cacheManager.getAllCachedAsFlow()) { raw, cachedEntities ->
                 SettingsUiState(
-                    activeProviderId = providerId ?: ProviderRegistry.DEFAULT_PROVIDER_ID,
+                    activeProviderId = raw.providerId ?: ProviderRegistry.DEFAULT_PROVIDER_ID,
                     providers =
                         providerRegistry.providers.map { provider ->
                             ProviderOption(provider.providerId, provider.displayName)
                         },
-                    cacheMaxMb = cacheMaxMb,
-                    highQualityStreaming = highQuality,
-                    hasAuthToken = !token.isNullOrEmpty(),
-                    currentCacheSizeBytes = totalBytes,
+                    cacheMaxMb = raw.cacheMaxMb,
+                    highQualityStreaming = raw.highQualityStreaming,
+                    currentCacheSizeBytes = cachedEntities.sumOf { it.fileSizeBytes },
                     themeMode =
-                        CliBeatsThemeMode.entries.firstOrNull { it.name == modeName }
+                        CliBeatsThemeMode.entries.firstOrNull { it.name == raw.themeModeName }
                             ?: CliBeatsThemeMode.DARK,
                     accentColor =
-                        AccentColor.entries.firstOrNull { it.name == accentName }
+                        AccentColor.entries.firstOrNull { it.name == raw.accentColorName }
                             ?: AccentColor.GREEN,
                 )
             }.stateIn(
@@ -180,12 +176,6 @@ class SettingsViewModel
         fun setAccentColor(accent: AccentColor) {
             viewModelScope.launch {
                 appPreferences.setAccentColorName(accent.name)
-            }
-        }
-
-        fun clearAuthToken() {
-            viewModelScope.launch {
-                appPreferences.clearAuthToken()
             }
         }
 

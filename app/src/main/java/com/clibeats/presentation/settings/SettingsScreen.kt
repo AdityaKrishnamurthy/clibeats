@@ -362,18 +362,6 @@ fun SettingsScreen(
             }
         }
 
-        if (uiState.hasAuthToken) {
-            TuiBlock(title = "Session") {
-                Button(
-                    onClick = { viewModel.clearAuthToken() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                ) {
-                    Text("CLEAR SESSION CREDENTIALS")
-                }
-            }
-        }
-
         // ── Section: Updates (GitHub Releases) ──────────────────────────────
         UpdateSection()
 
