@@ -77,8 +77,8 @@ class UpdateRulesTest {
         val release = UpdateRules.parseRelease(releaseJson())!!
         assertThat(release.version).isEqualTo("2.1.0")
         assertThat(release.apkName).isEqualTo("CLIBeats-v2.1.0.apk")
-        assertThat(release.apkUrl).isEqualTo("https://example.com/CLIBeats-v2.1.0.apk")
-        assertThat(release.checksumsUrl).isEqualTo("https://example.com/SHA256SUMS.txt")
+        assertThat(release.apkUrl).isEqualTo("https://github.com/o/r/releases/download/v2.1.0/CLIBeats-v2.1.0.apk")
+        assertThat(release.checksumsUrl).isEqualTo("https://github.com/o/r/releases/download/v2.1.0/SHA256SUMS.txt")
         assertThat(release.pageUrl).isEqualTo("https://github.com/o/r/releases/tag/v2.1.0")
     }
 
@@ -87,6 +87,23 @@ class UpdateRulesTest {
         assertThat(UpdateRules.parseRelease(releaseJson(assets = "[]"))).isNull()
         assertThat(UpdateRules.parseRelease(releaseJson(prerelease = true))).isNull()
         assertThat(UpdateRules.parseRelease("not json")).isNull()
+    }
+
+    @Test
+    fun `release assets outside github hosts are rejected`() {
+        assertThat(UpdateRules.isTrustedReleaseUrl("https://github.com/o/r/releases/download/v1/a.apk")).isTrue()
+        assertThat(UpdateRules.isTrustedReleaseUrl("https://objects.githubusercontent.com/a.apk")).isTrue()
+        assertThat(UpdateRules.isTrustedReleaseUrl("https://evil.example.com/a.apk")).isFalse()
+        assertThat(UpdateRules.isTrustedReleaseUrl("http://github.com/a.apk")).isFalse()
+        assertThat(
+            UpdateRules.parseRelease(
+                releaseJson(
+                    assets =
+                        """[{"name":"CLIBeats-v2.1.0.apk",
+                             "browser_download_url":"https://evil.example.com/CLIBeats-v2.1.0.apk"}]""",
+                ),
+            ),
+        ).isNull()
     }
 
     @Test
@@ -103,8 +120,10 @@ class UpdateRulesTest {
             prerelease: Boolean = false,
             assets: String =
                 """[
-                  {"name":"CLIBeats-v2.1.0.apk","browser_download_url":"https://example.com/CLIBeats-v2.1.0.apk","size":1},
-                  {"name":"SHA256SUMS.txt","browser_download_url":"https://example.com/SHA256SUMS.txt","size":1}
+                  {"name":"CLIBeats-v2.1.0.apk",
+                   "browser_download_url":"https://github.com/o/r/releases/download/v2.1.0/CLIBeats-v2.1.0.apk","size":1},
+                  {"name":"SHA256SUMS.txt",
+                   "browser_download_url":"https://github.com/o/r/releases/download/v2.1.0/SHA256SUMS.txt","size":1}
                 ]""",
         ): String =
             """{"tag_name":"$tag","html_url":"https://github.com/o/r/releases/tag/$tag","draft":false,

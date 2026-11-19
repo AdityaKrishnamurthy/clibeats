@@ -9,7 +9,17 @@ object UpdateRules {
     const val CHECKSUMS_FILE = "SHA256SUMS.txt"
     private const val SHA256_HEX_LENGTH = 64
 
+    /** GitHub hosts a release download may point at (the browser URL, then its CDN redirect). */
+    private val TRUSTED_RELEASE_HOSTS =
+        setOf("github.com", "www.github.com", "objects.githubusercontent.com", "api.github.com")
+
     private val json = Json { ignoreUnknownKeys = true }
+
+    /** Only https URLs on GitHub's own hosts are accepted from the releases API response. */
+    fun isTrustedReleaseUrl(url: String): Boolean {
+        val uri = runCatching { java.net.URI(url) }.getOrNull() ?: return false
+        return uri.scheme.equals("https", ignoreCase = true) && uri.host?.lowercase() in TRUSTED_RELEASE_HOSTS
+    }
 
     /** "v2.1.0" / "2.1.0-beta" / "2.1" -> [2, 1, 0]; missing or non-numeric parts count as 0. */
     fun parseVersion(version: String): List<Int> =
@@ -84,7 +94,11 @@ object UpdateRules {
         val apks = release.assets.filter { it.name.endsWith(".apk", ignoreCase = true) }
         val apk = apks.firstOrNull { it.name.startsWith("CLIBeats", ignoreCase = true) } ?: apks.firstOrNull()
         apk ?: return null
-        val checksums = release.assets.firstOrNull { it.name.equals(CHECKSUMS_FILE, ignoreCase = true) }
+        // Never download an APK (or checksum list) from a host GitHub did not give us.
+        if (!isTrustedReleaseUrl(apk.downloadUrl)) return null
+        val checksums =
+            release.assets.firstOrNull { it.name.equals(CHECKSUMS_FILE, ignoreCase = true) }
+                ?.takeIf { isTrustedReleaseUrl(it.downloadUrl) }
         return ReleaseInfo(
             version = parseVersion(release.tagName).joinToString("."),
             apkName = apk.name,
