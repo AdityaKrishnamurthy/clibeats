@@ -158,8 +158,8 @@ class YouTubeMusicProvider
                     continue
                 }
 
-                // Extract format
-                val extracted = StreamUrlDeobfuscator.deobfuscateStreamUrl(streamingData, traceId)
+                // Extract the best audio format from adaptiveFormats or formats.
+                val extracted = StreamUrlDeobfuscator.extractAudioStream(streamingData, traceId)
                 if (extracted != null) {
                     DiagnosticLogger.logStreamFormatSelected(
                         traceId = traceId,

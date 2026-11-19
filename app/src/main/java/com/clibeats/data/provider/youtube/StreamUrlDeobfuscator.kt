@@ -3,6 +3,7 @@
 package com.clibeats.data.provider.youtube
 
 import com.clibeats.util.DiagnosticLogger
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -20,6 +21,42 @@ data class ExtractedStreamInfo(
 )
 
 object StreamUrlDeobfuscator {
+    /**
+     * Picks the best playable audio format from a player response and returns its direct URL.
+     *
+     * YouTube splits audio across `adaptiveFormats` (and sometimes `formats`); only the first
+     * array used to be read, so responses with the audio in `formats` failed even though a
+     * playable stream was present. Formats that only carry `signatureCipher` are skipped: their
+     * signature must be deobfuscated by the player JS, and pretending to do that produced URLs
+     * that always failed with 403 at playback time.
+     */
+    fun extractAudioStream(
+        streamingData: JsonElement,
+        traceId: String,
+    ): ExtractedStreamInfo? {
+        val obj = runCatching { streamingData.jsonObject }.getOrNull() ?: return null
+        val formats =
+            (obj["adaptiveFormats"] as? JsonArray).orEmpty() +
+                (obj["formats"] as? JsonArray).orEmpty()
+        val audio =
+            formats.filter { format ->
+                format.stringField("mimeType").startsWith("audio/")
+            }
+        if (audio.isEmpty()) {
+            DiagnosticLogger.logError(traceId, "STREAM_RESOLUTION_FAILED", "No audio formats in streamingData")
+            return null
+        }
+        val ordered =
+            audio.sortedWith(
+                compareByDescending<JsonElement> { it.stringField("mimeType").contains("mp4") }
+                    .thenByDescending { it.stringField("bitrate").toIntOrNull() ?: 0 },
+            )
+        ordered.forEach { format ->
+            deobfuscateStreamUrl(format, traceId)?.let { return it }
+        }
+        return null
+    }
+
     fun deobfuscateStreamUrl(
         format: JsonElement,
         traceId: String,
@@ -29,15 +66,18 @@ object StreamUrlDeobfuscator {
         val mimeType = obj["mimeType"]?.jsonPrimitive?.contentOrNull ?: "audio/unknown"
         val bitrate = obj["bitrate"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
 
-        var rawUrl = obj["url"]?.jsonPrimitive?.contentOrNull
-        val cipherStr = obj["cipher"]?.jsonPrimitive?.contentOrNull ?: obj["signatureCipher"]?.jsonPrimitive?.contentOrNull
-
-        if (rawUrl.isNullOrBlank() && !cipherStr.isNullOrBlank()) {
-            rawUrl = parseCipher(cipherStr)
-        }
-
+        val rawUrl = obj["url"]?.jsonPrimitive?.contentOrNull
         if (rawUrl.isNullOrBlank()) {
-            DiagnosticLogger.logError(traceId, "STREAM_RESOLUTION_FAILED", "Empty stream URL in format")
+            val hasCipher =
+                !obj["cipher"]?.jsonPrimitive?.contentOrNull.isNullOrBlank() ||
+                    !obj["signatureCipher"]?.jsonPrimitive?.contentOrNull.isNullOrBlank()
+            val reason =
+                if (hasCipher) {
+                    "Signature-ciphered format (itag $itag) is not supported"
+                } else {
+                    "Empty stream URL in format"
+                }
+            DiagnosticLogger.logError(traceId, "STREAM_RESOLUTION_FAILED", reason)
             return null
         }
 
@@ -61,27 +101,8 @@ object StreamUrlDeobfuscator {
         )
     }
 
-    private fun parseCipher(cipherStr: String): String? {
-        val params =
-            cipherStr.split("&").associate { param ->
-                val parts = param.split("=", limit = 2)
-                val key = decode(parts.getOrNull(0) ?: "")
-                val value = decode(parts.getOrNull(1) ?: "")
-                key to value
-            }
-
-        val baseUrl = params["url"] ?: return null
-        val signature = params["s"]
-        val sigParam = params["sp"] ?: "sig"
-
-        if (signature.isNullOrBlank()) {
-            return baseUrl
-        }
-
-        val deobfuscatedSig = deobfuscateSignature(signature)
-        val delimiter = if (baseUrl.contains("?")) "&" else "?"
-        return "$baseUrl$delimiter$sigParam=$deobfuscatedSig"
-    }
+    private fun JsonElement.stringField(name: String): String =
+        runCatching { jsonObject[name]?.jsonPrimitive?.contentOrNull }.getOrNull().orEmpty()
 
     private fun extractQueryParam(
         url: String,
@@ -96,11 +117,5 @@ object StreamUrlDeobfuscator {
             ?.let { decode(it) }
     }
 
-    private fun decode(str: String): String {
-        return runCatching { URLDecoder.decode(str, "UTF-8") }.getOrDefault(str)
-    }
-
-    private fun deobfuscateSignature(signature: String): String {
-        return signature.reversed()
-    }
+    private fun decode(str: String): String = runCatching { URLDecoder.decode(str, "UTF-8") }.getOrDefault(str)
 }
