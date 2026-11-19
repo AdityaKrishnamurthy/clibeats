@@ -48,6 +48,12 @@ object UpdateRules {
             else -> now - lastCheckAt >= frequency.intervalMs
         }
 
+    /** A kept update APK is a leftover once the installed app is at least that version (the update was installed). */
+    fun isLeftoverDownload(
+        downloadVersion: String?,
+        installedVersion: String,
+    ): Boolean = downloadVersion != null && !isNewer(downloadVersion, installedVersion)
+
     fun isSnoozed(
         now: Long,
         snoozeUntil: Long,

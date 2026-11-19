@@ -72,7 +72,14 @@ class UpdateManager
         fun onAppStart() {
             if (!started.compareAndSet(false, true)) return
             scope.launch {
-                val record = preferences.updateRecord()
+                var record = preferences.updateRecord()
+                // The update was installed: delete its APK from Downloads.
+                if (record.downloadId != NO_DOWNLOAD &&
+                    UpdateRules.isLeftoverDownload(record.downloadVersion, installedVersion)
+                ) {
+                    removeDownload(record.downloadId)
+                    record = preferences.updateRecord()
+                }
                 val frequency = frequencyOf(record.frequency)
                 if (frequency == UpdateFrequency.OFF) return@launch
                 val cached = UpdateRules.decode(record.cachedReleaseJson)

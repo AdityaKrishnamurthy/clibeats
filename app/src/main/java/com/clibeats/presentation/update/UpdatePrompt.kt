@@ -98,7 +98,8 @@ internal fun UpdateProgress(
     when (state) {
         is UpdateState.Downloading -> {
             Text(
-                text = if (state.progress < 0) "Downloading..." else "Downloading... ${state.progress}%",
+                // -1 = checksum fetch, queued, or size not known yet: say so instead of a frozen 0%.
+                text = if (state.progress < 0) "Preparing download..." else "Downloading... ${state.progress}%",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

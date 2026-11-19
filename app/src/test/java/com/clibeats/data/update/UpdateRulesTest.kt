@@ -45,6 +45,14 @@ class UpdateRulesTest {
     }
 
     @Test
+    fun `downloaded apk is a leftover once that version is installed`() {
+        assertThat(UpdateRules.isLeftoverDownload("2.1.0", "2.1.0")).isTrue()
+        assertThat(UpdateRules.isLeftoverDownload("2.1.0", "2.2.0")).isTrue()
+        assertThat(UpdateRules.isLeftoverDownload("2.2.0", "2.1.0")).isFalse()
+        assertThat(UpdateRules.isLeftoverDownload(null, "2.1.0")).isFalse()
+    }
+
+    @Test
     fun `later snoozes until the stored time`() {
         assertThat(UpdateRules.isSnoozed(now = 100, snoozeUntil = 200)).isTrue()
         assertThat(UpdateRules.isSnoozed(now = 200, snoozeUntil = 200)).isFalse()
