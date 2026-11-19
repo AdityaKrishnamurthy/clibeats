@@ -99,6 +99,14 @@ fun PlaylistScreen(
     onCreateDialogHandled: () -> Unit = {},
     viewModel: PlaylistViewModel = hiltViewModel(),
 ) {
+    val favorites: FavoritesViewModel = hiltViewModel()
+    val state by viewModel.uiState.collectAsState()
+    var showCreateDialog by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
+    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
+    var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
+    var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
+
     // Re-tapping the Playlists tab while inside a playlist goes back to the grid.
     LaunchedEffect(showGridRequested) {
         if (showGridRequested) {
@@ -112,13 +120,6 @@ fun PlaylistScreen(
             onCreateDialogHandled()
         }
     }
-    val favorites: FavoritesViewModel = hiltViewModel()
-    val state by viewModel.uiState.collectAsState()
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
-    var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
-    var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
-    var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
 
     Column(
         modifier = Modifier

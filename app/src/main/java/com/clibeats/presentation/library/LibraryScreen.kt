@@ -334,7 +334,7 @@ private fun LibraryModeToggle(
 @Composable
 private fun ArtistsList(artists: List<ArtistGroup>) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = artists, key = { _, item -> item.artist }) { index, artist ->
+        itemsIndexed(items = artists, key = { _, item -> item.name }) { index, artist ->
             Row(
                 modifier =
                     Modifier
@@ -344,7 +344,7 @@ private fun ArtistsList(artists: List<ArtistGroup>) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "${index + 1}. ${artist.artist}",
+                    text = "${index + 1}. ${artist.name}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = CliBeatsTextPrimary,
                     maxLines = 1,
@@ -364,7 +364,7 @@ private fun ArtistsList(artists: List<ArtistGroup>) {
 @Composable
 private fun AlbumsList(albums: List<AlbumGroup>) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = albums, key = { _, item -> item.album }) { index, album ->
+        itemsIndexed(items = albums, key = { _, item -> "${item.artist}_${item.title}" }) { index, album ->
             Row(
                 modifier =
                     Modifier
@@ -375,7 +375,7 @@ private fun AlbumsList(albums: List<AlbumGroup>) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "${index + 1}. ${album.album}",
+                        text = "${index + 1}. ${album.title}",
                         style = MaterialTheme.typography.bodyMedium,
                         color = CliBeatsTextPrimary,
                         maxLines = 1,
