@@ -6,12 +6,12 @@ import android.content.Context
 import coil.ImageLoader
 import coil.memory.MemoryCache
 import com.clibeats.data.cache.ResizableDiskCache
-import com.clibeats.data.preferences.AppPreferences
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+
 private const val MEMORY_CACHE_PERCENT = 0.25
 private const val BYTES_IN_MB = 1_048_576L
 private const val DEFAULT_ARTWORK_CACHE_MB = 128L

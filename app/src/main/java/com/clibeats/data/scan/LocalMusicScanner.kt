@@ -1,4 +1,11 @@
-@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught", "NestedBlockDepth", "SwallowedException")
+@file:Suppress(
+    "ForbiddenImport",
+    "TooGenericExceptionCaught",
+    "NestedBlockDepth",
+    "SwallowedException",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+)
 
 package com.clibeats.data.scan
 

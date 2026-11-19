@@ -21,8 +21,8 @@ fun artworkUrlFor(
     // Imported JSON is untrusted: only image sources an image loader should open. `file` is allowed
     // for covers CLIBeats copied into its own filesDir; imports are filtered to http(s)/content.
     val scheme = runCatching { Uri.parse(url).scheme?.lowercase() }.getOrNull()
-    if (scheme !in ALLOWED_ARTWORK_SCHEMES) return null
     return when {
+        scheme !in ALLOWED_ARTWORK_SCHEMES -> null
         "googleusercontent.com" in url || "ggpht.com" in url ->
             if (GOOGLE_SIZE_SPEC.containsMatchIn(url)) {
                 url.replace(GOOGLE_SIZE_SPEC, "=w$sizePx-h$sizePx-l90-rj")

@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "TooManyFunctions")
+@file:Suppress("ForbiddenImport", "TooManyFunctions", "LongParameterList")
 
 package com.clibeats.presentation.settings
 

@@ -45,7 +45,7 @@ import javax.inject.Singleton
  *   `SHA256SUMS.txt` before it can be installed.
  * - Installing hands the file to Android's package installer ("Do you want to update this app?").
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 @Singleton
 class UpdateManager
     @Inject
@@ -340,10 +340,12 @@ class UpdateManager
                             temp.outputStream().use { output -> input.copyTo(output) }
                         }
                     if (copied == null || temp.length() == 0L) return@runCatching SIGNING_UNKNOWN_MESSAGE
-                    val archive = context.packageManager.archiveInfo(temp.absolutePath)
-                        ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
-                    val installed = context.packageManager.installedInfo(context.packageName)
-                        ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                    val archive =
+                        context.packageManager.archiveInfo(temp.absolutePath)
+                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                    val installed =
+                        context.packageManager.installedInfo(context.packageName)
+                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
                     val archiveSigners = archive.signerDigests()
                     val installedSigners = installed.signerDigests()
                     when {

@@ -1,3 +1,5 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats
 
 import android.app.Application

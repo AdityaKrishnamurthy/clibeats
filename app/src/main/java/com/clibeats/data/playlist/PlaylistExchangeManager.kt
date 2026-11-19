@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught")
+@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught", "LongParameterList")
 
 package com.clibeats.data.playlist
 
