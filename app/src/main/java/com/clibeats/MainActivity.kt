@@ -3,7 +3,6 @@
 package com.clibeats
 
 import android.os.Bundle
-import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -21,7 +20,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,20 +103,20 @@ private fun AppContent() {
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
-    // Bottom-bar gestures: double-tap Search = focus the search box; re-tap Playlists = back to grid.
+    // Re-tapping the tab you're on: Search = focus the search box (keyboard opens),
+    // Library = switch Online <-> Offline, Playlists = back to the grid.
     var focusSearch by remember { mutableStateOf(false) }
+    var toggleLibraryMode by remember { mutableStateOf(false) }
     var showPlaylistGrid by remember { mutableStateOf(false) }
-    var lastTab by remember { mutableStateOf<NavDestination?>(null) }
-    var lastTabAt by remember { mutableLongStateOf(0L) }
     val onTabClick: (NavDestination) -> Unit = { destination ->
-        val now = SystemClock.uptimeMillis()
-        val current = tabs[pagerState.currentPage]
-        val searchDoubleTap =
-            destination == NavDestination.Search && lastTab == NavDestination.Search && now - lastTabAt < DOUBLE_TAP_MS
-        if (searchDoubleTap) focusSearch = true
-        if (destination == NavDestination.Playlists && current == NavDestination.Playlists) showPlaylistGrid = true
-        lastTab = destination
-        lastTabAt = now
+        if (destination == tabs[pagerState.currentPage]) {
+            when (destination) {
+                NavDestination.Search -> focusSearch = true
+                NavDestination.Library -> toggleLibraryMode = true
+                NavDestination.Playlists -> showPlaylistGrid = true
+                else -> Unit
+            }
+        }
         navigate(destination)
     }
 
@@ -142,7 +140,11 @@ private fun AppContent() {
                 NavDestination.Search ->
                     SearchScreen(focusRequested = focusSearch, onFocusHandled = { focusSearch = false })
                 NavDestination.Queue -> QueueScreen()
-                NavDestination.Library -> LibraryScreen()
+                NavDestination.Library ->
+                    LibraryScreen(
+                        toggleModeRequested = toggleLibraryMode,
+                        onToggleModeHandled = { toggleLibraryMode = false },
+                    )
                 NavDestination.Playlists ->
                     PlaylistScreen(
                         showGridRequested = showPlaylistGrid,
@@ -153,5 +155,3 @@ private fun AppContent() {
         }
     }
 }
-
-private const val DOUBLE_TAP_MS = 400L

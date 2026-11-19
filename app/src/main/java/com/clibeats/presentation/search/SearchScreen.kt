@@ -69,7 +69,7 @@ fun SearchScreen(
 ) {
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
-    // Double-tapping the Search tab focuses the box and opens the keyboard (one-shot).
+    // Tapping the Search tab while already on Search focuses the box and opens the keyboard (one-shot).
     LaunchedEffect(focusRequested) {
         if (focusRequested) {
             runCatching { searchFocus.requestFocus() }

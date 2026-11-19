@@ -29,6 +29,7 @@ import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -40,6 +41,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
@@ -57,12 +59,23 @@ import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
-fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
+fun LibraryScreen(
+    viewModel: LibraryViewModel = hiltViewModel(),
+    toggleModeRequested: Boolean = false,
+    onToggleModeHandled: () -> Unit = {},
+) {
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val mode by viewModel.mode.collectAsState()
+    // Tapping the Library tab while already on it flips Online <-> Offline.
+    LaunchedEffect(toggleModeRequested) {
+        if (toggleModeRequested) {
+            viewModel.setMode(if (mode == LibraryMode.ONLINE) LibraryMode.OFFLINE else LibraryMode.ONLINE)
+            onToggleModeHandled()
+        }
+    }
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     var selectedTabIndex by remember { mutableIntStateOf(0) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
@@ -80,7 +93,13 @@ fun LibraryScreen(viewModel: LibraryViewModel = hiltViewModel()) {
         LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
         Spacer(modifier = Modifier.height(8.dp))
 
-        val modeLabel = if (mode == LibraryMode.ONLINE) "Online · played" else "Offline · device"
+        val trackCount = (state as? LibraryUiState.Success)?.tracks?.size ?: 0
+        val modeLabel =
+            if (mode == LibraryMode.ONLINE) {
+                "Online · played"
+            } else {
+                "Offline · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
+            }
         TuiBlock(
             title = "Library — $modeLabel (${tabs[selectedTabIndex]})",
             isActive = true,
@@ -203,18 +222,22 @@ private fun LibraryModeToggle(
     mode: LibraryMode,
     onSelect: (LibraryMode) -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    // Two equal-width segments, matching the Online / Local switch on Home and Search.
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LibraryMode.entries.forEach { option ->
             val selected = option == mode
             Text(
                 text = if (selected) "[● ${option.name}]" else "[ ${option.name} ]",
                 style = MaterialTheme.typography.labelMedium,
                 color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
                 modifier = Modifier
+                    .weight(1f)
                     .semantics { this.selected = selected }
                     .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
                     .clickable(role = Role.Tab) { onSelect(option) }
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                    .padding(horizontal = 10.dp, vertical = 10.dp),
             )
         }
     }
