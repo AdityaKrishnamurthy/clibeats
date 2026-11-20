@@ -196,7 +196,7 @@ internal fun PlaylistBrowser(
             }
         }
         if (files.isNotEmpty() || filter == PlaylistFilter.LOCAL_M3U) {
-            header("local_h", "LOCAL FILES · ${files.size}")
+            header("local_h", "LOCAL PLAYLISTS · ${files.size}")
             item(key = "local_hint", span = fullSpan) {
                 Hint("Read from M3U/PLS files in your music folder. Rescan in Settings → Local Music.")
             }
