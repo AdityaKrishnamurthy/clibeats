@@ -105,7 +105,6 @@ fun NowPlayingScreen(
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
-    val waveform by viewModel.waveform.collectAsState()
     val track = state.currentTrack
 
     // Match the screen to the album art (Symfonium-style): a deep tint of the cover at the top fading into
@@ -317,7 +316,6 @@ fun NowPlayingScreen(
                     positionMs = state.positionMs,
                     durationMs = state.durationMs,
                     onSeek = viewModel::seekTo,
-                    heights = waveform?.takeIf { it.trackId == track?.id }?.heights,
                 ) {
                     TransportControls(
                         state = state,

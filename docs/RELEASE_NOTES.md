@@ -4,9 +4,6 @@
 
 ## Now Playing
 
-- **Real waveform:** the seek bars now show each song's actual loudness. Local songs (and fully downloaded
-  ones) are measured in the background in a few seconds; streamed songs fill in as they play and are
-  remembered for next time. Bars that aren't measured yet show a dim placeholder.
 - **Previous** works like other players: more than 3 seconds into a song it restarts it, and pressing again
   plays the song before. Also from the notification, lock screen and headphones.
 - The quality line (`[LOCAL] FLAC · …`) is always readable: on covers whose colour matches the background it
@@ -15,9 +12,9 @@
 
 ## Navigation
 
-- **Four tabs:** Home, Search, Library, Settings. Playlists moved into Library (Tracks / Artists / Albums /
-  Playlists) and the queue opens over any screen (≡ in the top bar, the mini player or Now Playing).
 - Boxes have their title in the border, with no extra header line; Home no longer has the Quick Navigation box.
+- The queue also opens from the mini player (≡) and `[ QUEUE (n) ]` in Now Playing; it shows the playing song,
+  then Up Next with shuffle and clear.
 
 ## Library & playlists
 

@@ -70,8 +70,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
   (with **Save as app playlist** to make an editable copy).
 
 ### Library, playlists & favourites
-- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums / Playlists.
-- **Playlists** (Library → Playlists, or `[3] PLAYLISTS` on Home): ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
+- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
+- **Playlists grid:** ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
@@ -90,9 +90,6 @@ New screenshots of the other screens are on the way. The current Now Playing scr
   gradient on Android 11 and older), with the cover's vivid colour on the controls, fading between songs.
 - **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
   and dragging back near it snaps onto it (letting go there doesn't seek).
-- **Real loudness waveform:** local (and fully downloaded) songs are decoded in the background and their bars fill in
-  within seconds; streamed songs are measured as they play, and what's been heard is remembered. Unmeasured bars show
-  a dim placeholder.
 - The quality line stays readable on any cover: a lighter shade of the album colour, or light amber (never red).
 - Repeat · previous · play/pause · next · shuffle · sleep timer · queue (`[ QUEUE (n) ]`) · add to playlist · ♥.
 
@@ -122,7 +119,7 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 
 | Where | Gesture | Action |
 |---|---|---|
-| Anywhere outside a song row | Swipe left / right | Next / previous tab (Home → Search → Library → Settings) |
+| Anywhere outside a song row | Swipe left / right | Next / previous tab (Home → Search → Library → Queue → Playlists → Settings) |
 | Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
@@ -130,6 +127,7 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 | Bottom bar · **Search** | Tap again (on Search) | Switch the source Online ↔ Local |
 | Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
 | Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
+| Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
 | Queue | **Hold** an upcoming song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
@@ -138,22 +136,23 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 | Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
-| Back | — | Close queue / player / playlist, then return to Home |
+| Back | — | Close player / playlist, then return to Home |
 
 ---
 
 ## Navigation
 
 ```
- Home   Search   Library   Settings
+ Home   Search   Library   Queue   Playlists   ⚙ Settings
 ```
 
 - **Home** — source switch, recently played, trending, mini player.
 - **Search** — search the active source; play next / add to playlist / add to queue on each result.
-- **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums · **Playlists** (Favorites, Most Played,
-  app playlists, local M3U playlists).
-- **Queue** — opens over any screen from ≡ in the top bar, the mini player or Now Playing: the playing song, then
-  Up Next to reorder, remove, shuffle or clear; tap to jump.
+- **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
+- **Queue** — the playing song, then Up Next to reorder, remove, shuffle or clear; tap to jump. Also opens from the
+  mini player's ≡ and `[ QUEUE ]` in Now Playing.
+- **Playlists** — Favorites, Most Played, app playlists, local M3U playlists; drag ≡ to reorder Favorites and your
+  playlists.
 - **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange & backup, about.
 
 ---

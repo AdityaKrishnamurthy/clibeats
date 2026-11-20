@@ -16,15 +16,10 @@ Swipe left / right anywhere outside a song row to move between tabs.
 |---|---|
 | **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. Tap the tab again to switch Online ↔ Local. |
 | **Search** | Search the active source. With the box empty it lists songs you played from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
-| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums / **Playlists**. |
+| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
+| **Queue** | The playing song, then Up Next: hold a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it. Also opens from the mini player's ≡ and `[ QUEUE ]` in Now Playing. |
+| **Playlists** | ♥ Favorites, Most Played (✕ removes a song, `[ CLEAR ALL ]` asks first), your playlists, a **+** tile and local M3U playlists. Drag a song's ≡ handle to reorder ♥ Favorites or your own playlists. Tap the tab again to go back to the grid. |
 | **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
-
-**Playlists** (Library → Playlists, or `[3] PLAYLISTS` on Home): ♥ Favorites, Most Played (✕ removes a song,
-`[ CLEAR ALL ]` asks first), your playlists, `[ + NEW ]` and local M3U playlists. Drag a song's ≡ handle to
-reorder ♥ Favorites or your own playlists.
-
-**Queue** (≡ in the top bar, the mini player, or `[ QUEUE ]` in Now Playing): the playing song, then Up Next. Hold
-a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it.
 
 ## Song gestures
 
@@ -36,9 +31,8 @@ a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear
 ## Player
 
 - **Mini player** — tap the song to open Now Playing.
-- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. The waveform
-  behind the controls shows the song's real loudness (local songs within seconds, streamed songs as they play; dim
-  bars aren't measured yet). Drag across it to scrub: playback keeps going, and dragging back near the current time
+- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. Drag across
+  the waveform behind the controls to scrub: playback keeps going, and dragging back near the current time
   snaps onto it. Repeat (off → all → one), previous, play/pause,
   next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
