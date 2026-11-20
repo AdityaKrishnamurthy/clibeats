@@ -39,10 +39,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -55,6 +60,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -172,6 +178,7 @@ fun SettingsScreen(
             AccentColorPicker(
                 selected = uiState.accentColor,
                 onSelect = viewModel::setAccentColor,
+                onCustom = viewModel::setCustomAccent,
             )
         }
 
@@ -500,42 +507,71 @@ private fun CacheRow(
 @Suppress("FunctionNaming")
 @Composable
 private fun AccentColorPicker(
-    selected: AccentColor,
+    selected: Accent,
     onSelect: (AccentColor) -> Unit,
+    onCustom: (Color) -> Unit,
 ) {
     val currentAccent = LocalAccentColor.current
-    // An even grid that spans the box: every swatch gets an equal share of its row.
+    var showCustom by remember { mutableStateOf(false) }
+    // The presets, then "Custom" last. An even grid that spans the box: every swatch gets an equal share.
+    val options: List<AccentColor?> = AccentColor.entries + null
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AccentColor.entries.chunked(ACCENTS_PER_ROW).forEach { row ->
+        options.chunked(ACCENTS_PER_ROW).forEach { row ->
             Row(modifier = Modifier.fillMaxWidth()) {
                 row.forEach { option ->
-                    AccentSwatch(
-                        option = option,
-                        isSelected = selected == option,
-                        currentAccent = currentAccent,
-                        onSelect = onSelect,
-                    )
+                    if (option != null) {
+                        AccentSwatch(
+                            fill = SolidColor(option.color),
+                            label = option.displayName,
+                            isSelected = selected.preset == option,
+                            currentAccent = currentAccent,
+                            onClick = { onSelect(option) },
+                        )
+                    } else {
+                        // Shows the custom colour once there is one; a colour wheel until then.
+                        val isCustom = selected.preset == null
+                        AccentSwatch(
+                            fill = if (isCustom) SolidColor(selected.color) else CUSTOM_SWATCH_BRUSH,
+                            label = "Custom",
+                            isSelected = isCustom,
+                            currentAccent = currentAccent,
+                            onClick = { showCustom = true },
+                        )
+                    }
                 }
                 repeat(ACCENTS_PER_ROW - row.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
         }
     }
+    if (showCustom) {
+        CustomAccentDialog(
+            initial = selected.color,
+            onDismiss = { showCustom = false },
+            onApply = {
+                showCustom = false
+                onCustom(it)
+            },
+        )
+    }
 }
+
+private val CUSTOM_SWATCH_BRUSH = Brush.sweepGradient(hueSpectrum())
 
 @Suppress("FunctionNaming")
 @Composable
 private fun RowScope.AccentSwatch(
-    option: AccentColor,
+    fill: Brush,
+    label: String,
     isSelected: Boolean,
     currentAccent: Color,
-    onSelect: (AccentColor) -> Unit,
+    onClick: () -> Unit,
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier =
             Modifier
                 .weight(1f)
-                .clickable(role = Role.RadioButton) { onSelect(option) }
+                .clickable(role = Role.RadioButton, onClick = onClick)
                 .padding(vertical = 4.dp),
     ) {
         Box(
@@ -543,7 +579,7 @@ private fun RowScope.AccentSwatch(
                 Modifier
                     .size(32.dp)
                     .clip(RoundedCornerShape(4.dp))
-                    .background(option.color)
+                    .background(fill)
                     .then(
                         if (isSelected) {
                             Modifier.border(2.dp, currentAccent, RoundedCornerShape(4.dp))
@@ -554,7 +590,7 @@ private fun RowScope.AccentSwatch(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = option.displayName,
+            text = label,
             style = MaterialTheme.typography.labelSmall,
             color = if (isSelected) currentAccent else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,

@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            CliBeatsTheme(accent = themeState.accent, mode = themeState.mode) {
+            CliBeatsTheme(accent = themeState.accent.color, mode = themeState.mode) {
                 when (onboardingDone) {
                     null -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
                     false -> OnboardingScreen(currentTheme = themeState.mode)

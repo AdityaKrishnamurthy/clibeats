@@ -167,10 +167,10 @@ fun HomeScreen(
             val busy = isRefreshing || uiState is HomeUiState.Loading
             SectionHeader(
                 title = "TRENDING / ${providerName.uppercase()}",
-                actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ RELOAD ]",
+                actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ REFRESH ]",
                 onAction = homeViewModel::refreshTrending,
                 actionEnabled = !busy,
-                actionDescription = "Reload trending",
+                actionDescription = "Refresh trending",
             )
             SongTableHeader()
         }

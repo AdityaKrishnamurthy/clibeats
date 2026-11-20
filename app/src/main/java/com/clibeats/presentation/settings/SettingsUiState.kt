@@ -1,7 +1,7 @@
 package com.clibeats.presentation.settings
 
 import com.clibeats.domain.provider.ProviderRegistry
-import com.clibeats.presentation.theme.AccentColor
+import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 
 data class ProviderOption(
@@ -18,5 +18,5 @@ data class SettingsUiState(
     val exchangeMessage: String? = null,
     // Theme engine
     val themeMode: CliBeatsThemeMode = CliBeatsThemeMode.DARK,
-    val accentColor: AccentColor = AccentColor.GREEN,
+    val accentColor: Accent = Accent.DEFAULT,
 )

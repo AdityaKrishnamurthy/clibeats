@@ -116,6 +116,11 @@ class UpdateManager
             _promptVisible.value = false
         }
 
+        /** Reopens the pop-up from the download bar, if there's an update to show. */
+        fun showPrompt() {
+            if (releaseOf(_state.value) != null) _promptVisible.value = true
+        }
+
         fun download() {
             val release = releaseOf(_state.value) ?: return
             if (_state.value is UpdateState.Downloading || _state.value is UpdateState.Verifying) return
@@ -169,6 +174,11 @@ class UpdateManager
                         evaluate(cached, userInitiated)
                     }
                     is GitHubReleaseClient.Result.Found -> {
+                        // "Later" was for the release seen then: a newer one is worth asking about again.
+                        val fresh = result.release
+                        if (fresh != null && (cached == null || UpdateRules.isNewer(fresh.version, cached.version))) {
+                            preferences.setUpdateSnoozeUntil(0L)
+                        }
                         preferences.saveUpdateCheck(now, result.etag, result.release?.let(UpdateRules::encode))
                         evaluate(result.release, userInitiated)
                     }

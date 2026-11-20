@@ -30,14 +30,18 @@ import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.BluetoothAudio
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.RepeatOne
 import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material.icons.outlined.Speaker
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -75,8 +79,10 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.presentation.component.ARTWORK_FULL_PX
@@ -105,6 +111,12 @@ fun NowPlayingScreen(
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
+    val audioOutput = viewModel.audioOutput?.collectAsState()?.value
+    // Coming back from the system output switcher: show the device that was picked.
+    LifecycleResumeEffect(Unit) {
+        viewModel.refreshAudioOutput()
+        onPauseOrDispose {}
+    }
     val track = state.currentTrack
 
     // Match the screen to the album art (Symfonium-style): a deep tint of the cover at the top fading into
@@ -307,6 +319,10 @@ fun NowPlayingScreen(
                     color = statsColor,
                     textAlign = TextAlign.Center,
                 )
+                if (audioOutput != null) {
+                    val activity = LocalContext.current
+                    AudioOutputChip(output = audioOutput, onClick = { viewModel.openOutputSwitcher(activity) })
+                }
 
                 Spacer(Modifier.height(16.dp))
 
@@ -536,6 +552,48 @@ private fun Modifier.controlBackdrop(color: Color): Modifier {
     val fill = color.copy(alpha = CONTROL_BACKDROP_ALPHA)
     return background(fill, CircleShape)
 }
+
+/** `[ 🎧 GALAXY BUDS ]`-style button under the quality line: where the music plays; tap to switch. */
+@Suppress("FunctionNaming")
+@Composable
+private fun AudioOutputChip(
+    output: AudioOutput,
+    onClick: () -> Unit,
+) {
+    val icon =
+        when (output.kind) {
+            AudioOutput.Kind.PHONE -> Icons.Outlined.PhoneAndroid
+            AudioOutput.Kind.WIRED -> Icons.Outlined.Headphones
+            AudioOutput.Kind.BLUETOOTH -> Icons.Outlined.BluetoothAudio
+            AudioOutput.Kind.OTHER -> Icons.Outlined.Speaker
+        }
+    Row(
+        modifier =
+            Modifier
+                .padding(top = 2.dp)
+                .clickable(onClickLabel = "Change audio output", onClick = onClick)
+                .padding(horizontal = 8.dp, vertical = 6.dp)
+                .semantics(mergeDescendants = true) { contentDescription = "Playing on ${output.name}" },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text = "[ ", style = MaterialTheme.typography.labelSmall, color = CliBeatsTextSecondary)
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = CliBeatsTextSecondary,
+            modifier = Modifier.size(OUTPUT_ICON_DP.dp),
+        )
+        Text(
+            text = " ${output.name.uppercase()} ]",
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+private const val OUTPUT_ICON_DP = 14
 
 /** e.g. `[LOCAL] FLAC · 1076 kbps · 44.1 kHz · 24-bit` or `[ONLINE · YouTube Music] OPUS · 160 kbps · 48 kHz`. */
 internal fun qualityLine(state: PlaybackState): String {

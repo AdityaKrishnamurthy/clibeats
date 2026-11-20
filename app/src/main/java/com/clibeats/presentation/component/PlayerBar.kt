@@ -6,9 +6,10 @@
 
 package com.clibeats.presentation.component
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,29 +29,43 @@ import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import kotlinx.coroutines.delay
+import kotlin.math.abs
+import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 /**
  * Persistent bottom player bar — always visible across all main screens.
@@ -88,12 +103,6 @@ fun PlayerBar(
     val accent = LocalAccentColor.current
     val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
-
-    // Track bar width in pixels for seek calculation
-    var barWidthPx by remember { mutableFloatStateOf(1f) }
-    var isDragging by remember { mutableStateOf(false) }
-    var dragProgress by remember { mutableFloatStateOf(0f) }
-    val displayProgress = if (isDragging) dragProgress else progress
 
     TuiBlock(
         title = "Playing",
@@ -200,67 +209,149 @@ fun PlayerBar(
                 }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(2.dp))
 
-            // ── Timestamp + Seekable Progress Bar ─────────────────────────
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                // Current position timestamp
-                Text(
-                    text = formatPlayerTime(currentMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                    modifier = Modifier.padding(end = 6.dp),
-                )
-
-                // Seekable progress bar (fills remaining space)
-                LinearProgressIndicator(
-                    progress = { displayProgress.coerceIn(0f, 1f) },
-                    modifier = Modifier
-                        .weight(1f)
-                        .height(4.dp)
-                        .onSizeChanged { barWidthPx = it.width.toFloat().coerceAtLeast(1f) }
-                        .pointerInput(totalMs) {
-                            detectTapGestures { offset ->
-                                if (totalMs > 0L) {
-                                    val fraction = (offset.x / barWidthPx).coerceIn(0f, 1f)
-                                    onSeek((fraction * totalMs).toLong())
-                                }
-                            }
-                        }
-                        .pointerInput(totalMs) {
-                            detectHorizontalDragGestures(
-                                onDragStart = { isDragging = true },
-                                onDragEnd = {
-                                    if (totalMs > 0L) {
-                                        onSeek((dragProgress * totalMs).toLong())
-                                    }
-                                    isDragging = false
-                                },
-                                onDragCancel = { isDragging = false },
-                                onHorizontalDrag = { change, _ ->
-                                    val fraction = (change.position.x / barWidthPx).coerceIn(0f, 1f)
-                                    dragProgress = fraction
-                                },
-                            )
-                        },
-                    color = accent,
-                    trackColor = CliBeatsSurfaceVariant,
-                )
-
-                // Total duration timestamp
-                Text(
-                    text = formatPlayerTime(totalMs),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                    modifier = Modifier.padding(start = 6.dp),
-                )
-            }
+            MiniSeekBar(progress = progress, currentMs = currentMs, totalMs = totalMs, onSeek = onSeek)
         }
     }
 }
+
+/**
+ * Elapsed time · seek bar · duration. Touch anywhere on the bar and it starts scrubbing right away; while held,
+ * a bubble above the finger (and the elapsed time) shows the exact second it will jump to, and letting go
+ * seeks there. Positions snap to whole seconds, so what you see is exactly where it goes.
+ */
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
+@Composable
+private fun MiniSeekBar(
+    progress: Float,
+    currentMs: Long,
+    totalMs: Long,
+    onSeek: (Long) -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    val haptics = LocalHapticFeedback.current
+    val density = LocalDensity.current
+    val total by rememberUpdatedState(totalMs)
+    val seek by rememberUpdatedState(onSeek)
+    // Where the finger is (while held), then where playback was asked to go until it gets there.
+    var scrubMs by remember { mutableStateOf<Long?>(null) }
+    var pendingMs by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(pendingMs) {
+        if (pendingMs != null) {
+            delay(PENDING_TIMEOUT_MS)
+            pendingMs = null
+        }
+    }
+    LaunchedEffect(currentMs) {
+        pendingMs?.let { if (abs(currentMs - it) < CATCH_UP_MS) pendingMs = null }
+    }
+
+    val shownMs = scrubMs ?: pendingMs ?: currentMs
+    val fraction =
+        if (totalMs > 0L) (shownMs.toFloat() / totalMs).coerceIn(0f, 1f) else progress.coerceIn(0f, 1f)
+    val scrubbing = scrubMs != null
+
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = formatPlayerTime(shownMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (scrubbing) accent else CliBeatsTextSecondary,
+            modifier = Modifier.padding(end = 6.dp),
+        )
+        Box(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .height(SEEK_TOUCH_DP.dp)
+                    .semantics {
+                        contentDescription = "Seek"
+                        progressBarRangeInfo = ProgressBarRangeInfo(fraction, 0f..1f)
+                        setProgress { target ->
+                            if (total > 0L) seek((target * total).toLong())
+                            total > 0L
+                        }
+                    }.pointerInput(Unit) {
+                        fun msAt(x: Float): Long {
+                            val raw = (x / size.width).coerceIn(0f, 1f) * total
+                            return ((raw / MS_PER_SECOND).roundToLong() * MS_PER_SECOND).coerceIn(0L, total)
+                        }
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            if (total <= 0L) return@awaitEachGesture
+                            down.consume()
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            var target = msAt(down.position.x)
+                            scrubMs = target
+                            do {
+                                val change = awaitPointerEvent().changes.firstOrNull { it.id == down.id }
+                                val held = change?.pressed == true
+                                if (held) {
+                                    change.consume()
+                                    target = msAt(change.position.x)
+                                    scrubMs = target
+                                }
+                            } while (held)
+                            seek(target)
+                            pendingMs = target
+                            scrubMs = null
+                        }
+                    },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val trackColor = CliBeatsSurfaceVariant
+            Canvas(modifier = Modifier.fillMaxWidth().height(SEEK_TOUCH_DP.dp)) {
+                val y = size.height / 2
+                val stroke = (if (scrubbing) BAR_ACTIVE_DP else BAR_DP).dp.toPx()
+                val x = fraction * size.width
+                val thumb = (if (scrubbing) THUMB_ACTIVE_DP else THUMB_DP).dp.toPx()
+                drawLine(trackColor, Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
+                drawLine(accent, Offset(0f, y), Offset(x, y), stroke, StrokeCap.Round)
+                drawCircle(accent, radius = thumb, center = Offset(x, y))
+            }
+            if (scrubbing) {
+                // Time bubble that follows the finger, kept inside the bar's width.
+                val gapPx = with(density) { BUBBLE_GAP_DP.dp.roundToPx() }
+                Text(
+                    text = formatPlayerTime(shownMs),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent,
+                    modifier =
+                        Modifier
+                            .zIndex(1f)
+                            .layout { measurable, constraints ->
+                                val chip = measurable.measure(Constraints())
+                                val width = constraints.maxWidth
+                                layout(0, 0) {
+                                    val x =
+                                        (fraction * width - chip.width / 2f)
+                                            .roundToInt()
+                                            .coerceIn(0, (width - chip.width).coerceAtLeast(0))
+                                    // This node sits at the bar's vertical centre: lift the bubble above the bar.
+                                    chip.place(x, -chip.height - gapPx - SEEK_TOUCH_DP.dp.roundToPx() / 2)
+                                }
+                            },
+                )
+            }
+        }
+        Text(
+            text = formatPlayerTime(totalMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+            modifier = Modifier.padding(start = 6.dp),
+        )
+    }
+}
+
+private const val SEEK_TOUCH_DP = 24
+private const val BAR_DP = 3
+private const val BAR_ACTIVE_DP = 5
+private const val THUMB_DP = 4
+private const val THUMB_ACTIVE_DP = 7
+private const val BUBBLE_GAP_DP = 2
+private const val MS_PER_SECOND = 1_000L
+private const val PENDING_TIMEOUT_MS = 1_500L
+private const val CATCH_UP_MS = 1_500L
 
 /** Format milliseconds as `m:ss` or `h:mm:ss`. */
 private fun formatPlayerTime(ms: Long): String {

@@ -63,6 +63,7 @@ import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.update.UpdateStatusBar
 
 /**
  * Root layout shell for CLIBeats.
@@ -110,6 +111,9 @@ fun MainLayout(
                     thickness = 1.dp,
                     color = CliBeatsDivider,
                 )
+
+                // Update download progress (only while an update is downloading or ready to install).
+                UpdateStatusBar()
 
                 Box(
                     modifier = Modifier
