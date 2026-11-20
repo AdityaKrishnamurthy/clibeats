@@ -80,6 +80,12 @@ class PlaybackRepositoryImpl
         /** Songs in the order they played (oldest first, last = playing now), across queues and sources. */
         private val playedHistory = ArrayDeque<Track>()
 
+        /**
+         * Songs left by pressing "previous" (last = the one "next" returns to). Next walks back through them in
+         * order; playing anything else clears them. Guarded by [playedHistory]'s lock.
+         */
+        private val forward = ArrayDeque<Track>()
+
         /** Set while "previous" switches songs, so that switch isn't recorded as a new play. */
         @Volatile private var goingBack = false
 
@@ -279,7 +285,19 @@ class PlaybackRepositoryImpl
 
         override fun skipToIndex(index: Int) = playerAdapter.skipToIndex(index)
 
-        override fun skipToNext() = playerAdapter.skipToNext()
+        /**
+         * Any time in a song, "next" goes to the song that comes next: after going back with "previous", that's
+         * the song you went back from (and the one before it, and so on); otherwise the next song in the queue.
+         * The notification, lock screen and headset buttons come through here too.
+         */
+        override fun skipToNext() {
+            val target = synchronized(playedHistory) { forward.lastOrNull() }
+            when {
+                target == null -> playerAdapter.skipToNext()
+                playerAdapter.nextTrack()?.id == target.id -> playerAdapter.skipToNext()
+                else -> playerAdapter.playForward(target)
+            }
+        }
 
         /**
          * Like every music player: more than [RESTART_THRESHOLD_MS] into a song, "previous" restarts it;
@@ -306,9 +324,12 @@ class PlaybackRepositoryImpl
                 return
             }
             goingBack = true
-            val index = playerAdapter.currentIndex()
-            val queue = playerAdapter.queueFlow.value
-            if (index > 0 && queue.getOrNull(index - 1)?.id == previous.id) {
+            // Remember where we came from, so "next" brings us back here.
+            playerAdapter.playbackState.value.currentTrack?.let { leaving ->
+                synchronized(playedHistory) { forward.addLast(leaving) }
+            }
+            // The song before in play order (shuffle-aware) is usually the one that played before: just go back.
+            if (playerAdapter.previousTrack()?.id == previous.id) {
                 playerAdapter.skipToPrevious()
             } else {
                 playerAdapter.playBeforeCurrent(previous)
@@ -319,6 +340,11 @@ class PlaybackRepositoryImpl
             if (goingBack) {
                 goingBack = false
                 return
+            }
+            synchronized(playedHistory) {
+                // Arrived at the song "next" was meant to return to (by the button or by the previous song
+                // ending): drop it from the way forward. Anywhere else means a new direction: forget the way forward.
+                if (forward.lastOrNull()?.id == current.id) forward.removeLast() else forward.clear()
             }
             // After a restart, start from the saved listening history so "previous" works straight away.
             val seed =
