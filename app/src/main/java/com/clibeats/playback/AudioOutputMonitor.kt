@@ -8,6 +8,7 @@ import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.media.MediaRouter
 import android.media.MediaRouter2
 import android.os.Build
@@ -25,10 +26,12 @@ import javax.inject.Singleton
 /**
  * Tracks where media audio is actually playing (phone speaker, wired headphones, a Bluetooth device…).
  *
- * Android 13+ is asked directly which device media goes to, so a connected-but-unused headset isn't shown.
- * Older versions use the system media route. It updates when devices connect or disconnect and when the
- * route changes (e.g. after picking another device in the system switcher). These are passive system
- * callbacks: nothing polls, so it costs no battery.
+ * On Android 13+ it reads the device this app's own playback is routed to (or, while paused, the device media
+ * would go to), so a connected-but-unused headset isn't shown. Older versions use the system media route.
+ *
+ * Android reports a new device a moment before it moves audio onto it, so after a device connects or
+ * disconnects the output is re-checked a few times over ~3 s; playback route changes are followed directly.
+ * Everything is driven by system callbacks: nothing polls, so it costs no battery.
  */
 @Singleton
 class AudioOutputMonitor
@@ -38,20 +41,32 @@ class AudioOutputMonitor
     ) {
         private val audioManager = context.getSystemService(AudioManager::class.java)
         private val mediaRouter = context.getSystemService(MediaRouter::class.java)
+        private val main = Handler(Looper.getMainLooper())
         private val _current = MutableStateFlow(AudioOutput.PHONE_SPEAKER)
         val current: StateFlow<AudioOutput> = _current.asStateFlow()
 
+        private val settleCheck = Runnable { refresh() }
+
         init {
             // Callbacks are registered and delivered on the main thread.
-            Handler(Looper.getMainLooper()).post {
+            main.post {
                 runCatching {
                     audioManager?.registerAudioDeviceCallback(
                         object : AudioDeviceCallback() {
-                            override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = refresh()
+                            override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = onDevicesChanged()
 
-                            override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>?) = refresh()
+                            override fun onAudioDevicesRemoved(gone: Array<out AudioDeviceInfo>?) = onDevicesChanged()
                         },
-                        null,
+                        main,
+                    )
+                }
+                runCatching {
+                    // Fires when this app's playback starts, stops or is moved to another device.
+                    audioManager?.registerAudioPlaybackCallback(
+                        object : AudioManager.AudioPlaybackCallback() {
+                            override fun onPlaybackConfigChanged(c: List<AudioPlaybackConfiguration>?) = refresh()
+                        },
+                        main,
                     )
                 }
                 runCatching {
@@ -75,6 +90,13 @@ class AudioOutputMonitor
             }
         }
 
+        /** A device connected or went away: check now, then again while Android moves the audio over. */
+        private fun onDevicesChanged() {
+            refresh()
+            main.removeCallbacks(settleCheck)
+            SETTLE_DELAYS_MS.forEach { main.postDelayed(settleCheck, it) }
+        }
+
         /** Re-reads the output (also called when Now Playing comes back from the system switcher). */
         fun refresh() {
             _current.value = runCatching { detect() }.getOrNull() ?: AudioOutput.PHONE_SPEAKER
@@ -86,13 +108,16 @@ class AudioOutputMonitor
             return if (modern) detectFromAttributes(am) else detectFromRoute(am)
         }
 
-        /** Android 13+: the device media is routed to right now. */
+        /** Android 13+: where this app's playback is going, or where media would go while nothing plays. */
         @androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
         private fun detectFromAttributes(am: AudioManager): AudioOutput? {
-            val media = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
-            return am.getAudioDevicesForAttributes(media).firstOrNull()?.let {
-                audioOutputFor(it.type, it.productName?.toString())
-            }
+            val playing = am.activePlaybackConfigurations.firstNotNullOfOrNull { it.audioDeviceInfo }
+            val device =
+                playing ?: run {
+                    val media = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
+                    am.getAudioDevicesForAttributes(media).firstOrNull()
+                }
+            return device?.let { audioOutputFor(it.type, it.productName?.toString()) }
         }
 
         /** Older Android: the selected system route, or plugged-in headphones on the phone's own route. */
@@ -131,6 +156,8 @@ class AudioOutputMonitor
         }
 
         private companion object {
+            /** Re-checks after a device change: Android takes up to a couple of seconds to switch audio. */
+            val SETTLE_DELAYS_MS = longArrayOf(400L, 1_200L, 3_000L)
             const val MEDIA_OUTPUT_PANEL = "android.settings.panel.action.MEDIA_OUTPUT"
             const val EXTRA_PACKAGE_NAME = "com.android.settings.panel.extra.PACKAGE_NAME"
         }
