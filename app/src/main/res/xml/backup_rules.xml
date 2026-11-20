@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 8-11 backup (data_extraction_rules covers 12+). The database, DataStore and playback
-     history are backed up together so a restore doesn't reopen onboarding over a full library.
-     The Keystore-encrypted prefs file is excluded: it cannot be decrypted on a new device. -->
+<!-- Android 8-11 backup (data_extraction_rules covers 12+). The database (playlists, favorites,
+     history), DataStore and the daily library snapshot are backed up together, so a restore brings
+     back the library and settings at once and doesn't reopen onboarding over an empty library.
+     Extracted local covers live in no_backup (re-created by a rescan) to stay under the 25 MB quota.
+     The Keystore-encrypted prefs file of older versions is excluded: it can't be decrypted elsewhere. -->
 <full-backup-content>
     <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
-    <exclude domain="database" path="clibeats.db" />
-    <exclude domain="database" path="clibeats.db-wal" />
-    <exclude domain="database" path="clibeats.db-shm" />
 </full-backup-content>

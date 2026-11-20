@@ -1,14 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ backup / device transfer.
-     The Room database, the DataStore preferences and the playback history are included on purpose,
-     so a restore brings back the whole library and the onboarding flag together. Only the
-     Keystore-encrypted file is excluded: its key never leaves the old device. -->
+<!-- Android 12+ cloud backup and device transfer. The Room database, the DataStore preferences and the
+     daily library snapshot are included on purpose, so a restore brings back the whole library, the
+     settings and the onboarding flag together. Extracted local covers live in no_backup (a rescan
+     re-creates them). Only the Keystore-encrypted file of older versions is excluded: its key never
+     leaves the old device. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />
-        <exclude domain="database" path="clibeats.db" />
-        <exclude domain="database" path="clibeats.db-wal" />
-        <exclude domain="database" path="clibeats.db-shm" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="sharedpref" path="clibeats_secure_prefs.xml" />

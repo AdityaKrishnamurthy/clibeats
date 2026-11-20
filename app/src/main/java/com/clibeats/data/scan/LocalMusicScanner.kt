@@ -130,7 +130,11 @@ class LocalMusicScanner
                             val id = ProviderId.composite(LOCAL, doc.documentId)
                             val previous = existing[id]
                             // cached_at = file last-modified for local songs; unchanged files skip tag reads.
-                            val unchanged = previous?.cachedAt == doc.lastModified && doc.lastModified != 0L
+                            // ...unless its extracted cover went missing or still sits in the old folder.
+                            val unchanged =
+                                previous?.cachedAt == doc.lastModified &&
+                                    doc.lastModified != 0L &&
+                                    hasUsableArtwork(previous)
                             val entity =
                                 if (previous != null && unchanged) {
                                     previous
@@ -152,6 +156,8 @@ class LocalMusicScanner
                                 }
                             }
                             toDelete.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
+                            // Every song now points at the new cover folder; drop the pre-2.3 copies.
+                            runCatching { File(context.filesDir, ARTWORK_DIR).deleteRecursively() }
                         }
                         val keepPlaylistIds = HashSet<String>()
                         listings.forEach { (treeUri, listing) ->
@@ -291,8 +297,25 @@ class LocalMusicScanner
             )
         }
 
+        /**
+         * Covers extracted from local files. Not cacheDir: Android may clear it at any time, and an
+         * unchanged file is never re-read. Not filesDir: Auto Backup would upload every cover and can
+         * pass its 25 MB quota, which skips the whole backup. Covers can always be re-extracted.
+         */
+        private fun artworkDir(): File = File(context.noBackupFilesDir, ARTWORK_DIR)
+
+        /** True when the song has no cover, or its cover file is in [artworkDir] and still exists. */
+        private fun hasUsableArtwork(song: SongEntity): Boolean {
+            val file = song.artworkUrl?.let { url -> runCatching { Uri.parse(url).path }.getOrNull() }?.let(::File)
+            return when {
+                song.artworkUrl == null -> true
+                file == null -> false
+                else -> file.parentFile == artworkDir() && file.isFile
+            }
+        }
+
         private fun artworkFileForId(id: String): File {
-            val dir = File(context.cacheDir, "local_artwork").apply { mkdirs() }
+            val dir = artworkDir().apply { mkdirs() }
             val filename = UUID.nameUUIDFromBytes(id.toByteArray()).toString() + ".img"
             return File(dir, filename)
         }
@@ -310,6 +333,7 @@ class LocalMusicScanner
         companion object {
             const val LOCAL = "local"
             const val LOCAL_PLAYLIST_PREFIX = "localpl:"
+            private const val ARTWORK_DIR = "local_artwork"
             private const val UNKNOWN_ARTIST = "Unknown Artist"
             private const val UNKNOWN_ALBUM = "Unknown Album"
             private const val PROGRESS_EVERY = 10
