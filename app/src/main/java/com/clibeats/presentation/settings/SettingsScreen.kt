@@ -20,9 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,6 +42,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -250,7 +250,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Playback ───────────────────────────────────────────────
-        TuiBlock(title = "Playback") {
+        TuiBlock(title = "Playback", isActive = true) {
             Row(
                 modifier =
                     Modifier
@@ -280,7 +280,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Active Music Provider ──────────────────────────────────
-        TuiBlock(title = "Active Provider") {
+        TuiBlock(title = "Active Provider", isActive = true) {
             Column {
                 uiState.providers.forEach { option ->
                     val isSelected = uiState.activeProviderId == option.id
@@ -310,7 +310,7 @@ fun SettingsScreen(
         // ── Section: Storage (two independent caches) ───────────────────────
         val cacheUsage by viewModel.cacheUsage.collectAsState()
         val artworkCacheMb by viewModel.artworkCacheMb.collectAsState()
-        TuiBlock(title = "Storage") {
+        TuiBlock(title = "Storage", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CacheRow(
                     label = "ARTWORK",
@@ -333,7 +333,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Streaming Quality ──────────────────────────────────────
-        TuiBlock(title = "Audio Quality") {
+        TuiBlock(title = "Audio Quality", isActive = true) {
             Row(
                 modifier =
                     Modifier
@@ -363,7 +363,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Playlist Exchange ──────────────────────────────────────
-        TuiBlock(title = "Playlist Exchange") {
+        TuiBlock(title = "Playlist Exchange", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -409,7 +409,7 @@ fun SettingsScreen(
         UpdateSection()
 
         // ── Section: About (developer credit; name links to GitHub) ─────────
-        TuiBlock(title = "About") {
+        TuiBlock(title = "About", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = "CLIBeats v${BuildConfig.VERSION_NAME}",
@@ -498,47 +498,71 @@ private fun CacheRow(
 }
 
 @Suppress("FunctionNaming")
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AccentColorPicker(
     selected: AccentColor,
     onSelect: (AccentColor) -> Unit,
 ) {
     val currentAccent = LocalAccentColor.current
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        AccentColor.entries.forEach { accentOption ->
-            val isSelected = selected == accentOption
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onSelect(accentOption) },
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(accentOption.color)
-                            .then(
-                                if (isSelected) {
-                                    Modifier.border(2.dp, currentAccent, RoundedCornerShape(4.dp))
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = accentOption.displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) currentAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    // An even grid that spans the box: every swatch gets an equal share of its row.
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        AccentColor.entries.chunked(ACCENTS_PER_ROW).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                row.forEach { option ->
+                    AccentSwatch(
+                        option = option,
+                        isSelected = selected == option,
+                        currentAccent = currentAccent,
+                        onSelect = onSelect,
+                    )
+                }
+                repeat(ACCENTS_PER_ROW - row.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
         }
     }
 }
+
+@Suppress("FunctionNaming")
+@Composable
+private fun RowScope.AccentSwatch(
+    option: AccentColor,
+    isSelected: Boolean,
+    currentAccent: Color,
+    onSelect: (AccentColor) -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+            Modifier
+                .weight(1f)
+                .clickable(role = Role.RadioButton) { onSelect(option) }
+                .padding(vertical = 4.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(option.color)
+                    .then(
+                        if (isSelected) {
+                            Modifier.border(2.dp, currentAccent, RoundedCornerShape(4.dp))
+                        } else {
+                            Modifier
+                        },
+                    ),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = option.displayName,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isSelected) currentAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+private const val ACCENTS_PER_ROW = 5
 
 /** One credit line, terminal style: `> Name`, linking to GitHub. The last line carries the prompt cursor. */
 @Suppress("FunctionNaming")

@@ -124,7 +124,6 @@ fun MainLayout(
                 PlayerBarHost(
                     playerViewModel,
                     onExpandClick = { showNowPlaying = true },
-                    onQueueClick = { onDestinationSelected(NavDestination.Queue) },
                 )
             }
         }
@@ -154,7 +153,6 @@ private const val NOW_PLAYING_ANIM_MS = 250
 private fun PlayerBarHost(
     playerViewModel: PlayerViewModel,
     onExpandClick: () -> Unit,
-    onQueueClick: () -> Unit,
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
     val hint by playerViewModel.hint.collectAsState()
@@ -195,7 +193,6 @@ private fun PlayerBarHost(
         onRepeatClick = playerViewModel::onRepeatClick,
         repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
         onExpandClick = onExpandClick,
-        onQueueClick = onQueueClick,
     )
 }
 

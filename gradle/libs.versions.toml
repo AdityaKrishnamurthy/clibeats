@@ -31,6 +31,7 @@ palette = "1.0.0"
 newpipeextractor = "v0.27.1"
 truth = "1.4.4"
 guava = "33.3.1-android"
+reorderable = "2.4.3"
 
 [libraries]
 newpipe-extractor = { group = "com.github.TeamNewPipe", name = "NewPipeExtractor", version.ref = "newpipeextractor" }
@@ -76,6 +77,7 @@ coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coi
 palette-ktx = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 google-truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
 google-guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
+reorderable = { group = "sh.calvin.reorderable", name = "reorderable", version.ref = "reorderable" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -5,6 +5,7 @@ package com.clibeats.playback
 
 import android.content.Context
 import android.content.Intent
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -155,6 +156,7 @@ class PlayerAdapter
                         if (current in trackList.indices) {
                             resolveTrackBitrate(trackList[current])
                         }
+                        updateWakeMode()
                         updateState()
                     }
 
@@ -370,6 +372,16 @@ class PlayerAdapter
             }
             syncQueue()
             updateState()
+        }
+
+        /**
+         * Battery: a local file only needs the CPU kept awake; a stream also needs Wi-Fi kept on. Holding the
+         * Wi-Fi lock for local playback wastes power, so the lock follows the song that's playing.
+         */
+        private fun updateWakeMode() {
+            val scheme = player.currentMediaItem?.localConfiguration?.uri?.scheme
+            val local = scheme == "content" || scheme == "file"
+            player.setWakeMode(if (local) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
         }
 
         private fun syncQueue() {

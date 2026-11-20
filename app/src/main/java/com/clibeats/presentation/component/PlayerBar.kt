@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Repeat
@@ -85,7 +84,6 @@ fun PlayerBar(
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
     onExpandClick: () -> Unit = {},
-    onQueueClick: () -> Unit = {},
 ) {
     val accent = LocalAccentColor.current
     val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat
@@ -198,18 +196,6 @@ fun PlayerBar(
                                 modifier = Modifier.size(20.dp),
                             )
                         }
-                    }
-
-                    IconButton(
-                        onClick = onQueueClick,
-                        modifier = Modifier.semantics { contentDescription = "Open queue" },
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                            contentDescription = null,
-                            tint = CliBeatsTextSecondary,
-                            modifier = Modifier.size(20.dp),
-                        )
                     }
                 }
             }

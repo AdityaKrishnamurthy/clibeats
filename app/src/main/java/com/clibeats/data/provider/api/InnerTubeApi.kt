@@ -2,6 +2,8 @@
 
 package com.clibeats.data.provider.api
 
+import com.clibeats.data.provider.dto.BrowseRequest
+import com.clibeats.data.provider.dto.BrowseResponse
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.PlayerResponse
 import com.clibeats.data.provider.dto.SearchRequest
@@ -14,6 +16,11 @@ interface InnerTubeApi {
     suspend fun search(
         @Body body: SearchRequest,
     ): SearchResponse
+
+    @POST("browse")
+    suspend fun browse(
+        @Body body: BrowseRequest,
+    ): BrowseResponse
 
     @POST("player")
     suspend fun player(

@@ -149,6 +149,7 @@ dependencies {
     implementation(libs.palette.ktx)
     implementation(libs.newpipe.extractor)
     implementation(libs.google.guava)
+    implementation(libs.reorderable)
     detektPlugins(libs.detekt.formatting)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)

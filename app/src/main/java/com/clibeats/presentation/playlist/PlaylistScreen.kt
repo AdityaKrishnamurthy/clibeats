@@ -571,20 +571,31 @@ private fun PlaylistDetailView(
                 Text(text = emptyText, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
             }
         } else if (onReorder != null) {
-            ReorderableList(items = tracks, itemId = { it.id }, onReorder = onReorder) { track, index ->
+            ReorderableList(
+                items = tracks,
+                itemId = { it.id },
+                onReorder = { _, _, reordered -> onReorder(reordered) },
+            ) { track, index ->
                 SongTableRow(
                     trackTitle = track.title,
                     artist = track.artist,
                     duration = formatDuration(track.durationMs),
                     index = index + 1,
-                    artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                    // Hold the cover (or drag ≡) to move the song; a quick tap on the cover still plays it.
+                    artworkContent = {
+                        TrackArtwork(
+                            artworkUrl = track.artworkUrl,
+                            size = 32,
+                            modifier = Modifier.artworkHandle { onTrackClick(index) },
+                        )
+                    },
                     onClick = { if (!isAnyDragging) onTrackClick(index) },
                     onSwipeRight = { onSwipeRight(track) },
                     onSwipeLeft = { onSwipeLeft(track) },
                     onLongPress = { onLongPress(track) },
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            dragHandle()
+                            DragHandle()
                             onRemoveClick?.let { remove ->
                                 IconButton(onClick = { remove(track) }, enabled = !isAnyDragging) {
                                     Icon(

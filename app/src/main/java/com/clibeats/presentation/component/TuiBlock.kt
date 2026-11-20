@@ -168,9 +168,13 @@ fun TuiBlock(
             }
         val contentMinHeight = (constraints.minHeight - contentTopOffset).coerceAtLeast(0)
 
+        // Boxes span the full width they're given (like the original TuiBlock), so short content such as
+        // the accent swatches or the About lines still gets a full-width frame.
+        val fullWidth = if (constraints.hasBoundedWidth) constraints.maxWidth else null
         val contentPlaceable =
             contentMeasurable.measure(
                 constraints.copy(
+                    minWidth = fullWidth ?: constraints.minWidth,
                     minHeight = contentMinHeight,
                     maxHeight = contentMaxHeight,
                 ),
@@ -183,7 +187,7 @@ fun TuiBlock(
                 0
             }
         val totalWidth =
-            max(contentPlaceable.width, minWidthForTitle)
+            (fullWidth ?: max(contentPlaceable.width, minWidthForTitle))
                 .coerceIn(constraints.minWidth, constraints.maxWidth)
         val totalHeight =
             (contentTopOffset + contentPlaceable.height)
