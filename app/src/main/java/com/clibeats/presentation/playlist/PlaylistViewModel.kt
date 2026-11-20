@@ -155,6 +155,19 @@ class PlaylistViewModel
             }
         }
 
+        /** Saves the order the user dragged ♥ Favorites into (top first). */
+        fun reorderFavorites(tracks: List<Track>) {
+            viewModelScope.launch { libraryRepository?.reorderFavorites(tracks.map { it.id }) }
+        }
+
+        /** Saves the order the user dragged an app playlist into. */
+        fun reorderPlaylist(
+            playlistId: String,
+            tracks: List<Track>,
+        ) {
+            viewModelScope.launch { playlistRepository.reorderPlaylistSongs(playlistId, tracks.map { it.id }) }
+        }
+
         /** Takes [track] off Most Played; it comes back only if it's played often again. */
         fun removeFromMostPlayed(track: Track) {
             viewModelScope.launch { appPreferences?.resetMostPlayedSong(track.id, System.currentTimeMillis()) }
