@@ -282,10 +282,16 @@ class PlaybackRepositoryImpl
         override fun skipToNext() = playerAdapter.skipToNext()
 
         /**
-         * Plays whatever played before the current song, local or online, even if it was in an earlier
-         * queue. Falls back to the previous item in the queue when there's no history yet.
+         * Like every music player: more than [RESTART_THRESHOLD_MS] into a song, "previous" restarts it;
+         * pressed again (near the start) it plays whatever played before, local or online, even if it was
+         * in an earlier queue. Falls back to the previous item in the queue when there's no history yet.
+         * The notification, lock screen and headset buttons come through here too.
          */
         override fun skipToPrevious() {
+            if (playerAdapter.currentPositionMs() > RESTART_THRESHOLD_MS) {
+                playerAdapter.seekTo(0L)
+                return
+            }
             val previous =
                 synchronized(playedHistory) {
                     if (playedHistory.size < 2) {
@@ -339,5 +345,6 @@ class PlaybackRepositoryImpl
             const val PREFETCH_COUNT = 2
             const val HISTORY_LIMIT = 100
             const val POSITION_SAVE_STEP_MS = 5_000L
+            const val RESTART_THRESHOLD_MS = 3_000L
         }
     }

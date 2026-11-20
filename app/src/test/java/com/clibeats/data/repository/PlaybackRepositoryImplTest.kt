@@ -246,6 +246,40 @@ class PlaybackRepositoryImplTest {
     }
 
     @Test
+    fun `previous restarts the song when it is more than 3 seconds in`() {
+        val first = track("a")
+        val second = track("b")
+        queueFlow.value = listOf(first, second)
+        nowPlaying(first)
+        nowPlaying(second)
+        whenever(playerAdapter.currentIndex()).thenReturn(1)
+        whenever(playerAdapter.currentPositionMs()).thenReturn(10_000L)
+
+        repository.skipToPrevious()
+
+        verify(playerAdapter).seekTo(0L)
+        verify(playerAdapter, never()).skipToPrevious()
+        verify(playerAdapter, never()).playBeforeCurrent(any())
+    }
+
+    @Test
+    fun `previous pressed again near the start goes to the song before`() {
+        val first = track("a")
+        val second = track("b")
+        queueFlow.value = listOf(first, second)
+        nowPlaying(first)
+        nowPlaying(second)
+        whenever(playerAdapter.currentIndex()).thenReturn(1)
+        whenever(playerAdapter.currentPositionMs()).thenReturn(10_000L, 200L)
+
+        repository.skipToPrevious() // restarts "b"
+        repository.skipToPrevious() // now at 0:00, goes back to "a"
+
+        verify(playerAdapter).seekTo(0L)
+        verify(playerAdapter).skipToPrevious()
+    }
+
+    @Test
     fun `previous falls back to the queue when nothing played before`() {
         nowPlaying(track("a"))
 

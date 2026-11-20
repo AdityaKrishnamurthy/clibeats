@@ -288,11 +288,17 @@ class PlayerAdapter
             }
         }
 
+        /** Previous item in the queue; at the start of the queue it restarts the current song. */
         fun skipToPrevious() {
             if (player.hasPreviousMediaItem()) {
                 player.seekToPreviousMediaItem()
+            } else if (player.mediaItemCount > 0) {
+                player.seekTo(0L)
             }
         }
+
+        /** Live playback position of the current song (not the last 500 ms tick). */
+        fun currentPositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
 
         /** Index of the playing item in the queue, or -1 when the queue is empty. */
         fun currentIndex(): Int = if (trackList.isEmpty()) -1 else player.currentMediaItemIndex
