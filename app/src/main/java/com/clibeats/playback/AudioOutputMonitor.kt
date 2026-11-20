@@ -4,7 +4,6 @@ package com.clibeats.playback
 
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
 import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
@@ -26,8 +25,8 @@ import javax.inject.Singleton
 /**
  * Tracks where media audio is actually playing (phone speaker, wired headphones, a Bluetooth device…).
  *
- * On Android 13+ it reads the device this app's own playback is routed to (or, while paused, the device media
- * would go to), so a connected-but-unused headset isn't shown. Older versions use the system media route.
+ * It reads the device this app's playback is on (Android 13+, when the phone shares it), otherwise the system
+ * media route: the Bluetooth device in use, plugged-in headphones, or the phone speaker.
  *
  * Android reports a new device a moment before it moves audio onto it, so after a device connects or
  * disconnects the output is re-checked a few times over ~3 s; playback route changes are followed directly.
@@ -104,32 +103,31 @@ class AudioOutputMonitor
 
         private fun detect(): AudioOutput? {
             val am = audioManager ?: return null
-            val modern = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
-            return if (modern) detectFromAttributes(am) else detectFromRoute(am)
+            return playbackDevice(am) ?: routeOutput(am)
         }
 
-        /** Android 13+: where this app's playback is going, or where media would go while nothing plays. */
-        @androidx.annotation.RequiresApi(Build.VERSION_CODES.TIRAMISU)
-        private fun detectFromAttributes(am: AudioManager): AudioOutput? {
-            val playing = am.activePlaybackConfigurations.firstNotNullOfOrNull { it.audioDeviceInfo }
-            val device =
-                playing ?: run {
-                    val media = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).build()
-                    am.getAudioDevicesForAttributes(media).firstOrNull()
-                }
+        /**
+         * Android 13+: the device this app's audio is playing on right now, when Android shares it (some
+         * phones don't). Null while paused.
+         */
+        private fun playbackDevice(am: AudioManager): AudioOutput? {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+            val device = am.activePlaybackConfigurations.firstNotNullOfOrNull { it.audioDeviceInfo }
             return device?.let { audioOutputFor(it.type, it.productName?.toString()) }
         }
 
-        /** Older Android: the selected system route, or plugged-in headphones on the phone's own route. */
-        private fun detectFromRoute(am: AudioManager): AudioOutput {
+        /**
+         * The system media route: a Bluetooth device when one is in use (with its name), otherwise plugged-in
+         * headphones or the phone speaker. Works on every version, including phones that keep the newer
+         * "which device is media using" query to themselves (it returns nothing for apps on some Android 15s).
+         */
+        private fun routeOutput(am: AudioManager): AudioOutput {
             val route = mediaRouter?.getSelectedRoute(MediaRouter.ROUTE_TYPE_LIVE_AUDIO)
-            val wired = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type in WIRED_TYPES }
-            return when {
-                route?.deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_BLUETOOTH ->
-                    audioOutputFor(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, route.getName(context)?.toString())
-                wired != null -> audioOutputFor(wired.type, wired.productName?.toString())
-                else -> AudioOutput.PHONE_SPEAKER
+            if (route?.deviceType == MediaRouter.RouteInfo.DEVICE_TYPE_BLUETOOTH) {
+                return audioOutputFor(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, route.getName(context)?.toString())
             }
+            val wired = am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.type in WIRED_TYPES }
+            return wired?.let { audioOutputFor(it.type, it.productName?.toString()) } ?: AudioOutput.PHONE_SPEAKER
         }
 
         /**

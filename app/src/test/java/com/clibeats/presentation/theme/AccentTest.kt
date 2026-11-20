@@ -7,9 +7,9 @@ import org.junit.Test
 class AccentTest {
     @Test
     fun `presets are saved and read back by name`() {
-        val accent = Accent.fromStored("PINK")
-        assertThat(accent.preset).isEqualTo(AccentColor.PINK)
-        assertThat(accent.storedName).isEqualTo("PINK")
+        val accent = Accent.fromStored("MAGENTA")
+        assertThat(accent.preset).isEqualTo(AccentColor.MAGENTA)
+        assertThat(accent.storedName).isEqualTo("MAGENTA")
     }
 
     @Test
@@ -22,10 +22,12 @@ class AccentTest {
     }
 
     @Test
-    fun `people who picked the old Blue preset keep it as a custom colour`() {
-        val accent = Accent.fromStored("BLUE")
-        assertThat(accent.preset).isNull()
-        assertThat(Accent.toHex(accent.color)).isEqualTo("#2979FF")
+    fun `people who picked a retired preset keep it as a custom colour`() {
+        val blue = Accent.fromStored("BLUE")
+        assertThat(blue.preset).isNull()
+        assertThat(Accent.toHex(blue.color)).isEqualTo("#2979FF")
+        assertThat(Accent.toHex(Accent.fromStored("PINK").color)).isEqualTo("#E91E63")
+        assertThat(Accent.fromStored("RED").preset).isNull()
     }
 
     @Test
