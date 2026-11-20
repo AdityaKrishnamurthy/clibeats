@@ -41,6 +41,17 @@ class LocalFormatSupportTest {
 
     @Test fun `aac adts is read`() = assertReads("tone.aac", MimeTypes.AUDIO_AAC)
 
+    /** Why the scanner skips AIFF: none of the default extractors recognise it, so it could never play. */
+    @Test
+    fun `aiff is not readable`() {
+        val bytes = requireNotNull(javaClass.classLoader?.getResourceAsStream("audio/tone.aiff")).readBytes()
+        val readable =
+            DefaultExtractorsFactory().createExtractors().any { candidate ->
+                runCatching { candidate.sniff(input(bytes)) }.getOrDefault(false)
+            }
+        assertThat(readable).isFalse()
+    }
+
     private fun assertReads(
         name: String,
         expectedMime: String,
