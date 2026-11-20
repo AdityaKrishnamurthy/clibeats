@@ -231,7 +231,8 @@ private fun SplitQueueView(
 }
 
 /**
- * Reorderable upcoming list.
+ * Up Next, reordered by dragging a row (after a long press) or its handle. The order changes locally while
+ * dragging and is committed to the player as a single move when the finger lifts, so playback isn't disturbed.
  */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
@@ -240,6 +241,7 @@ private fun ReorderableUpcomingList(
     startIndex: Int,
     viewModel: QueueViewModel,
 ) {
+    // Stable keys that survive reordering; the same song can be queued more than once.
     val keys =
         remember(upcoming) {
             val seen = HashMap<String, Int>()
@@ -286,7 +288,9 @@ private fun ReorderableUpcomingList(
         dragOffset += amountY
         val info = listState.layoutInfo
         val current = info.visibleItemsInfo.firstOrNull { it.key == key } ?: return
+        // Wait until the list has laid out the last swap; acting on stale positions swapped rows back and forth.
         if (current.index != order.indexOfFirst { keys[it] == key }) return
+        // Keep scrolling while the row is held near the top or bottom.
         val top = current.offset + dragOffset
         val bottom = top + current.size
         val nearEnd = bottom > info.viewportEndOffset - edge && amountY > 0
@@ -297,6 +301,7 @@ private fun ReorderableUpcomingList(
             info.visibleItemsInfo.firstOrNull {
                 it.key != key && center >= it.offset && center <= it.offset + it.size
             } ?: return
+        // Moving the first visible row would make the list scroll to follow it; keep the view where it is.
         val firstIndex = listState.firstVisibleItemIndex
         val firstOffset = listState.firstVisibleItemScrollOffset
         order = order.toMutableList().apply { add(target.index, removeAt(current.index)) }
@@ -326,6 +331,7 @@ private fun ReorderableUpcomingList(
                             Modifier.animateItem()
                         }
                     ).pointerInput(key) {
+                        // Hold anywhere on the row (number, title, ...) and move it up or down.
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -349,6 +355,7 @@ private fun ReorderableUpcomingList(
                     onClick = { if (dragKey == null) viewModel.onTrackClick(track, originalIndex) },
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            // The handle drags straight away, without the long press.
                             Icon(
                                 imageVector = Icons.Outlined.DragHandle,
                                 contentDescription = "Drag to reorder",

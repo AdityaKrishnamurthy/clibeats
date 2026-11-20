@@ -32,6 +32,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,7 +65,7 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     toggleModeRequested: Boolean = false,
     onToggleModeHandled: () -> Unit = {},
-    initialTab: Int = 0,
+    openPlaylistsRequest: Int = 0,
 ) {
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
@@ -77,10 +78,13 @@ fun LibraryScreen(
         }
     }
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
-    var selectedTabIndex by remember { mutableIntStateOf(initialTab) }
-    LaunchedEffect(initialTab) {
-        if (initialTab in 0..3) {
-            selectedTabIndex = initialTab
+    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    // Handle each "open Playlists" request once, even if this page is recreated later.
+    var handledPlaylistsRequest by rememberSaveable { mutableIntStateOf(0) }
+    LaunchedEffect(openPlaylistsRequest) {
+        if (openPlaylistsRequest > handledPlaylistsRequest) {
+            selectedTabIndex = PLAYLISTS_TAB
+            handledPlaylistsRequest = openPlaylistsRequest
         }
     }
 
@@ -100,7 +104,7 @@ fun LibraryScreen(
                 .background(CliBeatsBackground)
                 .padding(12.dp),
     ) {
-        if (selectedTabIndex == 3) {
+        if (selectedTabIndex == PLAYLISTS_TAB) {
             Row(
                 modifier =
                     Modifier
@@ -173,7 +177,7 @@ fun LibraryScreen(
                 "Offline · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
             }
         val titleText =
-            if (selectedTabIndex == 3) {
+            if (selectedTabIndex == PLAYLISTS_TAB) {
                 "Library — Playlists"
             } else {
                 "Library — $modeLabel (${tabs[selectedTabIndex]})"
@@ -210,7 +214,7 @@ fun LibraryScreen(
                     }
                 }
 
-                if (selectedTabIndex == 3) {
+                if (selectedTabIndex == PLAYLISTS_TAB) {
                     PlaylistScreen(
                         filter = playlistFilter,
                         triggerCreateDialog = triggerCreatePlaylist,
@@ -298,6 +302,7 @@ private fun TracksList(
     }
 }
 
+private const val PLAYLISTS_TAB = 3
 private const val NOTHING_PLAYED = "> Nothing played yet. Songs you play show up here."
 private const val NO_FOLDER = "> No local folder. Settings → Local Music → Choose folder"
 private const val NO_FILES = "> No audio files found. Settings → Local Music → Rescan"
