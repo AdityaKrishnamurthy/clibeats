@@ -50,6 +50,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -72,6 +73,7 @@ import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
@@ -112,11 +114,14 @@ fun NowPlayingScreen(
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
     val audioOutput = viewModel.audioOutput?.collectAsState()?.value
-    // Coming back from the system output switcher: show the device that was picked.
+    // Coming back from the system output switcher: show the device that was picked. The switcher is a
+    // system pop-up over this screen (no pause/resume), so also re-check when this window gets focus back.
     LifecycleResumeEffect(Unit) {
         viewModel.refreshAudioOutput()
         onPauseOrDispose {}
     }
+    val windowFocused = LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(windowFocused) { if (windowFocused) viewModel.refreshAudioOutput() }
     val track = state.currentTrack
 
     // Match the screen to the album art (Symfonium-style): a deep tint of the cover at the top fading into

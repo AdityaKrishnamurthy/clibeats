@@ -8,8 +8,10 @@ import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioPlaybackConfiguration
+import android.media.MediaRoute2Info
 import android.media.MediaRouter
 import android.media.MediaRouter2
+import android.media.RouteDiscoveryPreference
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -46,15 +48,24 @@ class AudioOutputMonitor
 
         private val settleCheck = Runnable { refresh() }
 
+        /** Android 14+: the per-app system route, i.e. what the user picked in the output switcher. */
+        private val router2: MediaRouter2? by lazy {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                runCatching { MediaRouter2.getInstance(context) }.getOrNull()
+            } else {
+                null
+            }
+        }
+
         init {
             // Callbacks are registered and delivered on the main thread.
             main.post {
                 runCatching {
                     audioManager?.registerAudioDeviceCallback(
                         object : AudioDeviceCallback() {
-                            override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = onDevicesChanged()
+                            override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>?) = onRoutingChanged()
 
-                            override fun onAudioDevicesRemoved(gone: Array<out AudioDeviceInfo>?) = onDevicesChanged()
+                            override fun onAudioDevicesRemoved(gone: Array<out AudioDeviceInfo>?) = onRoutingChanged()
                         },
                         main,
                     )
@@ -63,7 +74,9 @@ class AudioOutputMonitor
                     // Fires when this app's playback starts, stops or is moved to another device.
                     audioManager?.registerAudioPlaybackCallback(
                         object : AudioManager.AudioPlaybackCallback() {
-                            override fun onPlaybackConfigChanged(c: List<AudioPlaybackConfiguration>?) = refresh()
+                            override fun onPlaybackConfigChanged(c: List<AudioPlaybackConfiguration>?) {
+                                onRoutingChanged()
+                            }
                         },
                         main,
                     )
@@ -85,12 +98,49 @@ class AudioOutputMonitor
                         },
                     )
                 }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) listenToSystemRoute()
                 refresh()
             }
         }
 
-        /** A device connected or went away: check now, then again while Android moves the audio over. */
-        private fun onDevicesChanged() {
+        /**
+         * Picking another output in Android's switcher changes this app's system route: follow it. The empty
+         * discovery preference asks for no scanning, so this costs nothing.
+         */
+        @androidx.annotation.RequiresApi(Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+        private fun listenToSystemRoute() {
+            val router = router2 ?: return
+            val executor = context.mainExecutor
+            runCatching {
+                router.registerRouteCallback(
+                    executor,
+                    object : MediaRouter2.RouteCallback() {
+                        override fun onRoutesUpdated(routes: List<MediaRoute2Info>) = onRoutingChanged()
+                    },
+                    RouteDiscoveryPreference.Builder(emptyList(), false).build(),
+                )
+                router.registerControllerCallback(
+                    executor,
+                    object : MediaRouter2.ControllerCallback() {
+                        override fun onControllerUpdated(controller: MediaRouter2.RoutingController) {
+                            onRoutingChanged()
+                        }
+                    },
+                )
+                router.registerTransferCallback(
+                    executor,
+                    object : MediaRouter2.TransferCallback() {
+                        override fun onTransfer(
+                            oldController: MediaRouter2.RoutingController,
+                            newController: MediaRouter2.RoutingController,
+                        ) = onRoutingChanged()
+                    },
+                )
+            }
+        }
+
+        /** Something about the output changed: check now, then again while Android finishes moving the audio. */
+        private fun onRoutingChanged() {
             refresh()
             main.removeCallbacks(settleCheck)
             SETTLE_DELAYS_MS.forEach { main.postDelayed(settleCheck, it) }
@@ -103,7 +153,18 @@ class AudioOutputMonitor
 
         private fun detect(): AudioOutput? {
             val am = audioManager ?: return null
-            return playbackDevice(am) ?: routeOutput(am)
+            return playbackDevice(am) ?: systemRoute() ?: routeOutput(am)
+        }
+
+        /**
+         * Android 14+: the output this app is routed to, including a choice made in the system switcher (e.g.
+         * the phone speaker while earbuds stay connected, which the older media route doesn't reflect).
+         * Route types use the same numbers as AudioDeviceInfo types.
+         */
+        private fun systemRoute(): AudioOutput? {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE) return null
+            val route = router2?.systemController?.selectedRoutes?.firstOrNull()
+            return route?.let { audioOutputFor(it.type, it.name?.toString()) }
         }
 
         /**
