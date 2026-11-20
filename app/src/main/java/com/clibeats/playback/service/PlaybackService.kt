@@ -78,17 +78,10 @@ class PlaybackService : MediaLibraryService() {
         addSession(session)
     }
 
-    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? =
-        if (isTrustedController(controllerInfo)) librarySession else null
-
-    /** Allow-list: own app, SystemUI media player card, Bluetooth AVRCP, and Google Auto/Assistant. */
-    fun isTrustedController(controller: MediaSession.ControllerInfo): Boolean {
-        val pkg = controller.packageName
-        return pkg == packageName ||
-            pkg == "com.android.systemui" ||
-            pkg == "com.android.bluetooth" ||
-            pkg.startsWith("com.google.android.")
-    }
+    // Every controller is accepted on purpose. A package allow-list breaks real controls: Samsung's lock
+    // screen and Edge panel, Galaxy/other watches, car head units, scrobblers, and platform controllers
+    // that Media3 reports under a placeholder package name. Controllers can only play/pause/skip.
+    override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
 
     /**
      * Notification, lock-screen and headset "previous" go through the same play history as the in-app
@@ -175,9 +168,6 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             Log.i(TAG, "connect from ${controller.packageName} items=${player.mediaItemCount}")
-            if (!isTrustedController(controller)) {
-                return MediaSession.ConnectionResult.reject()
-            }
             return super.onConnect(session, controller)
         }
 
