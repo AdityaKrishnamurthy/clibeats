@@ -110,13 +110,8 @@ class NewPipeExtractorResolver
 
                     DiagnosticLogger.logPlayerResponse(traceId, "NEWPIPE_EXTRACTOR", "OK")
 
-                    val formatName = selectedStream.getFormat()?.name?.lowercase() ?: "m4a"
-                    val mimeType =
-                        when (formatName) {
-                            "m4a" -> "audio/mp4"
-                            "webma_opus" -> "audio/webm"
-                            else -> "audio/mp4"
-                        }
+                    // The format's own MIME type ("audio/webm" for Opus, "audio/mp4" for AAC).
+                    val mimeType = selectedStream.format?.mimeType ?: "audio/mp4"
 
                     val uriHost = runCatching { java.net.URI(streamUrl).host }.getOrNull() ?: "googlevideo.com"
                     val expiresAtMs = parseExpiryFromUrl(streamUrl)

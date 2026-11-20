@@ -49,8 +49,6 @@ import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
-import com.clibeats.presentation.playlist.PlaylistFilter
-import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -65,7 +63,6 @@ fun LibraryScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     toggleModeRequested: Boolean = false,
     onToggleModeHandled: () -> Unit = {},
-    openPlaylistsRequest: Int = 0,
 ) {
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
@@ -79,23 +76,11 @@ fun LibraryScreen(
     }
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
-    // Handle each "open Playlists" request once, even if this page is recreated later.
-    var handledPlaylistsRequest by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(openPlaylistsRequest) {
-        if (openPlaylistsRequest > handledPlaylistsRequest) {
-            selectedTabIndex = PLAYLISTS_TAB
-            handledPlaylistsRequest = openPlaylistsRequest
-        }
-    }
-
-    var playlistFilter by remember { mutableStateOf(PlaylistFilter.ALL) }
-    var triggerCreatePlaylist by remember { mutableStateOf(false) }
-
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
     }
-    val tabs = listOf("Tracks", "Artists", "Albums", "Playlists")
+    val tabs = listOf("Tracks", "Artists", "Albums")
 
     Column(
         modifier =
@@ -104,69 +89,20 @@ fun LibraryScreen(
                 .background(CliBeatsBackground)
                 .padding(12.dp),
     ) {
-        if (selectedTabIndex == PLAYLISTS_TAB) {
-            Row(
+        LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
+        if (mode == LibraryMode.ONLINE && state is LibraryUiState.Success) {
+            Text(
+                text = "[ CLEAR ]",
+                style = MaterialTheme.typography.labelMedium,
+                color = CliBeatsTextSecondary,
                 modifier =
                     Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "[ + NEW ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsAccent,
-                    textAlign = TextAlign.Center,
-                    modifier =
-                        Modifier
-                            .border(1.dp, CliBeatsAccent)
-                            .clickable(role = Role.Button) { triggerCreatePlaylist = true }
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                )
-                Row(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    PlaylistFilter.entries.forEach { option ->
-                        val selected = option == playlistFilter
-                        val label =
-                            when (option) {
-                                PlaylistFilter.ALL -> if (selected) "[● ALL]" else "[ ALL ]"
-                                PlaylistFilter.LOCAL_M3U -> if (selected) "[● LOCAL M3U]" else "[ LOCAL M3U ]"
-                            }
-                        Text(
-                            text = label,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (selected) CliBeatsAccent else CliBeatsTextSecondary,
-                            maxLines = 1,
-                            textAlign = TextAlign.Center,
-                            modifier =
-                                Modifier
-                                    .weight(1f)
-                                    .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
-                                    .clickable(role = Role.Tab) { playlistFilter = option }
-                                    .padding(horizontal = 8.dp, vertical = 10.dp),
-                        )
-                    }
-                }
-            }
+                        .align(Alignment.End)
+                        .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
+                        .padding(8.dp),
+            )
         } else {
-            LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
-            if (mode == LibraryMode.ONLINE && state is LibraryUiState.Success) {
-                Text(
-                    text = "[ CLEAR ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsTextSecondary,
-                    modifier =
-                        Modifier
-                            .align(Alignment.End)
-                            .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
-                            .padding(8.dp),
-                )
-            } else {
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
 
         val trackCount = (state as? LibraryUiState.Success)?.tracks?.size ?: 0
@@ -176,12 +112,7 @@ fun LibraryScreen(
             } else {
                 "Offline · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
             }
-        val titleText =
-            if (selectedTabIndex == PLAYLISTS_TAB) {
-                "Library — Playlists"
-            } else {
-                "Library — $modeLabel (${tabs[selectedTabIndex]})"
-            }
+        val titleText = "Library — $modeLabel (${tabs[selectedTabIndex]})"
         TuiBlock(
             title = titleText,
             isActive = true,
@@ -214,57 +145,49 @@ fun LibraryScreen(
                     }
                 }
 
-                if (selectedTabIndex == PLAYLISTS_TAB) {
-                    PlaylistScreen(
-                        filter = playlistFilter,
-                        triggerCreateDialog = triggerCreatePlaylist,
-                        onCreateDialogHandled = { triggerCreatePlaylist = false },
-                    )
-                } else {
-                    when (val currentState = state) {
-                        is LibraryUiState.Loading -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                CircularProgressIndicator(color = CliBeatsAccent)
-                            }
+                when (val currentState = state) {
+                    is LibraryUiState.Loading -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            CircularProgressIndicator(color = CliBeatsAccent)
                         }
+                    }
 
-                        is LibraryUiState.Empty -> {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text =
-                                        when {
-                                            mode == LibraryMode.ONLINE -> NOTHING_PLAYED
-                                            !localFolderChosen -> NO_FOLDER
-                                            else -> NO_FILES
-                                        },
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = CliBeatsTextSecondary,
-                                    modifier = Modifier.padding(16.dp),
+                    is LibraryUiState.Empty -> {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text =
+                                    when {
+                                        mode == LibraryMode.ONLINE -> NOTHING_PLAYED
+                                        !localFolderChosen -> NO_FOLDER
+                                        else -> NO_FILES
+                                    },
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = CliBeatsTextSecondary,
+                                modifier = Modifier.padding(16.dp),
+                            )
+                        }
+                    }
+
+                    is LibraryUiState.Success -> {
+                        when (selectedTabIndex) {
+                            0 ->
+                                TracksList(
+                                    tracks = currentState.tracks,
+                                    onTrackClick = { track, index ->
+                                        viewModel.onTrackClick(track, currentState.tracks, index)
+                                    },
+                                    onSwipeRight = viewModel::onSwipeAddToQueue,
+                                    onSwipeLeft = favorites::add,
+                                    onLongPress = { addToPlaylistTrack = it },
                                 )
-                            }
-                        }
-
-                        is LibraryUiState.Success -> {
-                            when (selectedTabIndex) {
-                                0 ->
-                                    TracksList(
-                                        tracks = currentState.tracks,
-                                        onTrackClick = { track, index ->
-                                            viewModel.onTrackClick(track, currentState.tracks, index)
-                                        },
-                                        onSwipeRight = viewModel::onSwipeAddToQueue,
-                                        onSwipeLeft = favorites::add,
-                                        onLongPress = { addToPlaylistTrack = it },
-                                    )
-                                1 -> ArtistsList(artists = currentState.artists)
-                                2 -> AlbumsList(albums = currentState.albums)
-                            }
+                            1 -> ArtistsList(artists = currentState.artists)
+                            2 -> AlbumsList(albums = currentState.albums)
                         }
                     }
                 }
@@ -302,7 +225,6 @@ private fun TracksList(
     }
 }
 
-private const val PLAYLISTS_TAB = 3
 private const val NOTHING_PLAYED = "> Nothing played yet. Songs you play show up here."
 private const val NO_FOLDER = "> No local folder. Settings → Local Music → Choose folder"
 private const val NO_FILES = "> No audio files found. Settings → Local Music → Rescan"

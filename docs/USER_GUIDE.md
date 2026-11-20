@@ -14,17 +14,12 @@ Swipe left / right anywhere outside a song row to move between tabs.
 
 | Tab | What it does |
 |---|---|
-| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. Tap the tab again to switch Online ↔ Local. |
-| **Search** | Search the active source. With the box empty it lists songs you played from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
-| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums / **Playlists**. |
-| **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
-
-**Playlists** (Library → Playlists, or `[3] PLAYLISTS` on Home): ♥ Favorites, Most Played (✕ removes a song,
-`[ CLEAR ALL ]` asks first), your playlists, `[ + NEW ]` and local M3U playlists. Drag a song's ≡ handle to
-reorder ♥ Favorites or your own playlists.
-
-**Queue** (≡ in the top bar, the mini player, or `[ QUEUE ]` in Now Playing): the playing song, then Up Next. Hold
-a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it.
+| **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), and trending songs for your country (from your SIM / mobile network). Trending loads once each time you open the app; `[ ↻ REFRESH ]` reloads it. Tap the tab again to switch Online ↔ Local. |
+| **Search** | Search the active source. With the box empty it lists songs you played, queued, favourited or added to a playlist from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
+| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
+| **Queue** | The playing song, then Up Next: drag a song's ≡ handle, or hold its cover and drag, to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it. Shuffle mixes the list you see (the playing song moves to the top); turning it off puts the original order back. Also opens from `[ QUEUE ]` in Now Playing. |
+| **Playlists** | ♥ Favorites and Most Played pinned at the top (✕ removes a song, `[ CLEAR ALL ]` asks first), then your playlists (`[ + NEW ]`), then local M3U playlists. The buttons at the top switch between small grid, large grid, list and details. Inside Favorites or your own playlists, drag a song's ≡ handle (or hold its cover) to reorder. Tap the tab again to go back to the overview. |
+| **Settings** | Theme & accent (nine colours plus **Custom**: hue, saturation and brightness sliders or a hex code), music folders, playback, provider, storage, playlist exchange, updates, about. |
 
 ## Song gestures
 
@@ -35,15 +30,20 @@ a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear
 
 ## Player
 
-- **Mini player** — tap the song to open Now Playing.
-- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. The waveform
-  behind the controls shows the song's real loudness (local songs within seconds, streamed songs as they play; dim
-  bars aren't measured yet). Drag across it to scrub: playback keeps going, and dragging back near the current time
+- **Mini player** — tap the song to open Now Playing. Touch or drag the seek bar: a bubble shows the exact time and
+  it lands on that second when you let go.
+- **Now Playing** — a frosted-glass background made from the album art, with matching control colours. Drag across
+  the waveform behind the controls to scrub: playback keeps going, and dragging back near the current time
   snaps onto it. Repeat (off → all → one), previous, play/pause,
   next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
+- **Audio output** — under the quality line, Now Playing shows where the music is playing (phone speaker, wired
+  headphones or your Bluetooth device by name). Tap it to switch output in Android's own picker.
 - **Previous** — more than 3 seconds into a song it restarts it; press again to play the song that played
-  before, local or online, even from an earlier queue (also from the notification, lock screen and headphones).
+  before, local or online, even from an earlier queue.
+- **Next** — after going back, next returns to the song you went back from (and the ones before it, in order);
+  otherwise it plays the next song in the queue. Previous and next work the same from the notification, lock
+  screen and headphones.
 - **Sleep timer** — 15 / 30 / 45 / 60 minutes or end of the current song (works with repeat-one too).
 - If a song can't be played, CLIBeats skips to the next one and shows a short notice above the player.
 
@@ -68,7 +68,8 @@ the media card in Quick Settings resumes the last song from where you left off.
 ## Updates
 
 When a new version is released, a pop-up offers **DOWNLOAD** or **LATER** (hides it for a day). The APK is
-saved to your Downloads folder and checked against the release's checksum; then tap **INSTALL** and confirm
+saved to your Downloads folder (a progress bar under the top bar shows how far along it is; `[×]` hides it) and
+checked against the release's checksum; then tap **INSTALL** and confirm
 Android's update screen. The first time, Android asks you to allow installs from CLIBeats.
 
 Settings → Updates sets how often the app checks (**Daily**, **Weekly** or **Off**) and has **CHECK NOW** to

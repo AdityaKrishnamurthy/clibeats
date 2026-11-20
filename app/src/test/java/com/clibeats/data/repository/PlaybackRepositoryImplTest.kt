@@ -238,6 +238,7 @@ class PlaybackRepositoryImplTest {
         nowPlaying(first)
         nowPlaying(second)
         whenever(playerAdapter.currentIndex()).thenReturn(1)
+        whenever(playerAdapter.previousTrack()).thenReturn(first)
 
         repository.skipToPrevious()
 
@@ -270,6 +271,7 @@ class PlaybackRepositoryImplTest {
         nowPlaying(first)
         nowPlaying(second)
         whenever(playerAdapter.currentIndex()).thenReturn(1)
+        whenever(playerAdapter.previousTrack()).thenReturn(first)
         whenever(playerAdapter.currentPositionMs()).thenReturn(10_000L, 200L)
 
         repository.skipToPrevious() // restarts "b"
@@ -287,5 +289,74 @@ class PlaybackRepositoryImplTest {
 
         verify(playerAdapter).skipToPrevious()
         verify(playerAdapter, never()).playBeforeCurrent(any())
+    }
+
+    @Test
+    fun `next returns to the song you went back from`() {
+        val a = track("a")
+        val b = track("b")
+        nowPlaying(a)
+        queueFlow.value = listOf(b) // b was started from a new list
+        nowPlaying(b)
+
+        repository.skipToPrevious() // back to "a" (inserted before "b")
+        nowPlaying(a)
+        whenever(playerAdapter.nextTrack()).thenReturn(b)
+        repository.skipToNext()
+
+        verify(playerAdapter).skipToNext()
+        verify(playerAdapter, never()).playForward(any())
+    }
+
+    @Test
+    fun `next jumps back to the song you left even when it is not next in the queue`() {
+        val a = track("a")
+        val b = track("b")
+        nowPlaying(a)
+        nowPlaying(b)
+
+        repository.skipToPrevious()
+        nowPlaying(a)
+        whenever(playerAdapter.nextTrack()).thenReturn(track("x")) // e.g. shuffle put another song next
+        repository.skipToNext()
+
+        verify(playerAdapter).playForward(b)
+    }
+
+    @Test
+    fun `going back twice then next twice retraces the same songs`() {
+        val a = track("a")
+        val b = track("b")
+        val c = track("c")
+        nowPlaying(a)
+        nowPlaying(b)
+        nowPlaying(c)
+
+        repository.skipToPrevious() // c -> b
+        nowPlaying(b)
+        repository.skipToPrevious() // b -> a
+        nowPlaying(a)
+
+        repository.skipToNext() // a -> b
+        verify(playerAdapter).playForward(b)
+        nowPlaying(b)
+        repository.skipToNext() // b -> c
+        verify(playerAdapter).playForward(c)
+    }
+
+    @Test
+    fun `playing something new forgets the way forward`() {
+        val a = track("a")
+        val b = track("b")
+        nowPlaying(a)
+        nowPlaying(b)
+
+        repository.skipToPrevious()
+        nowPlaying(a)
+        nowPlaying(track("new")) // the user tapped another song
+        repository.skipToNext()
+
+        verify(playerAdapter).skipToNext()
+        verify(playerAdapter, never()).playForward(any())
     }
 }

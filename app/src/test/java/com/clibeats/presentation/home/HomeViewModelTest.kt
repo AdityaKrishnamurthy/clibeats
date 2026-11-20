@@ -15,8 +15,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -25,6 +27,8 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,6 +50,8 @@ class HomeViewModelTest {
         whenever(providerRegistry.defaultProvider()).thenReturn(musicProvider)
         whenever(providerRegistry.providers).thenReturn(listOf(musicProvider))
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("audius"))
+        // Trending loads as soon as the ViewModel starts; tests that care stub their own result.
+        runBlocking { whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(emptyList())) }
 
         val networkMonitor: NetworkMonitor = mock()
         whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
@@ -96,6 +102,38 @@ class HomeViewModelTest {
             val state = viewModel.uiState.value
             assertThat(state).isInstanceOf(HomeUiState.Error::class.java)
             assertThat((state as HomeUiState.Error).message).isEqualTo("provider offline")
+        }
+
+    @Test
+    fun `trending loads once and only reloads on request`() =
+        runTest {
+            whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(listOf(fakeTrack())))
+            // Leaving Home and coming back re-subscribes to the state; that must not fetch again.
+            repeat(2) {
+                val job =
+                    backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect() }
+                testDispatcher.scheduler.advanceUntilIdle()
+                job.cancel()
+                testDispatcher.scheduler.advanceTimeBy(10_000)
+            }
+            verify(musicProvider, times(1)).trending(any())
+
+            viewModel.refreshTrending()
+            testDispatcher.scheduler.advanceUntilIdle()
+            verify(musicProvider, times(2)).trending(any())
+            assertThat(viewModel.uiState.value).isInstanceOf(HomeUiState.Success::class.java)
+        }
+
+    @Test
+    fun `a failed first load is retried`() =
+        runTest {
+            whenever(musicProvider.trending(any()))
+                .thenReturn(ProviderResult.Error("no connection yet"))
+                .thenReturn(ProviderResult.Success(listOf(fakeTrack())))
+
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            assertThat(viewModel.uiState.value).isInstanceOf(HomeUiState.Success::class.java)
         }
 
     @Test

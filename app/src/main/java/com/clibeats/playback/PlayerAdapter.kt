@@ -5,6 +5,7 @@ package com.clibeats.playback
 
 import android.content.Context
 import android.content.Intent
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
@@ -155,6 +156,7 @@ class PlayerAdapter
                         if (current in trackList.indices) {
                             resolveTrackBitrate(trackList[current])
                         }
+                        updateWakeMode()
                         updateState()
                     }
 
@@ -179,6 +181,7 @@ class PlayerAdapter
 
         fun playTrack(track: Track) {
             startPlaybackService()
+            unshuffledOrder = null
             trackList.clear()
             trackList.add(track)
             syncQueue()
@@ -194,11 +197,23 @@ class PlayerAdapter
             startIndex: Int = 0,
         ) {
             startPlaybackService()
+            // With shuffle on, a newly started list plays shuffled: the tapped song first, the rest mixed.
+            val ordered: List<Track>
+            val start: Int
+            if (shuffleOn && tracks.size > 1) {
+                unshuffledOrder = tracks.toList()
+                ordered = shuffledAround(tracks, startIndex.coerceIn(tracks.indices))
+                start = 0
+            } else {
+                unshuffledOrder = null
+                ordered = tracks
+                start = startIndex
+            }
             trackList.clear()
-            trackList.addAll(tracks)
+            trackList.addAll(ordered)
             syncQueue()
-            val mediaItems = tracks.map { it.toMediaItem() }
-            player.setMediaItems(mediaItems, startIndex, 0L)
+            val mediaItems = ordered.map { it.toMediaItem() }
+            player.setMediaItems(mediaItems, start, 0L)
             player.prepare()
             player.play()
             updateState()
@@ -253,7 +268,9 @@ class PlayerAdapter
                     RepeatMode.ONE -> Player.REPEAT_MODE_ONE
                     RepeatMode.ALL -> Player.REPEAT_MODE_ALL
                 }
-            player.shuffleModeEnabled = shuffleEnabled
+            player.shuffleModeEnabled = false
+            shuffleOn = shuffleEnabled
+            unshuffledOrder = null
             updateState()
         }
 
@@ -288,6 +305,37 @@ class PlayerAdapter
             }
         }
 
+        /** The track "next" would play, or null at the end of the queue. */
+        fun nextTrack(): Track? = trackList.getOrNull(player.nextMediaItemIndex)
+
+        /** The track "previous" would play, or null at the start of the queue. */
+        fun previousTrack(): Track? = trackList.getOrNull(player.previousMediaItemIndex)
+
+        /**
+         * Plays [track]: jumps to it if it's already in the queue (the copy nearest after the current song),
+         * otherwise inserts it right after the current song. Used by "next" to return to a song left via "previous".
+         */
+        fun playForward(track: Track) {
+            val current = player.currentMediaItemIndex
+            val existing =
+                trackList.indices
+                    .filter { trackList[it].id == track.id && it != current }
+                    .minByOrNull { if (it > current) it - current else it + trackList.size }
+            if (existing != null) {
+                player.seekTo(existing, 0L)
+            } else {
+                startPlaybackService()
+                val index = (current + 1).coerceIn(0, trackList.size)
+                trackList.add(index, track)
+                syncQueue()
+                player.addMediaItem(index, track.toMediaItem())
+                player.seekTo(index, 0L)
+                player.prepare()
+            }
+            player.play()
+            updateState()
+        }
+
         /** Previous item in the queue; at the start of the queue it restarts the current song. */
         fun skipToPrevious() {
             if (player.hasPreviousMediaItem()) {
@@ -311,6 +359,7 @@ class PlayerAdapter
             startPlaybackService()
             val index = player.currentMediaItemIndex.coerceIn(0, trackList.size)
             trackList.add(index, track)
+            syncQueue()
             player.addMediaItem(index, track.toMediaItem())
             player.seekTo(index, 0L)
             player.prepare()
@@ -328,10 +377,74 @@ class PlayerAdapter
             updateState()
         }
 
+        /**
+         * Shuffle reorders the queue itself, so the Queue screen, "next" and "previous" all follow what you see:
+         * the playing song moves to the top and every other song is mixed below it. Turning it off puts the
+         * songs back in their original order (songs added meanwhile go at the end). The playing song never stops.
+         */
         fun toggleShuffle() {
-            player.shuffleModeEnabled = !player.shuffleModeEnabled
+            val current = player.currentMediaItemIndex
+            if (current !in trackList.indices || trackList.size < 2) {
+                shuffleOn = !shuffleOn
+                unshuffledOrder = null
+                updateState()
+                return
+            }
+            if (!shuffleOn) {
+                unshuffledOrder = trackList.toList()
+                applyOrder(shuffledAround(trackList, current), current)
+                shuffleOn = true
+            } else {
+                val original = unshuffledOrder
+                if (original != null) {
+                    val present = trackList.toMutableList()
+                    // Same Track objects as before shuffling (removed ones dropped), then anything added since.
+                    val restored =
+                        original.filter { o ->
+                            val i = present.indexOfFirst { it === o }
+                            if (i >= 0) present.removeAt(i)
+                            i >= 0
+                        }
+                    applyOrder(restored + present, current)
+                }
+                unshuffledOrder = null
+                shuffleOn = false
+            }
             updateState()
         }
+
+        /** [tracks] with the one at [keep] first and all the others in random order. */
+        private fun shuffledAround(
+            tracks: List<Track>,
+            keep: Int,
+        ): List<Track> = listOf(tracks[keep]) + tracks.filterIndexed { i, _ -> i != keep }.shuffled()
+
+        /**
+         * Rebuilds the queue in [order] (the same Track objects, playing one included) around the item at
+         * [current], which keeps playing: everything else is removed and re-added on both sides of it.
+         */
+        private fun applyOrder(
+            order: List<Track>,
+            current: Int,
+        ) {
+            val playing = trackList[current]
+            val at = order.indexOfFirst { it === playing }.takeIf { it >= 0 } ?: return
+            if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
+            if (current > 0) player.removeMediaItems(0, current)
+            val before = order.subList(0, at)
+            val after = order.subList(at + 1, order.size)
+            if (before.isNotEmpty()) player.addMediaItems(0, before.map { it.toMediaItem() })
+            if (after.isNotEmpty()) player.addMediaItems(after.map { it.toMediaItem() })
+            trackList.clear()
+            trackList.addAll(order)
+            syncQueue()
+        }
+
+        /** Whether shuffle is on (our own flag: the queue is reordered rather than ExoPlayer shuffling it). */
+        private var shuffleOn = false
+
+        /** The queue order from before shuffle was turned on, to put back when it's turned off. */
+        private var unshuffledOrder: List<Track>? = null
 
         fun moveTrack(
             fromIndex: Int,
@@ -370,6 +483,16 @@ class PlayerAdapter
             }
             syncQueue()
             updateState()
+        }
+
+        /**
+         * Battery: a local file only needs the CPU kept awake; a stream also needs Wi-Fi kept on. Holding the
+         * Wi-Fi lock for local playback wastes power, so the lock follows the song that's playing.
+         */
+        private fun updateWakeMode() {
+            val scheme = player.currentMediaItem?.localConfiguration?.uri?.scheme
+            val local = scheme == "content" || scheme == "file"
+            player.setWakeMode(if (local) C.WAKE_MODE_LOCAL else C.WAKE_MODE_NETWORK)
         }
 
         private fun syncQueue() {
@@ -444,7 +567,7 @@ class PlayerAdapter
                     positionMs = player.currentPosition.coerceAtLeast(0L),
                     bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
                     repeatMode = mappedRepeatMode(),
-                    shuffleEnabled = player.shuffleModeEnabled,
+                    shuffleEnabled = shuffleOn,
                     codec = format?.sampleMimeType?.let(::codecLabel),
                     bitrateKbps =
                         formatBitrate

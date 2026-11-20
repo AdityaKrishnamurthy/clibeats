@@ -15,6 +15,7 @@ import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.repository.SongRepository
+import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -152,9 +153,7 @@ class SettingsViewModel
                     themeMode =
                         CliBeatsThemeMode.entries.firstOrNull { it.name == raw.themeModeName }
                             ?: CliBeatsThemeMode.DARK,
-                    accentColor =
-                        AccentColor.entries.firstOrNull { it.name == raw.accentColorName }
-                            ?: AccentColor.GREEN,
+                    accentColor = Accent.fromStored(raw.accentColorName),
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -186,6 +185,13 @@ class SettingsViewModel
         fun setAccentColor(accent: AccentColor) {
             viewModelScope.launch {
                 appPreferences.setAccentColorName(accent.name)
+            }
+        }
+
+        /** A colour from the custom picker, saved as `#RRGGBB`. */
+        fun setCustomAccent(color: androidx.compose.ui.graphics.Color) {
+            viewModelScope.launch {
+                appPreferences.setAccentColorName(Accent.toHex(color))
             }
         }
 

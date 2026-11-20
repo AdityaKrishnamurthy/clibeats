@@ -143,21 +143,34 @@ class PlayerAdapterQueueTest {
     }
 
     @Test
-    fun toggleShuffle_flipsPlayerShuffleMode() {
-        whenever(exoPlayer.shuffleModeEnabled).thenReturn(true)
+    fun toggleShuffle_reordersQueueWithPlayingSongFirst() {
+        val tracks = (1..20).map { track("t$it") }
+        adapter.setQueue(tracks, 4)
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(4)
 
         adapter.toggleShuffle()
 
-        verify(exoPlayer).setShuffleModeEnabled(false)
+        val queue = adapter.queueFlow.value
+        assertEquals(true, adapter.playbackState.value.shuffleEnabled)
+        assertEquals("t5", queue.first().id)
+        assertThat(queue.map { it.id }).containsExactlyElementsIn(tracks.map { it.id })
+        assertThat(queue.map { it.id }).isNotEqualTo(tracks.map { it.id })
+        // ExoPlayer's own shuffle stays off: the queue order is the play order.
+        verify(exoPlayer, never()).setShuffleModeEnabled(true)
     }
 
     @Test
-    fun toggleShuffle_updatesStateFromPlayer() {
-        whenever(exoPlayer.shuffleModeEnabled).thenReturn(true)
+    fun toggleShuffle_offRestoresOriginalOrder() {
+        val tracks = (1..12).map { track("t$it") }
+        adapter.setQueue(tracks, 2)
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(2)
+        adapter.toggleShuffle()
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(0) // the playing song moved to the top
 
         adapter.toggleShuffle()
 
-        assertEquals(true, adapter.playbackState.value.shuffleEnabled)
+        assertEquals(false, adapter.playbackState.value.shuffleEnabled)
+        assertEquals(tracks.map { it.id }, adapter.queueFlow.value.map { it.id })
     }
 
     @Test

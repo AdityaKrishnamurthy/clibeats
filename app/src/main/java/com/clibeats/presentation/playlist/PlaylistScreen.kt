@@ -14,28 +14,20 @@ import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -82,7 +74,6 @@ import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
-import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
@@ -102,6 +93,7 @@ fun PlaylistScreen(
 ) {
     val favorites: FavoritesViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
+    val viewMode by viewModel.viewMode.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
@@ -222,9 +214,11 @@ fun PlaylistScreen(
                         )
                     }
                     else ->
-                        PlaylistGridView(
+                        PlaylistBrowser(
                             state = s,
                             filter = filter,
+                            viewMode = viewMode,
+                            onViewModeChange = viewModel::setViewMode,
                             onFavoritesClick = viewModel::openFavorites,
                             onMostPlayedClick = viewModel::openMostPlayed,
                             onCreateClick = { showCreateDialog = true },
@@ -304,179 +298,6 @@ fun PlaylistScreen(
     addToPlaylistTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
     }
-}
-
-@Suppress("LongMethod", "LongParameterList")
-@Composable
-private fun PlaylistGridView(
-    state: PlaylistUiState.Success,
-    filter: PlaylistFilter,
-    onFavoritesClick: () -> Unit,
-    onMostPlayedClick: () -> Unit,
-    onCreateClick: () -> Unit,
-    onPlaylistClick: (Playlist) -> Unit,
-    onDeleteClick: (Playlist) -> Unit,
-) {
-    val (local, app) = state.playlists.partition { it.isLocalFilePlaylist() }
-    val fullSpan: (LazyGridItemSpanScope.() -> GridItemSpan) = { GridItemSpan(maxLineSpan) }
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(minSize = TILE_MIN_DP.dp),
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        if (filter == PlaylistFilter.ALL) {
-            item(key = "fav") {
-                PlaylistTile(
-                    title = "♥ FAVORITES",
-                    subtitle = "${state.favoritesCount} tracks",
-                    coverUrl = state.favoritesCover,
-                    glyph = "♥",
-                    highlight = true,
-                    onClick = onFavoritesClick,
-                )
-            }
-            item(key = "most") {
-                PlaylistTile(
-                    title = "MOST PLAYED",
-                    subtitle = "${state.mostPlayedCount} tracks",
-                    coverUrl = state.mostPlayedCover,
-                    glyph = "▲",
-                    highlight = true,
-                    onClick = onMostPlayedClick,
-                )
-            }
-            items(app, key = { it.id }) { playlist ->
-                PlaylistTile(
-                    title = playlist.name,
-                    subtitle = "${playlist.trackCount} tracks",
-                    coverUrl = state.covers[playlist.id],
-                    glyph = "♫",
-                    onClick = { onPlaylistClick(playlist) },
-                    onLongClick = { onDeleteClick(playlist) },
-                    longClickLabel = "Delete playlist",
-                )
-            }
-            item(key = "new") { NewPlaylistTile(onClick = onCreateClick) }
-        }
-
-        item(key = "local_label", span = fullSpan) {
-            Column {
-                SectionLabel("LOCAL PLAYLISTS")
-                HintText("From M3U/PLS files in your music folder (read-only). Rescan in Settings → Local Music.")
-            }
-        }
-        items(local, key = { it.id }) { playlist ->
-            PlaylistTile(
-                title = playlist.name,
-                subtitle = "[LOCAL] ${playlist.trackCount} tracks",
-                coverUrl = state.covers[playlist.id],
-                glyph = "♫",
-                onClick = { onPlaylistClick(playlist) },
-            )
-        }
-    }
-}
-
-@Suppress("LongParameterList")
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun PlaylistTile(
-    title: String,
-    subtitle: String,
-    coverUrl: String?,
-    glyph: String,
-    onClick: () -> Unit,
-    highlight: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
-    longClickLabel: String? = null,
-) {
-    val borderColor = if (highlight) CliBeatsAccent else CliBeatsBorderInactive
-    Column(
-        modifier =
-            Modifier.combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick,
-                onLongClickLabel = longClickLabel,
-            ),
-    ) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(CliBeatsSurfaceVariant)
-                    .border(1.dp, borderColor, RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (coverUrl.isNullOrBlank()) {
-                Text(text = glyph, style = MaterialTheme.typography.headlineMedium, color = borderColor)
-            } else {
-                AsyncImage(
-                    // Same thumbnail URL as song rows: usually already cached, so tiles fill instantly.
-                    model = artworkUrlFor(coverUrl, ARTWORK_THUMB_PX * 2),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodySmall,
-            color = if (highlight) CliBeatsAccent else CliBeatsTextPrimary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Text(text = subtitle, style = MaterialTheme.typography.labelSmall, color = CliBeatsTextSecondary, maxLines = 1)
-    }
-}
-
-@Composable
-private fun NewPlaylistTile(onClick: () -> Unit) {
-    Column(modifier = Modifier.clickable(onClickLabel = "Create new playlist", onClick = onClick)) {
-        Box(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .border(1.dp, CliBeatsAccent, RoundedCornerShape(6.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "+", style = MaterialTheme.typography.headlineLarge, color = CliBeatsAccent)
-        }
-        Text(
-            text = "NEW PLAYLIST",
-            style = MaterialTheme.typography.bodySmall,
-            color = CliBeatsAccent,
-            modifier = Modifier.padding(top = 6.dp),
-        )
-        Text(text = " ", style = MaterialTheme.typography.labelSmall)
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelMedium,
-        color = CliBeatsAccent,
-        modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
-    )
-}
-
-@Composable
-private fun HintText(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.bodySmall,
-        color = CliBeatsTextSecondary,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
-    )
 }
 
 @Composable
@@ -571,20 +392,31 @@ private fun PlaylistDetailView(
                 Text(text = emptyText, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
             }
         } else if (onReorder != null) {
-            ReorderableList(items = tracks, itemId = { it.id }, onReorder = onReorder) { track, index ->
+            ReorderableList(
+                items = tracks,
+                itemId = { it.id },
+                onReorder = { _, _, reordered -> onReorder(reordered) },
+            ) { track, index ->
                 SongTableRow(
                     trackTitle = track.title,
                     artist = track.artist,
                     duration = formatDuration(track.durationMs),
                     index = index + 1,
-                    artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                    // Hold the cover (or drag ≡) to move the song; a quick tap on the cover still plays it.
+                    artworkContent = {
+                        TrackArtwork(
+                            artworkUrl = track.artworkUrl,
+                            size = 32,
+                            modifier = Modifier.artworkHandle { onTrackClick(index) },
+                        )
+                    },
                     onClick = { if (!isAnyDragging) onTrackClick(index) },
                     onSwipeRight = { onSwipeRight(track) },
                     onSwipeLeft = { onSwipeLeft(track) },
                     onLongPress = { onLongPress(track) },
                     actions = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            dragHandle()
+                            DragHandle()
                             onRemoveClick?.let { remove ->
                                 IconButton(onClick = { remove(track) }, enabled = !isAnyDragging) {
                                     Icon(
@@ -744,8 +576,6 @@ private fun ChangeCoverDialog(
         containerColor = CliBeatsSurface,
     )
 }
-
-private const val TILE_MIN_DP = 100 // 3 columns on most phones
 
 private enum class ClearTarget { FAVORITES, MOST_PLAYED }
 

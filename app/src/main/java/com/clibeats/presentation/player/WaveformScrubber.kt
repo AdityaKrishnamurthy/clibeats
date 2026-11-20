@@ -2,8 +2,6 @@
 
 package com.clibeats.presentation.player
 
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -17,7 +15,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,11 +44,7 @@ import kotlin.random.Random
  *
  * Drag anywhere on it to scrub. Playback keeps running while you drag and its position stays marked;
  * coming back near it snaps the cursor onto it (with a tick), and letting go there doesn't seek. Letting go
- * anywhere else seeks once.
- *
- * [heights] is the song's real loudness per bar (see WaveformRepository). Bars not measured yet (NaN, or no
- * [heights] at all) show a stable placeholder pattern, smaller and dimmer, and grow into their real height
- * once measured.
+ * anywhere else seeks once. The bars are a stable pattern per song, not decoded audio.
  */
 @Suppress("FunctionNaming", "LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
@@ -61,7 +54,6 @@ fun WaveformScrubber(
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
-    heights: FloatArray? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val accent = CliBeatsAccent
@@ -69,9 +61,7 @@ fun WaveformScrubber(
     val playedColor = CliBeatsTextPrimary.copy(alpha = PLAYED_BAR_ALPHA)
     val idle = CliBeatsTextSecondary.copy(alpha = IDLE_BAR_ALPHA)
     val liveMarker = CliBeatsTextPrimary.copy(alpha = LIVE_MARKER_ALPHA)
-    val placeholder = remember(trackKey) { waveformFor(trackKey) }
-    val target = remember(placeholder, heights) { barTargets(placeholder, heights) }
-    val bars = animatedBars(target)
+    val bars = remember(trackKey) { waveformFor(trackKey) }
     val haptics = LocalHapticFeedback.current
     val snapPx = with(LocalDensity.current) { SNAP_DP.dp.toPx() }
 
@@ -126,20 +116,16 @@ fun WaveformScrubber(
             val step = size.width / bars.size
             val barWidth = step * BAR_FILL
             val maxHeight = size.height * BAR_MAX_HEIGHT
-            bars.forEachIndexed { index, bar ->
-                val amplitude = bar.height
+            bars.forEachIndexed { index, amplitude ->
                 val center = (index + HALF) / bars.size
                 val played = center <= live
                 val inScrubRange = scrub != null && center in minOf(live, scrub)..maxOf(live, scrub)
-                val base =
+                val color =
                     when {
                         inScrubRange -> accent.copy(alpha = SCRUB_RANGE_ALPHA)
                         played -> playedColor
                         else -> idle
                     }
-                // Placeholder bars are dimmer; a bar brightens as it turns real.
-                val realness = PLACEHOLDER_ALPHA + (1f - PLACEHOLDER_ALPHA) * bar.measured
-                val color = base.copy(alpha = base.alpha * realness)
                 val height = maxHeight * amplitude
                 drawRoundRect(
                     color = color,
@@ -190,53 +176,6 @@ internal fun formatTime(ms: Long): String {
     return "%d:%02d".format(totalSec / SECONDS_PER_MINUTE, totalSec % SECONDS_PER_MINUTE)
 }
 
-/** One bar to draw: its height (0..1) and how "real" it is (0 = placeholder, 1 = measured; fades between). */
-internal data class BarTarget(
-    val height: Float,
-    val measured: Float,
-)
-
-/** Real heights where measured, the placeholder pattern (scaled down) everywhere else. */
-internal fun barTargets(
-    placeholder: List<Float>,
-    heights: FloatArray?,
-): List<BarTarget> =
-    placeholder.mapIndexed { i, fake ->
-        val real = heights?.getOrNull(i)?.takeUnless { it.isNaN() }
-        if (real != null) BarTarget(real, 1f) else BarTarget(fake * PLACEHOLDER_SCALE, 0f)
-    }
-
-/** Bars glide from their old height to the new one (a new song, or bars turning real) instead of jumping. */
-@Composable
-private fun animatedBars(target: List<BarTarget>): List<BarTarget> {
-    var from by remember { mutableStateOf(target) }
-    var to by remember { mutableStateOf(target) }
-    val progress = remember { Animatable(1f) }
-    LaunchedEffect(target) {
-        if (target == to) return@LaunchedEffect
-        val t = progress.value
-        from = lerpBars(from, to, t)
-        to = target
-        progress.snapTo(0f)
-        progress.animateTo(1f, tween(BAR_ANIM_MS))
-    }
-    return lerpBars(from, to, progress.value)
-}
-
-private fun lerpBars(
-    from: List<BarTarget>,
-    to: List<BarTarget>,
-    t: Float,
-): List<BarTarget> =
-    if (t >= 1f || from.size != to.size) {
-        to
-    } else {
-        to.mapIndexed { i, b ->
-            val a = from[i]
-            BarTarget(a.height + (b.height - a.height) * t, a.measured + (b.measured - a.measured) * t)
-        }
-    }
-
 /** A smooth, music-like bar pattern that's the same every time for the same song. */
 internal fun waveformFor(
     key: String?,
@@ -259,9 +198,6 @@ internal fun waveformFor(
 }
 
 private const val WAVEFORM_HEIGHT_DP = 176
-private const val PLACEHOLDER_SCALE = 0.45f
-private const val PLACEHOLDER_ALPHA = 0.45f
-private const val BAR_ANIM_MS = 350
 private const val BAR_COUNT = 64
 private const val BAR_FILL = 0.62f
 private const val BAR_MAX_HEIGHT = 0.92f

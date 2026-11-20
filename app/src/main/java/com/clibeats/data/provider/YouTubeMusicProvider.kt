@@ -12,6 +12,8 @@ package com.clibeats.data.provider
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
+import com.clibeats.data.provider.mapper.chartPlaylistBrowseId
+import com.clibeats.data.provider.mapper.playlistTracks
 import com.clibeats.data.provider.mapper.toTrackList
 import com.clibeats.data.provider.youtube.NewPipeExtractorResolver
 import com.clibeats.data.provider.youtube.PoTokenGenerator
@@ -61,9 +63,24 @@ class YouTubeMusicProvider
             }
         }
 
+        /**
+         * The country's chart from YouTube Music's Charts page (daily top music videos, where the phone is),
+         * falling back to a "top songs <country>" search when charts aren't available there.
+         */
         override suspend fun trending(limit: Int): ProviderResult<List<Track>> {
-            val country = com.clibeats.data.provider.dto.UserLocale.countryName
-            return search(if (country.isBlank()) "trending music" else "top songs $country", limit)
+            val country = com.clibeats.data.provider.dto.UserLocale.gl
+            val chart =
+                runCatching {
+                    val playlistId =
+                        api.browse(com.clibeats.data.provider.dto.BrowseRequest.charts(country))
+                            .chartPlaylistBrowseId()
+                    playlistId?.let {
+                        api.browse(com.clibeats.data.provider.dto.BrowseRequest.page(it)).playlistTracks()
+                    }
+                }.getOrNull()
+            if (!chart.isNullOrEmpty()) return ProviderResult.Success(chart.take(limit))
+            val name = com.clibeats.data.provider.dto.UserLocale.countryName
+            return search(if (name.isBlank()) "trending music" else "top songs $name", limit)
         }
 
         override suspend fun getTrack(trackId: String): ProviderResult<Track> {

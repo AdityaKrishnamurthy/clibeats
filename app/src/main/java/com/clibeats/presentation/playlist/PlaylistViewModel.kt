@@ -101,6 +101,16 @@ class PlaylistViewModel
                 initialValue = PlaylistUiState.Loading,
             )
 
+        /** How the Playlists overview is shown (grid sizes, list, details); remembered across launches. */
+        val viewMode: StateFlow<PlaylistViewMode> =
+            (appPreferences?.playlistView ?: flowOf(null))
+                .map(PlaylistViewMode::fromName)
+                .stateIn(viewModelScope, SharingStarted.Eagerly, PlaylistViewMode.DEFAULT)
+
+        fun setViewMode(mode: PlaylistViewMode) {
+            viewModelScope.launch { appPreferences?.setPlaylistView(mode.name) }
+        }
+
         fun createPlaylist(
             name: String,
             description: String?,

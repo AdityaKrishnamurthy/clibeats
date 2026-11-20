@@ -130,13 +130,20 @@ class SearchViewModel
             _query.value = ""
         }
 
-        // Only playing a result counts as a recent search: queueing (or saving) a song isn't picking it.
+        // Anything done with a result (play, queue, play next, favorite, add to playlist) makes it a recent search.
         fun onAddToQueue(track: Track) {
             playbackRepository.addToQueue(track)
+            rememberPick(track)
         }
 
         fun onPlayNext(track: Track) {
             playbackRepository.playNext(track)
+            rememberPick(track)
+        }
+
+        /** Lists [track] under recent searches (used for favorite / add to playlist from the results). */
+        fun rememberPick(track: Track) {
+            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
 
         /** Songs picked from search results, shown while the search box is empty. */

@@ -84,8 +84,9 @@ class PlaybackService : MediaLibraryService() {
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
 
     /**
-     * Notification, lock-screen and headset "previous" go through the same play history as the in-app
-     * button (whatever played before, from any queue), and stay available even at the start of a queue.
+     * Notification, lock-screen and headset "previous" and "next" behave exactly like the in-app buttons:
+     * previous goes through the play history (whatever played before, from any queue) and stays available at
+     * the start of a queue; next returns to the songs you went back from before following the queue.
      */
     private fun previousFromHistory(player: Player): Player =
         object : ForwardingPlayer(player) {
@@ -93,16 +94,27 @@ class PlaybackService : MediaLibraryService() {
 
             override fun seekToPreviousMediaItem() = playbackRepository.skipToPrevious()
 
+            override fun seekToNext() = playbackRepository.skipToNext()
+
+            override fun seekToNextMediaItem() = playbackRepository.skipToNext()
+
+            // Shuffle from a headset, car or watch reorders the queue the same way as the in-app button.
+            override fun setShuffleModeEnabled(enabled: Boolean) {
+                if (enabled != playbackRepository.playbackState.value.shuffleEnabled) playbackRepository.toggleShuffle()
+            }
+
+            override fun getShuffleModeEnabled(): Boolean = playbackRepository.playbackState.value.shuffleEnabled
+
             override fun getAvailableCommands(): Player.Commands =
                 super.getAvailableCommands()
                     .buildUpon()
-                    .addAll(Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                    .apply { NAV_COMMANDS.forEach(::add) }
                     .build()
 
-            override fun isCommandAvailable(command: Int): Boolean =
-                command == Player.COMMAND_SEEK_TO_PREVIOUS ||
-                    command == Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM ||
-                    super.isCommandAvailable(command)
+            override fun isCommandAvailable(command: Int): Boolean {
+                val navigation = command in NAV_COMMANDS
+                return navigation || super.isCommandAvailable(command)
+            }
         }
 
     /**
@@ -273,3 +285,11 @@ class PlaybackService : MediaLibraryService() {
         const val RECENT_ROOT = "clibeats_recent"
     }
 }
+
+private val NAV_COMMANDS =
+    listOf(
+        Player.COMMAND_SEEK_TO_PREVIOUS,
+        Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM,
+        Player.COMMAND_SEEK_TO_NEXT,
+        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM,
+    )

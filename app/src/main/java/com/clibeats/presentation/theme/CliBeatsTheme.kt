@@ -19,13 +19,13 @@ import androidx.compose.ui.graphics.lerp
 @Composable
 @Suppress("FunctionNaming")
 fun CliBeatsTheme(
-    accent: AccentColor = AccentColor.GREEN,
+    accent: Color = AccentColor.GREEN.color,
     mode: CliBeatsThemeMode = CliBeatsThemeMode.DARK,
     content: @Composable () -> Unit,
 ) {
     // Bright accents fail contrast as text on white, so deepen them in Light mode.
     val accentColor =
-        if (mode == CliBeatsThemeMode.LIGHT) lerp(accent.color, Color.Black, LIGHT_ACCENT_DARKEN) else accent.color
+        if (mode == CliBeatsThemeMode.LIGHT) lerp(accent, Color.Black, LIGHT_ACCENT_DARKEN) else accent
     val colorScheme = buildCliBeatsColorScheme(accentColor, mode)
 
     CompositionLocalProvider(

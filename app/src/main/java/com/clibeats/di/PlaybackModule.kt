@@ -11,17 +11,13 @@ import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.ResolvingDataSource
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
-import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.exoplayer.audio.AudioSink
-import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.cache.MediaCaches
 import com.clibeats.playback.LocalOrRemoteMediaSourceFactory
 import com.clibeats.playback.StreamResolver
 import com.clibeats.playback.TrackUriResolver
-import com.clibeats.playback.waveform.LoudnessTap
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -45,7 +41,6 @@ object PlaybackModule {
             .setUsage(C.USAGE_MEDIA)
             .build()
 
-    @Suppress("LongParameterList") // Hilt passes in what the player is built from.
     @OptIn(UnstableApi::class)
     @Provides
     @Singleton
@@ -55,7 +50,6 @@ object PlaybackModule {
         streamResolver: dagger.Lazy<StreamResolver>,
         cacheManager: dagger.Lazy<CacheManager>,
         mediaCaches: MediaCaches,
-        loudnessTap: LoudnessTap,
     ): ExoPlayer {
         // Start playback after 0.5s of audio instead of Media3's 2.5s default.
         val loadControl =
@@ -84,23 +78,7 @@ object PlaybackModule {
                 local = DefaultMediaSourceFactory(DefaultDataSource.Factory(context)),
                 remote = DefaultMediaSourceFactory(cachedFactory),
             )
-        // Media3's default audio output plus a pass-through step that measures loudness for the
-        // Now Playing waveform of streamed songs.
-        val renderersFactory =
-            object : DefaultRenderersFactory(context) {
-                override fun buildAudioSink(
-                    context: Context,
-                    enableFloatOutput: Boolean,
-                    enableAudioTrackPlaybackParams: Boolean,
-                ): AudioSink =
-                    DefaultAudioSink
-                        .Builder(context)
-                        .setEnableFloatOutput(enableFloatOutput)
-                        .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
-                        .setAudioProcessors(arrayOf(loudnessTap))
-                        .build()
-            }
-        return ExoPlayer.Builder(context, renderersFactory)
+        return ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .setAudioAttributes(audioAttributes, true)

@@ -2,6 +2,7 @@ package com.clibeats.presentation.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.RepeatMode
@@ -9,8 +10,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
-import com.clibeats.playback.waveform.Waveform
-import com.clibeats.playback.waveform.WaveformRepository
+import com.clibeats.playback.AudioOutputMonitor
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -45,12 +45,22 @@ class PlayerViewModel
         private val playbackRepository: PlaybackRepository,
         private val playlistRepository: PlaylistRepository? = null,
         private val libraryRepository: LibraryRepository? = null,
-        waveformRepository: WaveformRepository? = null,
+        private val audioOutputMonitor: AudioOutputMonitor? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
-        /** Real loudness of the playing song for the seek waveform (NaN bars aren't measured yet). */
-        val waveform: StateFlow<Waveform?> = waveformRepository?.current ?: MutableStateFlow(null)
+        /** Where the music is playing (null in previews/tests). */
+        val audioOutput: StateFlow<AudioOutput>? = audioOutputMonitor?.current
+
+        fun refreshAudioOutput() {
+            audioOutputMonitor?.refresh()
+        }
+
+        /** Opens Android's output picker (needs an Activity context). */
+        fun openOutputSwitcher(activityContext: android.content.Context) {
+            audioOutputMonitor?.openSwitcher(activityContext)
+        }
+
         val queue: StateFlow<List<Track>> = playbackRepository.queueState
 
         /** Whether the current track is in Favorites (liked songs). */

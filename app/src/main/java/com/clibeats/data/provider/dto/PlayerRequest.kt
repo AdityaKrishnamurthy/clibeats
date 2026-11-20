@@ -104,12 +104,33 @@ data class ContentPlaybackContext(
     val signatureTimestamp: Int = 0,
 )
 
-/** Device region/language for InnerTube `gl`/`hl`, so results and trending are regional. */
+/**
+ * Country and language sent to YouTube Music. The country is where the phone actually is (SIM, then mobile
+ * network, set by [detectFrom] at app start), not the language setting: a phone in India set to
+ * "English (United States)" should still get Indian charts and results.
+ */
 object UserLocale {
+    @Volatile
+    private var detectedCountry: String? = null
+
+    /** Reads the SIM / mobile network country (no permission needed). Wi-Fi-only devices keep the locale. */
+    fun detectFrom(context: android.content.Context) {
+        val telephony =
+            context.getSystemService(android.content.Context.TELEPHONY_SERVICE) as? android.telephony.TelephonyManager
+        detectedCountry =
+            listOfNotNull(
+                runCatching { telephony?.simCountryIso }.getOrNull(),
+                runCatching { telephony?.networkCountryIso }.getOrNull(),
+            ).map { it.uppercase() }.firstOrNull { it.length == 2 }
+    }
+
     val gl: String
-        get() = java.util.Locale.getDefault().country.uppercase().takeIf { it.length == 2 } ?: "US"
+        get() =
+            detectedCountry
+                ?: java.util.Locale.getDefault().country.uppercase().takeIf { it.length == 2 }
+                ?: "US"
     val hl: String
         get() = java.util.Locale.getDefault().language.ifBlank { "en" }
     val countryName: String
-        get() = java.util.Locale.getDefault().getDisplayCountry(java.util.Locale.ENGLISH)
+        get() = java.util.Locale("", gl).getDisplayCountry(java.util.Locale.ENGLISH)
 }

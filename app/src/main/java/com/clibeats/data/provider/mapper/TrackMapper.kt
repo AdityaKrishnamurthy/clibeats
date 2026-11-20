@@ -7,6 +7,7 @@
 
 package com.clibeats.data.provider.mapper
 
+import com.clibeats.data.provider.dto.BrowseResponse
 import com.clibeats.data.provider.dto.PlayerResponse
 import com.clibeats.data.provider.dto.SearchResponse
 import com.clibeats.domain.model.Track
@@ -57,6 +58,53 @@ fun SearchResponse.toTrackList(): List<Track> {
     return tracks
 }
 
+/**
+ * The chart playlist to show as "trending" from a Charts page: the daily top music videos for the country
+ * (real songs), else the top 100, else the trending list, else the first chart playlist. Returns its
+ * browse id (`VL...`).
+ */
+fun BrowseResponse.chartPlaylistBrowseId(): String? {
+    val playlists =
+        findAll(contents ?: return null, "musicTwoRowItemRenderer").mapNotNull { item ->
+            val title = item.nav("title", "runs")?.safeArray()?.getOrNull(0)?.nav("text")?.safeString()
+            val id = item.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+            if (title != null && id != null && id.startsWith("VL")) title to id else null
+        }
+    val preferences = listOf("daily top music videos", "top 100 music videos", "top songs", "trending")
+    return preferences.firstNotNullOfOrNull { wanted ->
+        playlists.firstOrNull { (title, _) -> title.lowercase().startsWith(wanted) }?.second
+    } ?: playlists.firstOrNull()?.second
+}
+
+/** Songs of a playlist page (e.g. a chart), in order; items without a video id are skipped. */
+fun BrowseResponse.playlistTracks(): List<Track> {
+    val root = contents ?: return emptyList()
+    return findAll(root, "musicResponsiveListItemRenderer")
+        .mapNotNull { it.parseTrack() }
+        .distinctBy { it.id }
+}
+
+/** Every value stored under [key] anywhere in the tree, in document order. */
+private fun findAll(
+    root: JsonElement,
+    key: String,
+): List<JsonElement> {
+    val found = mutableListOf<JsonElement>()
+
+    fun walk(element: JsonElement) {
+        when (element) {
+            is JsonObject ->
+                element.forEach { (k, v) ->
+                    if (k == key) found += v else walk(v)
+                }
+            is kotlinx.serialization.json.JsonArray -> element.forEach(::walk)
+            else -> Unit
+        }
+    }
+    walk(root)
+    return found
+}
+
 private fun JsonElement.parseTrack(): Track? {
     val flexCols = this.nav("flexColumns")?.safeArray() ?: return null
 
@@ -82,7 +130,12 @@ private fun JsonElement.parseTrack(): Track? {
     val artist = col1Runs.getOrNull(0)?.nav("text")?.safeString() ?: ""
     val album = col1Runs.getOrNull(2)?.nav("text")?.safeString() ?: ""
     val durationStr = col1Runs.lastOrNull()?.nav("text")?.safeString() ?: ""
-    val durationMs = parseDurationMs(durationStr)
+    // Playlists (charts) put the duration in a fixed column instead of the artist line.
+    val fixedDuration =
+        this.nav("fixedColumns")?.safeArray()?.getOrNull(0)
+            ?.nav("musicResponsiveListItemFixedColumnRenderer", "text", "runs")
+            ?.safeArray()?.getOrNull(0)?.nav("text")?.safeString()
+    val durationMs = parseDurationMs(durationStr).takeIf { it > 0 } ?: parseDurationMs(fixedDuration ?: "")
 
     // Thumbnail — pick highest resolution
     val artworkUrl =

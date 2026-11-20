@@ -25,7 +25,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
-import org.mockito.kotlin.never
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -154,12 +154,14 @@ class SearchViewModelTest {
     }
 
     @Test
-    fun `queueing a result does not add it to recent searches`() =
+    fun `queueing or saving a result adds it to recent searches`() =
         runTest {
             val track = Track("1", "Title", "Artist", "Album", 180000L, null, null, "local")
             viewModel.onAddToQueue(track)
             viewModel.onPlayNext(track)
-            verify(appPreferences, never()).addRecentSearchTrack(any())
+            viewModel.rememberPick(track)
+            testDispatcher.scheduler.advanceUntilIdle()
+            verify(appPreferences, times(3)).addRecentSearchTrack(track)
         }
 
     @Test

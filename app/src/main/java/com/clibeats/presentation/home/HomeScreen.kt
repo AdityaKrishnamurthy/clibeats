@@ -33,6 +33,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
@@ -55,7 +58,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
  * Shows a system status block, quick navigation shortcuts, and a live
  * trending tracks feed (Audius) so songs are listed on launch.
  */
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun HomeScreen(
     homeViewModel: HomeViewModel = hiltViewModel(),
@@ -71,6 +74,7 @@ fun HomeScreen(
     }
     val favorites: FavoritesViewModel = hiltViewModel()
     val uiState by homeViewModel.uiState.collectAsState()
+    val isRefreshing by homeViewModel.isRefreshing.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
     val activeProviderId by homeViewModel.activeProviderId.collectAsState()
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
@@ -159,7 +163,15 @@ fun HomeScreen(
 
         // 4. Trending Tracks Block Header
         item {
-            SectionHeader(title = "TRENDING / ${providerName.uppercase()}")
+            // Trending loads once when the app opens; after that only this button reloads it.
+            val busy = isRefreshing || uiState is HomeUiState.Loading
+            SectionHeader(
+                title = "TRENDING / ${providerName.uppercase()}",
+                actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ REFRESH ]",
+                onAction = homeViewModel::refreshTrending,
+                actionEnabled = !busy,
+                actionDescription = "Refresh trending",
+            )
             SongTableHeader()
         }
 
@@ -243,6 +255,8 @@ private fun SectionHeader(
     title: String,
     actionLabel: String? = null,
     onAction: () -> Unit = {},
+    actionEnabled: Boolean = true,
+    actionDescription: String? = null,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
@@ -254,8 +268,17 @@ private fun SectionHeader(
             Text(
                 text = actionLabel,
                 style = MaterialTheme.typography.labelMedium,
-                color = CliBeatsTextSecondary,
-                modifier = Modifier.clickable(onClick = onAction).padding(8.dp),
+                color = CliBeatsTextSecondary.copy(alpha = if (actionEnabled) 1f else DISABLED_ALPHA),
+                modifier =
+                    Modifier
+                        .clickable(enabled = actionEnabled, role = Role.Button, onClick = onAction)
+                        .then(
+                            if (actionDescription != null) {
+                                Modifier.semantics { contentDescription = actionDescription }
+                            } else {
+                                Modifier
+                            },
+                        ).padding(8.dp),
             )
         }
     }
@@ -287,3 +310,5 @@ private fun EmptyHomeState() {
         )
     }
 }
+
+private const val DISABLED_ALPHA = 0.5f

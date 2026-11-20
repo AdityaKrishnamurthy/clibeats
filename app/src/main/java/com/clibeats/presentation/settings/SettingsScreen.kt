@@ -20,9 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,9 +39,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -55,6 +60,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -172,6 +178,7 @@ fun SettingsScreen(
             AccentColorPicker(
                 selected = uiState.accentColor,
                 onSelect = viewModel::setAccentColor,
+                onCustom = viewModel::setCustomAccent,
             )
         }
 
@@ -250,7 +257,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Playback ───────────────────────────────────────────────
-        TuiBlock(title = "Playback") {
+        TuiBlock(title = "Playback", isActive = true) {
             Row(
                 modifier =
                     Modifier
@@ -280,7 +287,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Active Music Provider ──────────────────────────────────
-        TuiBlock(title = "Active Provider") {
+        TuiBlock(title = "Active Provider", isActive = true) {
             Column {
                 uiState.providers.forEach { option ->
                     val isSelected = uiState.activeProviderId == option.id
@@ -310,7 +317,7 @@ fun SettingsScreen(
         // ── Section: Storage (two independent caches) ───────────────────────
         val cacheUsage by viewModel.cacheUsage.collectAsState()
         val artworkCacheMb by viewModel.artworkCacheMb.collectAsState()
-        TuiBlock(title = "Storage") {
+        TuiBlock(title = "Storage", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CacheRow(
                     label = "ARTWORK",
@@ -333,7 +340,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Streaming Quality ──────────────────────────────────────
-        TuiBlock(title = "Audio Quality") {
+        TuiBlock(title = "Audio Quality", isActive = true) {
             Row(
                 modifier =
                     Modifier
@@ -363,7 +370,7 @@ fun SettingsScreen(
         }
 
         // ── Section: Playlist Exchange ──────────────────────────────────────
-        TuiBlock(title = "Playlist Exchange") {
+        TuiBlock(title = "Playlist Exchange", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -409,7 +416,7 @@ fun SettingsScreen(
         UpdateSection()
 
         // ── Section: About (developer credit; name links to GitHub) ─────────
-        TuiBlock(title = "About") {
+        TuiBlock(title = "About", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = "CLIBeats v${BuildConfig.VERSION_NAME}",
@@ -498,47 +505,100 @@ private fun CacheRow(
 }
 
 @Suppress("FunctionNaming")
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AccentColorPicker(
-    selected: AccentColor,
+    selected: Accent,
     onSelect: (AccentColor) -> Unit,
+    onCustom: (Color) -> Unit,
 ) {
     val currentAccent = LocalAccentColor.current
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        AccentColor.entries.forEach { accentOption ->
-            val isSelected = selected == accentOption
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.clickable { onSelect(accentOption) },
-            ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .size(32.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(accentOption.color)
-                            .then(
-                                if (isSelected) {
-                                    Modifier.border(2.dp, currentAccent, RoundedCornerShape(4.dp))
-                                } else {
-                                    Modifier
-                                },
-                            ),
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = accentOption.displayName,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) currentAccent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+    var showCustom by remember { mutableStateOf(false) }
+    // The presets, then "Custom" last. An even grid that spans the box: every swatch gets an equal share.
+    val options: List<AccentColor?> = AccentColor.entries + null
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        options.chunked(ACCENTS_PER_ROW).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth()) {
+                row.forEach { option ->
+                    if (option != null) {
+                        AccentSwatch(
+                            fill = SolidColor(option.color),
+                            label = option.displayName,
+                            isSelected = selected.preset == option,
+                            currentAccent = currentAccent,
+                            onClick = { onSelect(option) },
+                        )
+                    } else {
+                        // Shows the custom colour once there is one; a colour wheel until then.
+                        val isCustom = selected.preset == null
+                        AccentSwatch(
+                            fill = if (isCustom) SolidColor(selected.color) else CUSTOM_SWATCH_BRUSH,
+                            label = "Custom",
+                            isSelected = isCustom,
+                            currentAccent = currentAccent,
+                            onClick = { showCustom = true },
+                        )
+                    }
+                }
+                repeat(ACCENTS_PER_ROW - row.size) { Spacer(modifier = Modifier.weight(1f)) }
             }
         }
     }
+    if (showCustom) {
+        CustomAccentDialog(
+            initial = selected.color,
+            onDismiss = { showCustom = false },
+            onApply = {
+                showCustom = false
+                onCustom(it)
+            },
+        )
+    }
 }
+
+private val CUSTOM_SWATCH_BRUSH = Brush.sweepGradient(hueSpectrum())
+
+@Suppress("FunctionNaming")
+@Composable
+private fun RowScope.AccentSwatch(
+    fill: Brush,
+    label: String,
+    isSelected: Boolean,
+    currentAccent: Color,
+    onClick: () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier =
+            Modifier
+                .weight(1f)
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .padding(vertical = 4.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(fill)
+                    .then(
+                        if (isSelected) {
+                            Modifier.border(2.dp, currentAccent, RoundedCornerShape(4.dp))
+                        } else {
+                            Modifier
+                        },
+                    ),
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isSelected) currentAccent else MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+private const val ACCENTS_PER_ROW = 5
 
 /** One credit line, terminal style: `> Name`, linking to GitHub. The last line carries the prompt cursor. */
 @Suppress("FunctionNaming")

@@ -38,7 +38,7 @@ fun UpdateSection(viewModel: UpdateViewModel = hiltViewModel()) {
     val accent = LocalAccentColor.current
     val release = state.releaseOrNull()
 
-    TuiBlock(title = "Updates") {
+    TuiBlock(title = "Updates", isActive = true) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

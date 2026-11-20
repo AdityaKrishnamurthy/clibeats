@@ -151,8 +151,14 @@ fun SearchScreen(
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
                         onClear = viewModel::clearRecentSearches,
                         onAddToQueue = viewModel::onAddToQueue,
-                        onFavorite = favorites::add,
-                        onAddToPlaylist = { playlistPickerTrack = it },
+                        onFavorite = { track ->
+                            favorites.add(track)
+                            viewModel.rememberPick(track)
+                        },
+                        onAddToPlaylist = { track ->
+                            playlistPickerTrack = track
+                            viewModel.rememberPick(track)
+                        },
                     )
                 }
                 return@TuiBlock
@@ -169,9 +175,15 @@ fun SearchScreen(
                             tracks = currentState.tracks,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = viewModel::onAddToQueue,
-                            onFavorite = favorites::add,
+                            onFavorite = { track ->
+                                favorites.add(track)
+                                viewModel.rememberPick(track)
+                            },
                             onPlayNext = viewModel::onPlayNext,
-                            onAddToPlaylist = { playlistPickerTrack = it },
+                            onAddToPlaylist = { track ->
+                                playlistPickerTrack = track
+                                viewModel.rememberPick(track)
+                            },
                         )
                     }
             }

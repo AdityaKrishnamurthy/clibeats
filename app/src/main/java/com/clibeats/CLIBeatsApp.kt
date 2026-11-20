@@ -26,6 +26,8 @@ class CLIBeatsApp :
 
     override fun onCreate() {
         super.onCreate()
+        // Before any YouTube request: charts and results follow the country the phone is in.
+        com.clibeats.data.provider.dto.UserLocale.detectFrom(this)
         // Daily, silent safety net so an uninstall/reinstall doesn't lose the library.
         appScope.launch { runCatching { snapshotManager.snapshotIfDue() } }
     }
