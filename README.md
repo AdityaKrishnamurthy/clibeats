@@ -31,6 +31,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Privacy & Legal](#privacy--legal)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
+- [Star History](#star-history)
 - [Developers](#developers)
 - [License](#license)
 
@@ -261,6 +262,18 @@ responsible for complying with providers' terms of service and copyright law in 
 2. Add or update tests for behaviour changes.
 3. Run the quality gates (tests, ktlint, detekt, lint) before opening a PR.
 4. Keep UI changes consistent with the terminal design system.
+
+---
+
+## Star History
+
+<a href="https://star-history.com/#Omprakash-p06/clibeats&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Omprakash-p06/clibeats&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Omprakash-p06/clibeats&type=Date" />
+    <img alt="Star history chart for CLIBeats" src="https://api.star-history.com/svg?repos=Omprakash-p06/clibeats&type=Date" />
+  </picture>
+</a>
 
 ---
 
