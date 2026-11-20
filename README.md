@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.3.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.4.0-1DB954)](#)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -40,7 +40,17 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ## Screenshots
 
-New screenshots of the other screens are on the way. The current Now Playing screen is shown at the top.
+**Home & Search** — swipe a song right to queue it or left to favourite it; recent searches when the box is empty.
+
+<img src="docs/screenshots/strip_home_search.png" width="100%" alt="Home swipe gestures and search">
+
+**Library & Playlists** — songs you've played online; playlists with Favorites and Most Played pinned on top.
+
+<img src="docs/screenshots/strip_library_playlists.png" width="66%" alt="Library and playlists">
+
+**Settings** — theme, accent colours (with a custom picker), music folders, caches, backup and updates.
+
+<img src="docs/screenshots/strip_settings.png" width="66%" alt="Settings: theme, accent, storage and updates">
 
 ---
 
@@ -49,11 +59,16 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 ### Playback
 - **Queue playback that just works** — every queued song resolves when it's reached (skip, auto-advance, repeat).
 - **Fast start** — playback begins after ~0.5 s of buffer; next 2 songs are pre-resolved and their covers prefetched.
-- **Repeat** (off → all → one) and **shuffle**, with a tiny `ONE` / `ALL` / `OFF` label above the button.
+- **Repeat** (off → all → one), with a tiny `ONE` / `ALL` / `OFF` label above the button.
+- **Shuffle reorders the queue itself:** the playing song moves to the top and the rest is mixed, so the Queue screen,
+  next and previous all follow what you see; turning it off restores the original order. A list started while shuffle
+  is on plays shuffled.
 - **Sleep timer** — 15 / 30 / 45 / 60 min or end of track (also with repeat-one).
 - **Auto-queue related songs** (optional, off by default) — tapping a song queues the rest of that list after it.
 - **Previous** restarts the song when it's more than 3 s in; press again for the song that played before — local or
-  online, from any queue — in the app, notification, lock screen and headphones.
+  online, from any queue.
+- **Next** after going back returns to the songs you went back from, in order, at any point in a song; otherwise it
+  follows the queue. Previous and next work the same in the app, notification, lock screen and headphones.
 - **Clear upcoming** keeps the song that's playing.
 - Expired YouTube links are refreshed automatically; one silent retry on stream errors.
 - **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
@@ -62,7 +77,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - **Online:** YouTube Music, Internet Archive, Jamendo, Audius — pick from the `ONLINE ▾` drop-down.
 - **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A (AAC / ALAC), AAC, OGG Vorbis, Opus** (each checked
   with a real sample file in the tests; ALAC also needs the phone's decoder). AIFF isn't supported.
-- **Regional results** — YouTube Music uses your device's country and language; trending shows your country's top songs.
+- **Trending by country** — Home shows YouTube Music's own chart for the country your SIM / mobile network is in
+  (e.g. *Daily Top Music Videos – India*). It loads once per app open; `[ ↻ REFRESH ]` reloads it.
 - **Data saver** — turn off *High quality streaming* (Settings → Audio Quality) to stream the lowest-bitrate audio.
 
 ### Local library
@@ -73,12 +89,15 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 
 ### Library, playlists & favourites
 - **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
-- **Playlists grid:** ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
+- **Playlists:** ♥ Favorites and Most Played pinned on top (each with ✕ per song and a confirmed `[ CLEAR ALL ]`),
+  then your playlists (`[ + NEW ]`), then local playlists in their own section. Four views — small grid, large grid,
+  list and details — remembered between launches.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
-- **Recent searches:** with the search box empty, Search lists the songs you played from earlier searches.
-- **Reorder** ♥ Favorites and your own playlists by dragging a song's ≡ handle.
+- **Recent searches:** with the search box empty, Search lists the songs you played, queued, favourited or added to
+  a playlist from earlier searches.
+- **Reorder** the queue, ♥ Favorites and your own playlists: drag a song's ≡ handle, or hold its cover and drag.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 - **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
   `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
@@ -93,6 +112,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
   and dragging back near it snaps onto it (letting go there doesn't seek).
 - The quality line stays readable on any cover: a lighter shade of the album colour, or light amber (never red).
+- **Audio output:** shows where the music is playing — phone speaker, wired headphones or your Bluetooth device by
+  name — and follows changes as they happen. Tap it to open Android's output switcher.
 - Repeat · previous · play/pause · next · shuffle · sleep timer · queue (`[ QUEUE (n) ]`) · add to playlist · ♥.
 
 ### System integration
@@ -101,7 +122,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - Tapping the notification opens the app; the session survives swiping the app away.
 - **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
 - **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
-  Downloads, then INSTALL. Settings → Updates: auto-check daily / weekly / off and CHECK NOW.
+  Downloads with a progress bar under the top bar (`[VIEW]` / `[×]`), then INSTALL. Settings → Updates: auto-check
+  daily / weekly / off and CHECK NOW.
 
 ### Storage & performance
 - **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);
@@ -111,7 +133,9 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 
 ### Interface
 - Terminal-style UI (JetBrains Mono, bracketed controls, bordered blocks).
-- **Themes:** Dark · AMOLED · **Light**, with six accent colours; dialogs and menus follow the theme.
+- **Themes:** Dark · AMOLED · **Light**, with nine accent colours plus a **custom colour picker** (hue, saturation,
+  brightness or a hex code); dialogs and menus follow the theme.
+- **Mini player seek:** touch or drag the bar; a bubble shows the exact time, and it lands on that second.
 - **First-run setup** (new installs): theme → music folder → default source (Online / Local).
 - **App icon:** round logo (terminal prompt and spectrum bars) that fits round, squircle and square icon shapes, with a themed (monochrome) variant on Android 13+.
 
@@ -131,10 +155,12 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 | Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
 | Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
+| Mini player | Touch / drag the seek bar | Seek, with the exact time shown while held |
 | Now Playing | **Drag down** on the artwork | Close the player |
-| Queue | **Hold** an upcoming song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
-| ♥ Favorites / your playlists | Drag a song's ≡ handle | Reorder |
+| Queue · ♥ Favorites · your playlists | Drag a song's ≡ handle, or **hold its cover** and drag | Reorder |
 | Previous button | Tap (more than 3 s in) · tap again | Restart the song · play the one before |
+| Next button | Tap after going back | Return to the song you went back from |
+| Now Playing | Tap the audio output (`[ ᛒ EARBUDS ]`) | Open Android's output switcher |
 | Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
@@ -151,10 +177,10 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - **Home** — source switch, recently played, trending, mini player.
 - **Search** — search the active source; play next / add to playlist / add to queue on each result.
 - **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
-- **Queue** — the playing song, then Up Next to reorder, remove, shuffle or clear; tap to jump. Also opens from the
-  mini player's ≡ and `[ QUEUE ]` in Now Playing.
-- **Playlists** — Favorites, Most Played, app playlists, local M3U playlists; drag ≡ to reorder Favorites and your
-  playlists.
+- **Queue** — the playing song, then Up Next to reorder, remove, shuffle or clear; tap to jump. Also opens from
+  `[ QUEUE ]` in Now Playing.
+- **Playlists** — Favorites and Most Played pinned, your playlists, local M3U playlists; grid / list / details views;
+  drag ≡ (or hold a cover) to reorder Favorites and your playlists.
 - **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange & backup, about.
 
 ---
@@ -209,15 +235,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.3.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.4.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.3.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.4.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.3.0` → versionCode `20300`); local builds default to 2.3.0.
+left untouched. The version comes from the tag (`2.4.0` → versionCode `20400`); local builds default to 2.4.0.
 
 ---
 

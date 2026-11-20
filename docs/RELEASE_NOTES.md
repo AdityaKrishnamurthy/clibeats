@@ -1,38 +1,57 @@
-# CLIBeats v2.3.0 — Release Notes
+# CLIBeats v2.4.0 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.3.0.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.4.0.apk` (verify with `SHA256SUMS.txt`)
+
+## Playlists
+
+- **New views:** small grid, large grid, list and details. Switch with the buttons at the top; your choice is
+  remembered.
+- **Clear sections:** ♥ Favorites and Most Played are pinned at the top, then your playlists (with `[ + NEW ]`),
+  then local M3U/PLS playlists in their own section.
+- **Reordering rebuilt** for the queue, ♥ Favorites and your own playlists: drag the ≡ handle, or hold a song's cover
+  and drag. It scrolls at the edges, the other songs move out of the way smoothly, and the new order is saved when you
+  let go.
+
+## Playback
+
+- **Next goes back where you came from:** after pressing Previous, Next returns to the song you went back from (and
+  the ones before it, in order), at any point in the song. The same in the app, notification, lock screen and
+  headphones.
+- **Shuffle really shuffles the queue:** the playing song moves to the top and the rest is mixed, so the Queue
+  screen, Next and Previous all match what you see. Turning it off restores the original order.
+- **Precise seeking in the mini player:** touch or drag the bar; a bubble shows the exact time and it lands on that
+  second.
 
 ## Now Playing
 
-- **Previous** works like other players: more than 3 seconds into a song it restarts it, and pressing again
-  plays the song before. Also from the notification, lock screen and headphones.
-- The quality line (`[LOCAL] FLAC · …`) is always readable: on covers whose colour matches the background it
-  switches to a lighter shade or a light amber, never red.
-- `[ QUEUE (n) ]` opens the queue right from Now Playing.
+- **Audio output:** see where the music is playing — phone speaker, wired headphones or your Bluetooth device by name
+  — updated as you connect, disconnect or switch. Tap it to open Android's output switcher.
+- The classic waveform is back (the live loudness waveform from v2.3.0 has been removed).
 
-## Navigation
+## Home & Search
 
-- Boxes have their title in the border, with no extra header line; Home no longer has the Quick Navigation box.
-- The queue also opens from the mini player (≡) and `[ QUEUE (n) ]` in Now Playing; it shows the playing song,
-  then Up Next with shuffle and clear.
+- **Trending for your country:** Home shows YouTube Music's own chart for the country your SIM / mobile network is in,
+  e.g. *Daily Top Music Videos – India*.
+- Trending loads once each time you open the app and no longer reloads when you switch tabs; `[ ↻ REFRESH ]` next to
+  the title reloads it. If the connection isn't ready when the app opens, it waits and retries instead of showing
+  an error.
+- **Recent searches** now include songs you queued, favourited or added to a playlist from search, not only ones you
+  played.
+- The bottom bar has its six tabs again, and the mini player no longer has a queue button.
 
-## Library & playlists
+## Settings
 
-- **Reorder ♥ Favorites** and your own playlists by dragging the ≡ handle.
-- **Recent searches** only list songs you played from search, not ones you queued.
-- Local folders: **FLAC, MP3, WAV, M4A (AAC/ALAC), OGG, Opus and AAC** are checked with real sample files;
-  AIFF files (which can't be played) are no longer listed.
+- **New accent colours:** Green, Lime, Amber, Orange, Magenta, Lavender, Cyan, Teal and White, plus a **custom colour
+  picker** (hue, saturation and brightness sliders, or type a hex code). If you used a colour that was removed, you
+  keep it as your custom colour.
+- Every box spans the full width with an accent outline.
+- **Update downloads** show a progress bar under the top bar (`[VIEW]` / `[×]`), so you can keep using the app while
+  it downloads. Update checks stay once a day (or weekly / off).
 
-## Backup & safety
+## Under the hood
 
-- **Automatic daily backup** of playlists, Favorites, saved albums/artists and settings, also saved to
-  `Download/CLIBeats` (Android 10+) so it survives an uninstall. Setup offers to restore it; Settings →
-  **SHARE BACKUP** sends a copy anywhere. Android's own backup now brings the library back on a new phone.
-- A failed or unreadable music folder no longer deletes songs from the library.
-- Updates are only installed when they are signed with the same key as the installed app.
-- Faster start (no blocking reads at launch), steadier playback queue, and the sleep timer keeps running when
-  the app is closed.
+- Uses less battery: Wi-Fi is only kept awake while streaming, not while playing your own files.
+- YouTube streams play the best audio available without an account (Opus, about 160 kbps).
+- README: new screenshots, a star history chart and a daily-updated downloads chart.
 
-## Updates
-
-Installed v2.1.0 or later? This update appears in the app (Settings → Updates).
+Thanks to **Omprakash Panda** for the audio output switcher and update progress bar ideas (#8).
