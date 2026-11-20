@@ -9,6 +9,8 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
+import com.clibeats.playback.waveform.Waveform
+import com.clibeats.playback.waveform.WaveformRepository
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -43,8 +45,12 @@ class PlayerViewModel
         private val playbackRepository: PlaybackRepository,
         private val playlistRepository: PlaylistRepository? = null,
         private val libraryRepository: LibraryRepository? = null,
+        waveformRepository: WaveformRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+
+        /** Real loudness of the playing song for the seek waveform (NaN bars aren't measured yet). */
+        val waveform: StateFlow<Waveform?> = waveformRepository?.current ?: MutableStateFlow(null)
         val queue: StateFlow<List<Track>> = playbackRepository.queueState
 
         /** Whether the current track is in Favorites (liked songs). */

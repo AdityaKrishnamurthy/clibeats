@@ -16,10 +16,14 @@ import coil.request.SuccessResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** Colours taken from the album art: [accent] for controls, [tint] for the background. */
+/**
+ * Colours taken from the album art: [accent] for controls, [tint] for the background, and [coverColors]
+ * (the main colours of the cover itself, which shows blurred behind the screen) to keep text readable.
+ */
 data class ArtworkColors(
     val accent: Color,
     val tint: Color,
+    val coverColors: List<Color> = emptyList(),
 )
 
 /**
@@ -72,7 +76,12 @@ private fun colorsFrom(
     // Bright enough to read on a dark screen, dark enough on a light one.
     hsv[1] = hsv[1].coerceAtLeast(ACCENT_MIN_SATURATION)
     hsv[2] = if (lightTheme) hsv[2].coerceIn(LIGHT_MIN_VALUE, LIGHT_MAX_VALUE) else hsv[2].coerceAtLeast(DARK_MIN_VALUE)
-    return ArtworkColors(accent = Color(android.graphics.Color.HSVToColor(hsv)), tint = Color(deep.rgb))
+    val cover = listOfNotNull(palette.dominantSwatch, vivid, palette.lightVibrantSwatch, palette.mutedSwatch)
+    return ArtworkColors(
+        accent = Color(android.graphics.Color.HSVToColor(hsv)),
+        tint = Color(deep.rgb),
+        coverColors = cover.map { Color(it.rgb) }.distinct(),
+    )
 }
 
 private const val PALETTE_SOURCE_PX = 128
