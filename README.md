@@ -8,7 +8,7 @@
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
 [![Version](https://img.shields.io/badge/version-2.3.0-1DB954)](#)
-[![Downloads](https://img.shields.io/github/downloads/Omprakash-p06/clibeats/total?label=downloads&color=1DB954)](https://github.com/Omprakash-p06/clibeats/releases)
+[![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
@@ -32,6 +32,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [Star History](#star-history)
+- [Downloads](#downloads)
 - [Developers](#developers)
 - [License](#license)
 
@@ -274,6 +275,17 @@ responsible for complying with providers' terms of service and copyright law in 
     <img alt="Star history chart for CLIBeats" src="https://api.star-history.com/svg?repos=Omprakash-p06/clibeats&type=Date" />
   </picture>
 </a>
+
+---
+
+## Downloads
+
+APK downloads from GitHub Releases, updated daily. These count downloads, not people: installing and
+later updating counts each download, and the checksum file the in-app updater fetches isn't counted.
+
+<img alt="CLIBeats APK downloads per release" src="https://raw.githubusercontent.com/Omprakash-p06/clibeats/stats/downloads-per-release.svg" />
+
+<img alt="CLIBeats APK downloads over time" src="https://raw.githubusercontent.com/Omprakash-p06/clibeats/stats/downloads-history.svg" />
 
 ---
 
