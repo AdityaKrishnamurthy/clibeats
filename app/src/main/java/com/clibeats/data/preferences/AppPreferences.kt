@@ -33,6 +33,7 @@ class AppPreferences
             val SAVED_SHUFFLE_ENABLED = booleanPreferencesKey("saved_shuffle_enabled")
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
+            val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val ARTWORK_CACHE_MB = intPreferencesKey("artwork_cache_mb")
             val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -295,6 +296,13 @@ class AppPreferences
 
         suspend fun setAccentColorName(name: String) {
             dataStore.edit { it[Keys.ACCENT_COLOR_NAME] = name }
+        }
+
+        /** Playlists overview layout (a PlaylistViewMode name); null = default. */
+        val playlistView: Flow<String?> = dataStore.data.map { it[Keys.PLAYLIST_VIEW] }
+
+        suspend fun setPlaylistView(name: String) {
+            dataStore.edit { it[Keys.PLAYLIST_VIEW] = name }
         }
 
         suspend fun saveQueueMetadata(
