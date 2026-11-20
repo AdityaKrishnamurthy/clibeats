@@ -1,31 +1,41 @@
-# CLIBeats v2.2.0 — Release Notes
+# CLIBeats v2.3.0 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.2.0.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.3.0.apk` (verify with `SHA256SUMS.txt`)
 
 ## Now Playing
 
-- **Waveform seek** behind the controls: drag across the bars to scrub while the song keeps playing. Its current
-  position stays marked; drag back near it and the cursor **snaps to "now"** (with a tick), and letting go there
-  doesn't seek. Letting go anywhere else jumps there.
-- **Frosted-glass background** made from the album art, with the cover's colour on the controls.
-- **Previous** always plays the song that played before — local or online, from any queue — also from the
-  notification, lock screen and headphones.
-- Notification artwork no longer goes blank: cached covers show instantly, then the high-res one.
+- **Real waveform:** the seek bars now show each song's actual loudness. Local songs (and fully downloaded
+  ones) are measured in the background in a few seconds; streamed songs fill in as they play and are
+  remembered for next time. Bars that aren't measured yet show a dim placeholder.
+- **Previous** works like other players: more than 3 seconds into a song it restarts it, and pressing again
+  plays the song before. Also from the notification, lock screen and headphones.
+- The quality line (`[LOCAL] FLAC · …`) is always readable: on covers whose colour matches the background it
+  switches to a lighter shade or a light amber, never red.
+- `[ QUEUE (n) ]` opens the queue right from Now Playing.
 
-## Everywhere else
+## Navigation
 
-- **New round logo** that fits every launcher icon shape.
-- **Tab re-taps:** Home and Search switch Online ↔ Local, double-tap Search opens the keyboard, Library switches
-  Online ↔ Offline. Online / Local boxes are equal width.
-- **Queue:** hold any song (or drag its ≡ handle) to reorder.
-- **Search** lists the songs you picked before when the box is empty.
-- **History:** Home, Library and Most Played each clear on their own; Most Played and Favorites get ✕ per song
-  and a confirmed `[ CLEAR ALL ]`; Home shows the last 5.
-- **Playlists:** custom covers (from your phone or a URL).
-- **Settings:** track count always shown, data saver works, credits for both developers.
-- Auto-queue related songs is off by default; setup defaults to Online; "Music & Audio" app category;
-  `[ LOCAL ]` / `[ OFFLINE ]` status on Home.
+- **Four tabs:** Home, Search, Library, Settings. Playlists moved into Library (Tracks / Artists / Albums /
+  Playlists) and the queue opens over any screen (≡ in the top bar, the mini player or Now Playing).
+- Boxes have their title in the border, with no extra header line; Home no longer has the Quick Navigation box.
+
+## Library & playlists
+
+- **Reorder ♥ Favorites** and your own playlists by dragging the ≡ handle.
+- **Recent searches** only list songs you played from search, not ones you queued.
+- Local folders: **FLAC, MP3, WAV, M4A (AAC/ALAC), OGG, Opus and AAC** are checked with real sample files;
+  AIFF files (which can't be played) are no longer listed.
+
+## Backup & safety
+
+- **Automatic daily backup** of playlists, Favorites, saved albums/artists and settings, also saved to
+  `Download/CLIBeats` (Android 10+) so it survives an uninstall. Setup offers to restore it; Settings →
+  **SHARE BACKUP** sends a copy anywhere. Android's own backup now brings the library back on a new phone.
+- A failed or unreadable music folder no longer deletes songs from the library.
+- Updates are only installed when they are signed with the same key as the installed app.
+- Faster start (no blocking reads at launch), steadier playback queue, and the sleep timer keeps running when
+  the app is closed.
 
 ## Updates
 
-Installed v2.1.0? This update appears in the app (Settings → Updates).
+Installed v2.1.0 or later? This update appears in the app (Settings → Updates).

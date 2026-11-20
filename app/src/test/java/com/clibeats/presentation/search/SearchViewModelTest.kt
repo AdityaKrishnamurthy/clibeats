@@ -25,6 +25,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -151,6 +152,15 @@ class SearchViewModelTest {
         viewModel.onAddToQueue(track)
         verify(playbackRepository).addToQueue(track)
     }
+
+    @Test
+    fun `queueing a result does not add it to recent searches`() =
+        runTest {
+            val track = Track("1", "Title", "Artist", "Album", 180000L, null, null, "local")
+            viewModel.onAddToQueue(track)
+            viewModel.onPlayNext(track)
+            verify(appPreferences, never()).addRecentSearchTrack(any())
+        }
 
     @Test
     fun `onPlayNext delegates to playbackRepository`() {

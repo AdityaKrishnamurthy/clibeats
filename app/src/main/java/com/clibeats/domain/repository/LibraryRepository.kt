@@ -17,6 +17,9 @@ interface LibraryRepository {
     /** Likes [track] if it isn't already (never unlikes). */
     suspend fun addToFavorites(track: Track)
 
+    /** Stores a new ♥ Favorites order ([trackIds] top first, as listed). */
+    suspend fun reorderFavorites(trackIds: List<String>)
+
     /** Removes every song from ♥ Favorites. */
     suspend fun clearFavorites()
 

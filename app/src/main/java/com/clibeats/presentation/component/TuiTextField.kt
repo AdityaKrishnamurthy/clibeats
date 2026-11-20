@@ -6,17 +6,14 @@
 
 package com.clibeats.presentation.component
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,22 +26,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.dp
-import com.clibeats.presentation.theme.CliBeatsBackground
-import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /**
  * TUI-styled text field that matches the TuiBlock aesthetic.
  *
- * Renders as:
- * ```
- * ─ [label] ─────────────────────────────────────
- * > [value]█
- * ```
+ * Renders as a [TuiBlock] with the label in its top border and a `> ` prompt inside.
  *
  * Border glows with the current accent colour only when the field has focus.
  *
@@ -73,45 +63,14 @@ fun TuiTextField(
     val accent = LocalAccentColor.current
     var isFocused by remember { mutableStateOf(false) }
 
-    val borderColor: Color = if (isFocused) accent else CliBeatsBorderInactive
-    val labelColor: Color = if (isFocused) accent else MaterialTheme.colorScheme.onSurfaceVariant
-
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .background(CliBeatsSurface)
-            .border(1.dp, borderColor),
+    // Same frame as TuiBlock: the label sits in the top border, so there is no separate header row.
+    TuiBlock(
+        title = label,
+        isActive = isFocused,
+        containerColor = CliBeatsSurface,
+        contentPadding = PaddingValues(0.dp),
+        modifier = modifier.fillMaxWidth(),
     ) {
-        // ── Top Border with Embedded Label ──────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CliBeatsBackground)
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "─ ",
-                style = MaterialTheme.typography.labelSmall,
-                color = borderColor,
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = labelColor,
-            )
-            Text(
-                text = " ",
-                style = MaterialTheme.typography.labelSmall,
-                color = borderColor,
-            )
-            HorizontalDivider(
-                modifier = Modifier.weight(1f),
-                thickness = 1.dp,
-                color = borderColor,
-            )
-        }
-
         // ── Input Row ────────────────────────────────────────────────────────
         BasicTextField(
             value = value,

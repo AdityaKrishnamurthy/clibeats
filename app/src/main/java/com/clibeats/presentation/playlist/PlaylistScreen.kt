@@ -74,6 +74,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.FavoritesViewModel
+import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
@@ -147,6 +148,7 @@ fun PlaylistScreen(
                             onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
+                            onReorder = viewModel::reorderFavorites,
                             onSwipeRight = viewModel::addToQueue,
                             onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
@@ -195,6 +197,12 @@ fun PlaylistScreen(
                                     { track -> viewModel.removeSongFromPlaylist(selected.id, track.id) }
                                 },
                             removeLabel = "Remove from playlist",
+                            onReorder =
+                                if (readOnly) {
+                                    null
+                                } else {
+                                    { reordered -> viewModel.reorderPlaylist(selected.id, reordered) }
+                                },
                             onSwipeRight = viewModel::addToQueue,
                             onSwipeLeft = favorites::add,
                             onLongPress = { addToPlaylistTrack = it },
@@ -487,6 +495,8 @@ private fun PlaylistDetailView(
     headerAction: Pair<String, () -> Unit>? = null,
     coverUrl: String? = null,
     onChangeCoverClick: (() -> Unit)? = null,
+    /** Non-null: rows get a ≡ handle to drag them into a new order (long-press stays "add to playlist"). */
+    onReorder: ((List<Track>) -> Unit)? = null,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
@@ -559,6 +569,34 @@ private fun PlaylistDetailView(
         if (tracks.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Text(text = emptyText, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
+            }
+        } else if (onReorder != null) {
+            ReorderableList(items = tracks, itemId = { it.id }, onReorder = onReorder) { track, index ->
+                SongTableRow(
+                    trackTitle = track.title,
+                    artist = track.artist,
+                    duration = formatDuration(track.durationMs),
+                    index = index + 1,
+                    artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                    onClick = { if (!isAnyDragging) onTrackClick(index) },
+                    onSwipeRight = { onSwipeRight(track) },
+                    onSwipeLeft = { onSwipeLeft(track) },
+                    onLongPress = { onLongPress(track) },
+                    actions = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            dragHandle()
+                            onRemoveClick?.let { remove ->
+                                IconButton(onClick = { remove(track) }, enabled = !isAnyDragging) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Delete,
+                                        contentDescription = "$removeLabel: ${track.title}",
+                                        tint = CliBeatsTextSecondary,
+                                    )
+                                }
+                            }
+                        }
+                    },
+                )
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {

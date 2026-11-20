@@ -1,10 +1,11 @@
 // ForbiddenImport: data-layer self-imports are legitimate; Phase 0 com.clibeats.data.* pattern is over-broad.
-@file:Suppress("ForbiddenImport", "MaxLineLength")
+@file:Suppress("ForbiddenImport", "MaxLineLength", "TooManyFunctions")
 
 package com.clibeats.data.local.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import com.clibeats.data.local.entity.SongEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -30,6 +31,25 @@ interface LikedSongDao {
 
     @Query("SELECT s.* FROM songs s INNER JOIN liked_songs l ON s.id = l.song_id ORDER BY l.liked_at DESC")
     fun getLikedSongsAsFlow(): Flow<List<SongEntity>>
+
+    @Query("SELECT MAX(liked_at) FROM liked_songs")
+    suspend fun latestLikedAt(): Long?
+
+    @Query("UPDATE liked_songs SET liked_at = :likedAt WHERE song_id = :songId")
+    suspend fun setLikedAt(
+        songId: String,
+        likedAt: Long,
+    )
+
+    /**
+     * Favorites are listed newest-liked first, so a new order is stored by giving the songs descending
+     * liked_at values from the current newest one down. Songs liked later still land on top.
+     */
+    @Transaction
+    suspend fun reorder(songIdsTopFirst: List<String>) {
+        val top = latestLikedAt() ?: return
+        songIdsTopFirst.forEachIndexed { index, songId -> setLikedAt(songId, top - index) }
+    }
 
     @Query("SELECT song_id FROM liked_songs")
     fun getLikedSongIdsAsFlow(): Flow<List<String>>

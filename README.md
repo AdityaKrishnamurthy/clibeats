@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.2.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.3.0-1DB954)](#)
 [![Downloads](https://img.shields.io/github/downloads/Omprakash-p06/clibeats/total?label=downloads&color=1DB954)](https://github.com/Omprakash-p06/clibeats/releases)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -50,14 +50,16 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - **Repeat** (off → all → one) and **shuffle**, with a tiny `ONE` / `ALL` / `OFF` label above the button.
 - **Sleep timer** — 15 / 30 / 45 / 60 min or end of track (also with repeat-one).
 - **Auto-queue related songs** (optional, off by default) — tapping a song queues the rest of that list after it.
-- **Previous always goes back** to the song that played before — local or online, from any queue — in the app, notification and lock screen.
+- **Previous** restarts the song when it's more than 3 s in; press again for the song that played before — local or
+  online, from any queue — in the app, notification, lock screen and headphones.
 - **Clear upcoming** keeps the song that's playing.
 - Expired YouTube links are refreshed automatically; one silent retry on stream errors.
 - **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
 
 ### Sources
 - **Online:** YouTube Music, Internet Archive, Jamendo, Audius — pick from the `ONLINE ▾` drop-down.
-- **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A/AAC, OGG/Opus, ALAC, AIFF**.
+- **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A (AAC / ALAC), AAC, OGG Vorbis, Opus** (each checked
+  with a real sample file in the tests; ALAC also needs the phone's decoder). AIFF isn't supported.
 - **Regional results** — YouTube Music uses your device's country and language; trending shows your country's top songs.
 - **Data saver** — turn off *High quality streaming* (Settings → Audio Quality) to stream the lowest-bitrate audio.
 
@@ -73,7 +75,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
-- **Recent searches:** with the search box empty, Search lists the songs you picked from earlier searches.
+- **Recent searches:** with the search box empty, Search lists the songs you played from earlier searches.
+- **Reorder** ♥ Favorites and your own playlists by dragging a song's ≡ handle.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 - **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
   `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
@@ -87,6 +90,10 @@ New screenshots of the other screens are on the way. The current Now Playing scr
   gradient on Android 11 and older), with the cover's vivid colour on the controls, fading between songs.
 - **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
   and dragging back near it snaps onto it (letting go there doesn't seek).
+- **Real loudness waveform:** local (and fully downloaded) songs are decoded in the background and their bars fill in
+  within seconds; streamed songs are measured as they play, and what's been heard is remembered. Unmeasured bars show
+  a dim placeholder.
+- The quality line stays readable on any cover: a lighter shade of the album colour, or light amber (never red).
 - Repeat · previous · play/pause · next · shuffle · sleep timer · queue (`[ QUEUE (n) ]`) · add to playlist · ♥.
 
 ### System integration
@@ -126,6 +133,8 @@ New screenshots of the other screens are on the way. The current Now Playing scr
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
 | Queue | **Hold** an upcoming song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
+| ♥ Favorites / your playlists | Drag a song's ≡ handle | Reorder |
+| Previous button | Tap (more than 3 s in) · tap again | Restart the song · play the one before |
 | Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |

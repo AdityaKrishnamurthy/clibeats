@@ -105,6 +105,7 @@ fun NowPlayingScreen(
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
+    val waveform by viewModel.waveform.collectAsState()
     val track = state.currentTrack
 
     // Match the screen to the album art (Symfonium-style): a deep tint of the cover at the top fading into
@@ -119,10 +120,22 @@ fun NowPlayingScreen(
     )
     val topTint by animateColorAsState(
         targetValue =
-            artColors?.let { lerp(themeBackground, it.tint, if (lightTheme) LIGHT_TINT else DARK_TINT) }
+            artColors?.let { topTintTarget(it, themeBackground, lightTheme) }
                 ?: themeBackground,
         animationSpec = tween(COLOR_FADE_MS),
         label = "tint",
+    )
+
+    // The quality line sits over the blurred cover under the wash (or the tint gradient on Android 11 and
+    // older); pick a colour that stays readable on all of those, not just the raw album colour.
+    val statsTarget =
+        remember(artColors, themeBackground) {
+            artColors?.let { statsColorFor(it, themeBackground, lightTheme) }
+        }
+    val statsColor by animateColorAsState(
+        targetValue = statsTarget ?: LocalAccentColor.current,
+        animationSpec = tween(COLOR_FADE_MS),
+        label = "stats",
     )
 
     // Drag down on the artwork/header to collapse: follows the finger, snaps back if not far/fast enough.
@@ -292,7 +305,7 @@ fun NowPlayingScreen(
                 Text(
                     text = qualityLine(state),
                     style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsAccent,
+                    color = statsColor,
                     textAlign = TextAlign.Center,
                 )
 
@@ -304,6 +317,7 @@ fun NowPlayingScreen(
                     positionMs = state.positionMs,
                     durationMs = state.durationMs,
                     onSeek = viewModel::seekTo,
+                    heights = waveform?.takeIf { it.trackId == track?.id }?.heights,
                 ) {
                     TransportControls(
                         state = state,
@@ -498,6 +512,26 @@ private fun GlassBackground(
         ),
     )
 }
+
+/** Readable colour for the quality line over the blurred cover and its wash (see [GlassBackground]). */
+private fun statsColorFor(
+    colors: ArtworkColors,
+    themeBackground: Color,
+    lightTheme: Boolean,
+): Color {
+    val topTint = topTintTarget(colors, themeBackground, lightTheme)
+    val wash = if (lightTheme) themeBackground else lerp(themeBackground, topTint, WASH_TINT)
+    val washAlpha = (if (lightTheme) LIGHT_WASH else DARK_WASH).second
+    val behind = colors.coverColors.map { lerp(it, wash, washAlpha) } + topTint
+    return readableTextColor(colors.accent, behind, lightTheme)
+}
+
+/** The album tint blended into the theme background, as used at the top of the screen. */
+private fun topTintTarget(
+    colors: ArtworkColors,
+    themeBackground: Color,
+    lightTheme: Boolean,
+): Color = lerp(themeBackground, colors.tint, if (lightTheme) LIGHT_TINT else DARK_TINT)
 
 /** Dark disc behind a control drawn over the waveform. */
 private fun Modifier.controlBackdrop(color: Color): Modifier {
