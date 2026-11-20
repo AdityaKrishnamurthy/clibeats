@@ -248,7 +248,8 @@ class PlaylistExchangeManager
                 ?.let { appPreferences.setArtworkCacheMb(it) }
             prefs.highQualityStreaming?.let { appPreferences.setHighQualityStreaming(it) }
             prefs.autoQueueRelated?.let { appPreferences.setAutoQueueRelated(it) }
-            if (prefs.onboardingDone == true) appPreferences.setOnboardingDone()
+            // prefs.onboardingDone is ignored: a restore from the setup screen would otherwise close
+            // setup before the user picks a music folder and a default source.
         }
 
         /**

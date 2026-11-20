@@ -31,25 +31,30 @@ class OnboardingViewModel
         private val _folderName = MutableStateFlow<String?>(null)
         val folderName: StateFlow<String?> = _folderName.asStateFlow()
 
-        /** True when a previous install left a snapshot the user can bring back. */
+        /** True when Android's backup brought back a snapshot from the previous install. */
         private val _canRestore = MutableStateFlow(snapshotManager?.hasSnapshot() == true)
         val canRestore: StateFlow<Boolean> = _canRestore.asStateFlow()
 
         private val _restoreMessage = MutableStateFlow<String?>(null)
         val restoreMessage: StateFlow<String?> = _restoreMessage.asStateFlow()
 
+        /** Restores the snapshot Android's backup brought back. */
         fun restoreSnapshot() {
-            val manager = snapshotManager ?: return
+            val file = snapshotManager?.latestFile ?: return
+            if (!file.isFile) {
+                _restoreMessage.value = "! No backup found on this device"
+                _canRestore.value = false
+                return
+            }
+            restoreFrom(Uri.fromFile(file))
+        }
+
+        /** Restores a backup file the user picked (e.g. Download/CLIBeats/clibeats-backup.json). */
+        fun restoreFrom(source: Uri) {
             val exchange = playlistExchangeManager ?: return
             viewModelScope.launch {
-                val file = manager.latestFile
-                if (!file.isFile) {
-                    _restoreMessage.value = "! No backup found on this device"
-                    _canRestore.value = false
-                    return@launch
-                }
                 _restoreMessage.value =
-                    exchange.import(Uri.fromFile(file)).fold(
+                    exchange.import(source).fold(
                         onSuccess = { count ->
                             _canRestore.value = false
                             "[ OK ] Restored $count track(s) from backup"

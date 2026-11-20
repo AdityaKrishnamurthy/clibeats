@@ -46,6 +46,9 @@ import com.clibeats.presentation.theme.CliBeatsThemeMode
 
 private const val STEP_COUNT = 3
 
+/** Backup files show up under different types depending on the app that saved or shared them. */
+private val BACKUP_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
+
 /** First-run setup (new installs only): theme → music folder → default source. */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
@@ -68,6 +71,11 @@ fun OnboardingScreen(
                 // Picking a folder doesn't change the default source: Online stays selected in step 3.
                 viewModel.onFolderPicked(uri)
             }
+        }
+    // After a reinstall the Downloads copy belongs to the old install, so it is opened through the picker.
+    val backupPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) viewModel.restoreFrom(uri)
         }
     // Android 13+: ask for notification permission at the end of setup (media controls card).
     val notificationPermission =
@@ -139,6 +147,18 @@ fun OnboardingScreen(
                             )
                             Text(
                                 "A backup from your previous install was found. Restoring brings back " +
+                                    "playlists, favorites and saved albums.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsTextSecondary,
+                            )
+                        } else {
+                            Choice(
+                                label = "[ RESTORE FROM A BACKUP FILE ]",
+                                selected = false,
+                                onClick = { backupPicker.launch(BACKUP_MIME_TYPES) },
+                            )
+                            Text(
+                                "Reinstalling? Pick clibeats-backup.json from Download/CLIBeats to bring back " +
                                     "playlists, favorites and saved albums.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = CliBeatsTextSecondary,

@@ -389,7 +389,9 @@ fun SettingsScreen(
                     Text("SHARE BACKUP")
                 }
                 Text(
-                    text = "A snapshot is saved automatically once a day. Share it to keep an off-device copy.",
+                    text =
+                        "A backup is saved automatically once a day (on Android 10+ also to Download/CLIBeats, " +
+                            "so it survives an uninstall). Share it to keep an off-device copy.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
