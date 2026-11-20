@@ -343,11 +343,18 @@ class LocalMusicScanner
             private const val COL_MODIFIED = 3
             private const val DB_CHUNK = 500
             private val AUDIO_EXTENSIONS =
-                setOf("flac", "mp3", "wav", "m4a", "aac", "ogg", "opus", "alac", "aiff", "aif")
+                setOf("flac", "mp3", "wav", "m4a", "aac", "ogg", "oga", "opus", "alac", "weba", "mka")
+
+            /** ExoPlayer has no AIFF reader: listing these would only add songs that fail to play. */
+            private val UNPLAYABLE_EXTENSIONS = setOf("aiff", "aif", "aifc")
 
             fun isAudio(
                 mime: String,
                 name: String,
-            ): Boolean = mime.startsWith("audio/") || name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS
+            ): Boolean {
+                val extension = name.substringAfterLast('.', "").lowercase()
+                val unplayable = extension in UNPLAYABLE_EXTENSIONS || mime.contains("aiff")
+                return !unplayable && (mime.startsWith("audio/") || extension in AUDIO_EXTENSIONS)
+            }
         }
     }
