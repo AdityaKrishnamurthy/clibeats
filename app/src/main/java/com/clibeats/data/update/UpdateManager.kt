@@ -6,6 +6,8 @@ package com.clibeats.data.update
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
@@ -28,6 +30,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.File
 import java.security.MessageDigest
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
@@ -42,7 +45,7 @@ import javax.inject.Singleton
  *   `SHA256SUMS.txt` before it can be installed.
  * - Installing hands the file to Android's package installer ("Do you want to update this app?").
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 @Singleton
 class UpdateManager
     @Inject
@@ -309,16 +312,82 @@ class UpdateManager
                         digest.digest().joinToString("") { "%02x".format(it) }
                     }
                 }.getOrNull()
-            if (actual != null && actual == expectedSha256) {
+            val signerError = if (actual != null && actual == expectedSha256) verifySigner(id) else null
+            if (actual != null && actual == expectedSha256 && signerError == null) {
                 _state.value = UpdateState.ReadyToInstall(release)
                 // A download started from the pop-up brings it back when it's ready.
                 if (_promptVisible.value || startedFromPrompt) _promptVisible.value = true
             } else {
                 removeDownload(id)
                 _state.value =
-                    UpdateState.Failed(DAMAGED_MESSAGE, release)
+                    UpdateState.Failed(signerError ?: DAMAGED_MESSAGE, release)
             }
             startedFromPrompt = false
+        }
+
+        /**
+         * Android refuses an in-place update signed with a different certificate, which forces the
+         * user to uninstall and lose their library. Compare the downloaded APK's signer with the
+         * installed app's before offering INSTALL. Null means "matches / safe to install".
+         */
+        private fun verifySigner(id: Long): String? =
+            runCatching {
+                val uri = downloadManager?.getUriForDownloadedFile(id) ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                val temp = File(context.cacheDir, SIGNER_CHECK_FILE)
+                try {
+                    val copied =
+                        context.contentResolver.openInputStream(uri)?.use { input ->
+                            temp.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    if (copied == null || temp.length() == 0L) return@runCatching SIGNING_UNKNOWN_MESSAGE
+                    val archive =
+                        context.packageManager.archiveInfo(temp.absolutePath)
+                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                    val installed =
+                        context.packageManager.installedInfo(context.packageName)
+                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                    val archiveSigners = archive.signerDigests()
+                    val installedSigners = installed.signerDigests()
+                    when {
+                        archiveSigners.isEmpty() || installedSigners.isEmpty() -> SIGNING_UNKNOWN_MESSAGE
+                        archiveSigners == installedSigners -> null
+                        else -> SIGNING_MISMATCH_MESSAGE
+                    }
+                } finally {
+                    temp.delete()
+                }
+            }.getOrDefault(SIGNING_UNKNOWN_MESSAGE)
+
+        @Suppress("DEPRECATION")
+        private fun PackageManager.archiveInfo(path: String): PackageInfo? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                getPackageArchiveInfo(path, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                getPackageArchiveInfo(path, PackageManager.GET_SIGNATURES)
+            }
+
+        @Suppress("DEPRECATION")
+        private fun PackageManager.installedInfo(packageName: String): PackageInfo? =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                getPackageInfo(packageName, PackageManager.GET_SIGNING_CERTIFICATES)
+            } else {
+                getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+            }
+
+        @Suppress("DEPRECATION")
+        private fun PackageInfo.signerDigests(): Set<String> {
+            val certificates =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    signingInfo?.apkContentsSigners
+                } else {
+                    signatures
+                }
+            return certificates.orEmpty().mapTo(HashSet()) { signature ->
+                MessageDigest
+                    .getInstance("SHA-256")
+                    .digest(signature.toByteArray())
+                    .joinToString("") { "%02x".format(it) }
+            }
         }
 
         /** Set by the pop-up's Download button so the finished download re-opens it with Install. */
@@ -373,5 +442,11 @@ class UpdateManager
             const val NO_CHECKSUM_MESSAGE = "Couldn't get this release's checksum, so it can't be verified"
             const val DOWNLOAD_FAILED_MESSAGE = "Download failed. Check your connection and retry."
             const val DAMAGED_MESSAGE = "The download was damaged (checksum mismatch) and was deleted. Try again."
+            const val SIGNING_MISMATCH_MESSAGE =
+                "This update uses a different signing key and would require uninstalling. " +
+                    "Back up your library, then install the APK from the release page."
+            const val SIGNING_UNKNOWN_MESSAGE =
+                "Couldn't verify the update's signature, so it was not installed. Try downloading it again."
+            const val SIGNER_CHECK_FILE = "update-signer-check.apk"
         }
     }

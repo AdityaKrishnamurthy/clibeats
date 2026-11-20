@@ -9,6 +9,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderId
 import com.clibeats.domain.provider.ProviderResult
+import java.net.URLEncoder
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -95,6 +96,8 @@ class AudiusMusicProvider
             return copy(streamUrl = streamEndpointUrl(ProviderId.rawSourceId(providerId, id)))
         }
 
-        private fun streamEndpointUrl(rawTrackId: String): String =
-            "${AudiusApi.BASE_URL}tracks/$rawTrackId/stream?app_name=${AudiusApi.DEFAULT_APP_NAME}"
+        private fun streamEndpointUrl(rawTrackId: String): String {
+            val encoded = URLEncoder.encode(rawTrackId, "UTF-8")
+            return "${AudiusApi.BASE_URL}tracks/$encoded/stream?app_name=${AudiusApi.DEFAULT_APP_NAME}"
+        }
     }

@@ -34,8 +34,6 @@ import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
 import com.clibeats.presentation.onboarding.OnboardingScreen
-import com.clibeats.presentation.playlist.PlaylistScreen
-import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
 import com.clibeats.presentation.settings.SettingsScreen
 import com.clibeats.presentation.theme.CliBeatsTheme
@@ -94,21 +92,34 @@ private fun AppContent() {
     val scope = rememberCoroutineScope()
     LaunchedEffect(pagerState.currentPage) { savedPage = pagerState.currentPage }
 
+    // Bumped on every "open Playlists" request, so a repeat request still switches the sub-tab.
+    var openPlaylistsRequest by rememberSaveable { mutableIntStateOf(0) }
+
     val navigate: (NavDestination) -> Unit = { destination ->
-        val target = tabs.indexOf(destination).coerceAtLeast(0)
-        scope.launch {
-            // Neighbours slide; far jumps snap so we don't compose every page in between.
-            if (abs(target - pagerState.currentPage) == 1) {
-                pagerState.animateScrollToPage(target)
-            } else {
-                pagerState.scrollToPage(target)
+        if (destination == NavDestination.Playlists) {
+            openPlaylistsRequest++
+        }
+        val resolved =
+            when (destination) {
+                NavDestination.Playlists -> NavDestination.Library
+                else -> destination
+            }
+        val target = tabs.indexOf(resolved)
+        if (target >= 0) {
+            scope.launch {
+                // Neighbours slide; far jumps snap so we don't compose every page in between.
+                if (abs(target - pagerState.currentPage) == 1) {
+                    pagerState.animateScrollToPage(target)
+                } else {
+                    pagerState.scrollToPage(target)
+                }
             }
         }
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
 
     // Re-tapping the tab you're on: Home / Search = switch Online <-> Local (double-tap Search = search box),
-    // Library = switch Online <-> Offline, Playlists = back to the grid.
+    // Library = switch Online <-> Offline.
     var focusSearch by remember { mutableStateOf(false) }
     var toggleSearchSource by remember { mutableStateOf(false) }
     // Search tab: one tap (when already on Search) switches the source after a short wait, which a second
@@ -117,14 +128,12 @@ private fun AppContent() {
     var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
-    var showPlaylistGrid by remember { mutableStateOf(false) }
     val onTabClick: (NavDestination) -> Unit = { destination ->
-        if (destination == tabs[pagerState.currentPage]) {
+        if (destination == tabs.getOrNull(pagerState.currentPage)) {
             when (destination) {
                 NavDestination.Home -> toggleHomeSource = true
                 NavDestination.Search -> Unit // handled below (single vs double tap)
                 NavDestination.Library -> toggleLibraryMode = true
-                NavDestination.Playlists -> showPlaylistGrid = true
                 else -> Unit
             }
         }
@@ -176,18 +185,14 @@ private fun AppContent() {
                         toggleSourceRequested = toggleSearchSource,
                         onToggleSourceHandled = { toggleSearchSource = false },
                     )
-                NavDestination.Queue -> QueueScreen()
                 NavDestination.Library ->
                     LibraryScreen(
                         toggleModeRequested = toggleLibraryMode,
                         onToggleModeHandled = { toggleLibraryMode = false },
-                    )
-                NavDestination.Playlists ->
-                    PlaylistScreen(
-                        showGridRequested = showPlaylistGrid,
-                        onShowGridHandled = { showPlaylistGrid = false },
+                        openPlaylistsRequest = openPlaylistsRequest,
                     )
                 NavDestination.Settings -> SettingsScreen()
+                else -> Unit
             }
         }
     }

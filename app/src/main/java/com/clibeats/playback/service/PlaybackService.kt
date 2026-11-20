@@ -78,6 +78,9 @@ class PlaybackService : MediaLibraryService() {
         addSession(session)
     }
 
+    // Every controller is accepted on purpose. A package allow-list breaks real controls: Samsung's lock
+    // screen and Edge panel, Galaxy/other watches, car head units, scrobblers, and platform controllers
+    // that Media3 reports under a placeholder package name. Controllers can only play/pause/skip.
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaLibrarySession? = librarySession
 
     /**

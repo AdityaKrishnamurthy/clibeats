@@ -18,9 +18,9 @@ import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
-import com.clibeats.presentation.component.ARTWORK_FULL_PX
-import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.util.ARTWORK_FULL_PX
 import com.clibeats.util.DiagnosticLogger
+import com.clibeats.util.artworkUrlFor
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -92,6 +92,12 @@ class PlaybackRepositoryImpl
         override val pauseAtEndOfTrack: StateFlow<Boolean> = playerAdapter.pauseAtEndOfTrack
 
         override fun setPauseAtEndOfTrack(enabled: Boolean) = playerAdapter.setPauseAtEndOfTrack(enabled)
+
+        override val sleepTimerCountdown: StateFlow<Int?> = playerAdapter.sleepTimerCountdown
+
+        override fun startSleepTimer(minutes: Int) = playerAdapter.startSleepTimer(minutes)
+
+        override fun cancelSleepTimer() = playerAdapter.cancelSleepTimer()
 
         private val restored = CompletableDeferred<Unit>()
 
@@ -246,7 +252,14 @@ class PlaybackRepositoryImpl
         private fun prefetchArtwork(track: Track) {
             val context = appContext ?: return
             val url = artworkUrlFor(track.artworkUrl, ARTWORK_FULL_PX) ?: return
-            runCatching { imageLoader?.get()?.enqueue(ImageRequest.Builder(context).data(url).build()) }
+            runCatching {
+                imageLoader?.get()?.enqueue(
+                    ImageRequest.Builder(context)
+                        .data(url)
+                        .size(ARTWORK_FULL_PX)
+                        .build(),
+                )
+            }
         }
 
         override fun moveTrackInQueue(

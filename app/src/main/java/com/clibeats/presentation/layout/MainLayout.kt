@@ -14,13 +14,20 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -31,9 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,7 +47,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -59,21 +66,23 @@ import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.player.HintTarget
 import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
+import com.clibeats.presentation.queue.QueueScreen
+import com.clibeats.presentation.theme.CliBeatsBackground
+import com.clibeats.presentation.theme.CliBeatsBorder
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.LocalAccentColor
 
 /**
  * Root layout shell for CLIBeats.
  *
  * Contains:
- * - Adaptive navigation (Rail on compact/medium, Drawer on expanded)
  * - TopAppBar (48dp, flat, no elevation)
  * - Content area slot for screen content
- * - Bottom slot for persistent PlayerBar
- *
- * Per UI-SPEC: Active nav item = CliBeatsAccent. No pill/bubble indicator.
+ * - Persistent PlayerBar
+ * - Custom TUI bottom navigation bar with sharp 1.dp borders and terminal styling
  */
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
@@ -84,48 +93,56 @@ fun MainLayout(
     content: @Composable () -> Unit = {},
 ) {
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
+    var showQueue by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showQueue) { showQueue = false }
+    BackHandler(enabled = showNowPlaying && !showQueue) { showNowPlaying = false }
+
+    val handleDestinationSelected: (NavDestination) -> Unit = { destination ->
+        if (destination == NavDestination.Queue) {
+            showQueue = true
+        } else {
+            onDestinationSelected(destination)
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        NavigationSuiteScaffold(
-            navigationSuiteItems = {
-                buildNavItems(
-                    selectedDestination = selectedDestination,
-                    onDestinationSelected = onDestinationSelected,
-                )
-            },
-            navigationSuiteColors = NavigationSuiteDefaults.colors(
-                navigationRailContainerColor = CliBeatsSurface,
-                navigationDrawerContainerColor = CliBeatsSurface,
-                navigationBarContainerColor = CliBeatsSurface,
-            ),
-            containerColor = MaterialTheme.colorScheme.background,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                CliBeatsTopAppBar(
-                    onSearchClick = { onDestinationSelected(NavDestination.Search) },
-                )
+            CliBeatsTopAppBar(
+                onSearchClick = { handleDestinationSelected(NavDestination.Search) },
+                onQueueClick = { showQueue = true },
+            )
 
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = CliBeatsDivider,
-                )
+            HorizontalDivider(
+                thickness = 1.dp,
+                color = CliBeatsDivider,
+            )
 
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.background),
-                ) {
-                    content()
-                }
-
-                // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
-                PlayerBarHost(
-                    playerViewModel,
-                    onExpandClick = { showNowPlaying = true },
-                )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.background),
+            ) {
+                content()
             }
+
+            // ── Persistent Player Bar (own scope: 500ms ticks don't recompose the screen)
+            PlayerBarHost(
+                playerViewModel = playerViewModel,
+                onExpandClick = { showNowPlaying = true },
+                onQueueClick = { showQueue = true },
+            )
+
+            // ── Custom TUI Bottom Navigation Bar
+            TuiBottomBar(
+                destinations = NavDestination.mainTabs,
+                selectedDestination = selectedDestination,
+                onSelect = handleDestinationSelected,
+            )
         }
 
         // ── Full-screen Now Playing overlay (slides up over everything) ──
@@ -138,10 +155,91 @@ fun MainLayout(
                 viewModel = playerViewModel,
                 onClose = { showNowPlaying = false },
                 onOpenQueue = {
-                    showNowPlaying = false
-                    onDestinationSelected(NavDestination.Queue)
+                    showQueue = true
                 },
             )
+        }
+
+        // ── Full-screen Queue overlay (slides up) ──
+        AnimatedVisibility(
+            visible = showQueue,
+            enter = slideInVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+            exit = slideOutVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
+        ) {
+            QueueScreen(
+                onClose = { showQueue = false },
+            )
+        }
+    }
+}
+
+/**
+ * Drop-in TUI bottom bar composable matching TuiBlock frames and sharp 1.dp rectangular aesthetic.
+ */
+@Suppress("FunctionNaming")
+@Composable
+fun TuiBottomBar(
+    destinations: List<NavDestination>,
+    selectedDestination: NavDestination,
+    onSelect: (NavDestination) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = LocalAccentColor.current
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .background(CliBeatsBackground)
+            .navigationBarsPadding(),
+    ) {
+        HorizontalDivider(thickness = 1.dp, color = CliBeatsBorder)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            destinations.forEachIndexed { index, destination ->
+                val isSelected = destination == selectedDestination
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .background(if (isSelected) accent.copy(alpha = 0.12f) else Color.Transparent)
+                        .clickable { onSelect(destination) }
+                        .padding(horizontal = 4.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = destination.icon,
+                            contentDescription = destination.label,
+                            tint = if (isSelected) accent else CliBeatsTextSecondary,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        val labelText =
+                            if (isSelected) {
+                                "[${destination.label.uppercase()}]"
+                            } else {
+                                destination.label.uppercase()
+                            }
+                        Text(
+                            text = labelText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isSelected) accent else CliBeatsTextSecondary,
+                            maxLines = 1,
+                        )
+                    }
+                }
+                if (index < destinations.lastIndex) {
+                    VerticalDivider(
+                        thickness = 1.dp,
+                        color = CliBeatsBorder,
+                        modifier = Modifier.fillMaxHeight(),
+                    )
+                }
+            }
         }
     }
 }
@@ -153,6 +251,7 @@ private const val NOW_PLAYING_ANIM_MS = 250
 private fun PlayerBarHost(
     playerViewModel: PlayerViewModel,
     onExpandClick: () -> Unit,
+    onQueueClick: () -> Unit = {},
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
     val hint by playerViewModel.hint.collectAsState()
@@ -163,7 +262,12 @@ private fun PlayerBarHost(
     val artworkUrl = playbackState.currentTrack?.artworkUrl
     LaunchedEffect(artworkUrl) {
         val hiRes = artworkUrlFor(artworkUrl, ARTWORK_FULL_PX) ?: return@LaunchedEffect
-        context.imageLoader.enqueue(ImageRequest.Builder(context).data(hiRes).build())
+        context.imageLoader.enqueue(
+            ImageRequest.Builder(context)
+                .data(hiRes)
+                .size(ARTWORK_FULL_PX)
+                .build(),
+        )
     }
     // Player-reported duration first: local files may have no duration in metadata.
     val trackDuration = playbackState.durationMs.takeIf { it > 0 } ?: playbackState.currentTrack?.durationMs ?: 0L
@@ -193,6 +297,7 @@ private fun PlayerBarHost(
         onRepeatClick = playerViewModel::onRepeatClick,
         repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
         onExpandClick = onExpandClick,
+        onQueueClick = onQueueClick,
     )
 }
 
@@ -221,35 +326,13 @@ private fun PlayerMessageLine(message: String?) {
     }
 }
 
-private fun NavigationSuiteScope.buildNavItems(
-    selectedDestination: NavDestination,
-    onDestinationSelected: (NavDestination) -> Unit,
-) {
-    NavDestination.mainTabs.forEach { destination ->
-        item(
-            selected = destination == selectedDestination,
-            onClick = { onDestinationSelected(destination) },
-            icon = {
-                // Label below already names the tab; a description here would be read twice.
-                Icon(imageVector = destination.icon, contentDescription = null)
-            },
-            // Six tabs: small single-line labels so "Playlists"/"Settings" fit at 360dp.
-            label = {
-                Text(
-                    text = destination.label,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            },
-        )
-    }
-}
-
 @Suppress("FunctionNaming")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CliBeatsTopAppBar(onSearchClick: () -> Unit = {}) {
+private fun CliBeatsTopAppBar(
+    onSearchClick: () -> Unit = {},
+    onQueueClick: () -> Unit = {},
+) {
     TopAppBar(
         modifier = Modifier.height(48.dp),
         title = {
@@ -268,6 +351,13 @@ private fun CliBeatsTopAppBar(onSearchClick: () -> Unit = {}) {
             }
         },
         actions = {
+            IconButton(onClick = onQueueClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
+                    contentDescription = "Open queue",
+                    tint = CliBeatsTextSecondary,
+                )
+            }
             IconButton(onClick = onSearchClick) {
                 Icon(
                     imageVector = Icons.Outlined.Search,

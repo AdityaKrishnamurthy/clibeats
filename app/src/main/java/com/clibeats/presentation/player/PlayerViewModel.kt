@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -45,6 +45,7 @@ class PlayerViewModel
         private val libraryRepository: LibraryRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+        val queue: StateFlow<List<Track>> = playbackRepository.queueState
 
         /** Whether the current track is in Favorites (liked songs). */
         @Suppress("OPT_IN_USAGE")
@@ -67,9 +68,17 @@ class PlayerViewModel
                 .map { all -> all.filterNot { it.isLocalFilePlaylist() } }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
-        private val _sleepTimer = MutableStateFlow<SleepTimer>(SleepTimer.Off)
-        val sleepTimer: StateFlow<SleepTimer> = _sleepTimer.asStateFlow()
-        private var sleepJob: Job? = null
+        val sleepTimer: StateFlow<SleepTimer> =
+            combine(
+                playbackRepository.sleepTimerCountdown,
+                playbackRepository.pauseAtEndOfTrack,
+            ) { countdown, endOfTrack ->
+                when {
+                    countdown != null -> SleepTimer.Countdown(countdown)
+                    endOfTrack -> SleepTimer.EndOfTrack
+                    else -> SleepTimer.Off
+                }
+            }.stateIn(viewModelScope, SharingStarted.Eagerly, SleepTimer.Off)
 
         /** Short-lived player message (e.g. a song that couldn't be played), shown above the player bar. */
         @Suppress("OPT_IN_USAGE")
@@ -161,31 +170,18 @@ class PlayerViewModel
 
         /** [minutes] > 0 starts a countdown; 0 turns it off; null = pause at end of current track. */
         fun setSleepTimer(minutes: Int?) {
-            sleepJob?.cancel()
-            sleepJob = null
-            if (_sleepTimer.value == SleepTimer.EndOfTrack) playbackRepository.setPauseAtEndOfTrack(false)
             when {
                 minutes == null -> {
-                    _sleepTimer.value = SleepTimer.EndOfTrack
-                    // The player itself pauses when the song ends (also with repeat-one on).
+                    playbackRepository.cancelSleepTimer()
                     playbackRepository.setPauseAtEndOfTrack(true)
-                    sleepJob =
-                        viewModelScope.launch {
-                            playbackRepository.pauseAtEndOfTrack.first { armed -> !armed }
-                            _sleepTimer.value = SleepTimer.Off
-                        }
                 }
-                minutes <= 0 -> _sleepTimer.value = SleepTimer.Off
-                else ->
-                    sleepJob =
-                        viewModelScope.launch {
-                            for (left in minutes downTo 1) {
-                                _sleepTimer.value = SleepTimer.Countdown(left)
-                                delay(MINUTE_MS)
-                            }
-                            playbackRepository.pause()
-                            _sleepTimer.value = SleepTimer.Off
-                        }
+                minutes <= 0 -> {
+                    playbackRepository.cancelSleepTimer()
+                    playbackRepository.setPauseAtEndOfTrack(false)
+                }
+                else -> {
+                    playbackRepository.startSleepTimer(minutes)
+                }
             }
         }
 

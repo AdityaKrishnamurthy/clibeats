@@ -16,13 +16,14 @@ import androidx.media3.datasource.cache.SimpleCache
 import coil.ImageLoader
 import com.clibeats.data.preferences.AppPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.TreeSet
@@ -48,15 +49,31 @@ class MediaCaches
         private val imageLoader: dagger.Lazy<ImageLoader>,
         private val artworkDiskCache: dagger.Lazy<ResizableDiskCache>,
     ) {
-        // Read once at startup; later changes go through setSongLimitMb.
         private val evictor =
-            AdjustableLruEvictor(runBlocking { appPreferences.cacheMaxMb.first() }.toLong() * BYTES_IN_MB)
+            AdjustableLruEvictor(DEFAULT_SONG_CACHE_MB * BYTES_IN_MB)
 
         val songCache: SimpleCache =
             SimpleCache(File(context.cacheDir, "song_cache"), evictor, StandaloneDatabaseProvider(context))
 
         private val _usage = MutableStateFlow(CacheUsage())
         val usage: StateFlow<CacheUsage> = _usage.asStateFlow()
+
+        private val cacheScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        init {
+            cacheScope.launch {
+                launch {
+                    appPreferences.cacheMaxMb.collect { mb ->
+                        setSongLimitMb(mb)
+                    }
+                }
+                launch {
+                    appPreferences.artworkCacheMb.collect { mb ->
+                        setArtworkLimitMb(mb)
+                    }
+                }
+            }
+        }
 
         /** Stores a stream's bitrate with its cached audio, so it's known on cached replays too. */
         fun rememberBitrate(
@@ -123,6 +140,7 @@ class MediaCaches
 
         companion object {
             const val BYTES_IN_MB = 1_048_576L
+            private const val DEFAULT_SONG_CACHE_MB = 512L
             private const val KEY_KBPS = "clibeats_kbps"
             private const val BITS_PER_BYTE = 8
             private const val TRIM_SETTLE_MS = 500L

@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught")
+@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught", "LongParameterList")
 
 package com.clibeats.data.playlist
 
@@ -6,9 +6,13 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.clibeats.data.local.CliBeatsDatabase
+import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.domain.model.Album
+import com.clibeats.domain.model.Artist
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.ProviderId
+import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import com.clibeats.domain.repository.SongRepository
@@ -16,6 +20,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,8 +39,10 @@ class PlaylistExchangeManager
         @ApplicationContext private val context: Context,
         private val playlistRepository: PlaylistRepository,
         private val songRepository: SongRepository,
-        private val database: CliBeatsDatabase? = null,
-        private val libraryRepository: LibraryRepository? = null,
+        private val providerRegistry: ProviderRegistry,
+        private val database: CliBeatsDatabase,
+        private val libraryRepository: LibraryRepository,
+        private val appPreferences: AppPreferences,
     ) {
         /**
          * Writes the app's own playlists plus ♥ Favorites to [target]; returns the number exported.
@@ -43,80 +50,134 @@ class PlaylistExchangeManager
          */
         suspend fun export(target: Uri): Result<Int> =
             runCatching {
-                val appPlaylists =
-                    playlistRepository.getAllPlaylistsAsFlow().first().filterNot { it.id.startsWith(LOCAL_FILE_PREFIX) }
-                val named =
-                    appPlaylists.map { it.name to playlistRepository.getSongsForPlaylistAsFlow(it.id).first() } +
-                        listOfNotNull(
-                            libraryRepository?.getLikedSongs()?.first()?.takeIf { it.isNotEmpty() }?.let {
-                                FAVORITES_NAME to it
-                            },
-                        )
-                val file =
-                    CliBeatsFile(
-                        playlists =
-                            named.map { (name, songs) ->
-                                CliBeatsPlaylist(
-                                    name = name,
-                                    tracks =
-                                        songs.map { song ->
-                                            val safeSourceUrl =
-                                                song.streamUrl?.takeIf {
-                                                    song.providerId == "local" || !it.contains("expire")
-                                                }
-                                            CliBeatsTrack(
-                                                providerId = song.providerId,
-                                                sourceId = ProviderId.rawSourceId(song.providerId, song.id),
-                                                title = song.title,
-                                                artist = song.artist,
-                                                album = song.album,
-                                                durationMs = song.durationMs,
-                                                artworkUrl = song.artworkUrl,
-                                                sourceUrl = safeSourceUrl,
-                                            )
-                                        },
-                                )
-                            },
-                    )
+                val file = buildFile()
                 withContext(Dispatchers.IO) {
                     val out =
                         context.contentResolver.openOutputStream(target, "wt") ?: error("Cannot open file for writing")
                     out.bufferedWriter().use { it.write(CliBeatsFileCodec.encode(file)) }
                 }
-                named.size
+                file.playlists.size
             }
+
+        /** Same payload as [export], written straight to an app-private file (auto snapshots). */
+        suspend fun exportToFile(target: File): Result<Int> =
+            runCatching {
+                val file = buildFile()
+                withContext(Dispatchers.IO) {
+                    target.parentFile?.mkdirs()
+                    target.writeText(CliBeatsFileCodec.encode(file))
+                }
+                file.playlists.size
+            }
+
+        /** Builds the complete portable library: playlists, favorites, albums, artists and safe prefs. */
+        suspend fun buildFile(): CliBeatsFile {
+            val appPlaylists =
+                playlistRepository.getAllPlaylistsAsFlow().first().filterNot { it.id.startsWith(LOCAL_FILE_PREFIX) }
+            val named =
+                appPlaylists.map { it.name to playlistRepository.getSongsForPlaylistAsFlow(it.id).first() } +
+                    listOfNotNull(
+                        libraryRepository.getLikedSongs().first().takeIf { it.isNotEmpty() }?.let {
+                            FAVORITES_NAME to it
+                        },
+                    )
+            return CliBeatsFile(
+                playlists =
+                    named.map { (name, songs) ->
+                        CliBeatsPlaylist(
+                            name = name,
+                            tracks =
+                                songs.map { song ->
+                                    val safeSourceUrl =
+                                        song.streamUrl?.takeIf {
+                                            song.providerId == "local" || !it.contains("expire")
+                                        }
+                                    CliBeatsTrack(
+                                        providerId = song.providerId,
+                                        sourceId = ProviderId.rawSourceId(song.providerId, song.id),
+                                        title = song.title,
+                                        artist = song.artist,
+                                        album = song.album,
+                                        durationMs = song.durationMs,
+                                        artworkUrl = song.artworkUrl,
+                                        sourceUrl = safeSourceUrl,
+                                    )
+                                },
+                        )
+                    },
+                prefs = currentPrefs(),
+                albums =
+                    libraryRepository.getSavedAlbums().first().map { album ->
+                        CliBeatsAlbum(
+                            id = album.id,
+                            title = album.title,
+                            artist = album.artist,
+                            year = album.year,
+                            artworkUrl = album.artworkUrl,
+                            trackCount = album.trackCount,
+                            providerId = album.providerId,
+                        )
+                    },
+                artists =
+                    libraryRepository.getSavedArtists().first().map { artist ->
+                        CliBeatsArtist(
+                            id = artist.id,
+                            name = artist.name,
+                            artworkUrl = artist.artworkUrl,
+                            providerId = artist.providerId,
+                        )
+                    },
+            )
+        }
+
+        /** Non-secret settings only: never tokens, history or search queries. */
+        private suspend fun currentPrefs(): CliBeatsPrefs =
+            CliBeatsPrefs(
+                themeMode = appPreferences.themeMode.first(),
+                accentColorName = appPreferences.accentColorName.first(),
+                activeProviderId = appPreferences.activeProviderId.first(),
+                cacheMaxMb = appPreferences.cacheMaxMb.first(),
+                artworkCacheMb = appPreferences.artworkCacheMb.first(),
+                highQualityStreaming = appPreferences.highQualityStreaming.first(),
+                autoQueueRelated = appPreferences.autoQueueRelated.first(),
+                onboardingDone = appPreferences.onboardingDone.first(),
+            )
 
         /** Reads playlists from [source]; returns the number of tracks imported. */
         suspend fun import(source: Uri): Result<Int> =
             runCatching {
-                val text =
-                    withContext(Dispatchers.IO) {
-                        val input = context.contentResolver.openInputStream(source) ?: error("Cannot open file")
-                        input.bufferedReader().use { it.readText() }
-                    }
-                val cliBeatsFile = CliBeatsFileCodec.decode(text)
+                val cliBeatsFile = readFile(source)
                 var importedTracks = 0
                 val write: suspend () -> Unit = {
                     cliBeatsFile.playlists.forEach { playlistData ->
-                        if (playlistData.name.isBlank()) return@forEach
+                        if (playlistData.name.isBlank() || playlistData.name.length > MAX_NAME_LENGTH) return@forEach
                         // Stable per name (re-import merges) and collision-free, unlike String.hashCode().
                         val playlistId = "imported_" + UUID.nameUUIDFromBytes(playlistData.name.toByteArray())
                         val tracks =
-                            playlistData.tracks.map { trackData ->
-                                Track(
-                                    id = ProviderId.composite(trackData.providerId, trackData.sourceId),
-                                    title = trackData.title,
-                                    artist = trackData.artist,
-                                    album = trackData.album,
-                                    durationMs = trackData.durationMs,
-                                    artworkUrl = trackData.artworkUrl,
-                                    streamUrl = safeStreamUrl(trackData.providerId, trackData.sourceUrl),
-                                    providerId = trackData.providerId,
-                                )
-                            }.distinctBy { it.id }
+                            playlistData.tracks
+                                .take(MAX_TRACKS_PER_PLAYLIST)
+                                .mapNotNull { trackData ->
+                                    if (providerRegistry.getProvider(trackData.providerId) == null) {
+                                        return@mapNotNull null
+                                    }
+                                    val sourceId =
+                                        trackData.sourceId
+                                            .takeIf { it.isNotBlank() && it.length <= MAX_SOURCE_ID_LENGTH }
+                                            ?: return@mapNotNull null
+                                    Track(
+                                        id = ProviderId.composite(trackData.providerId, sourceId),
+                                        title = trackData.title.take(MAX_TITLE_LENGTH),
+                                        artist = trackData.artist.take(MAX_TITLE_LENGTH),
+                                        album = trackData.album.take(MAX_TITLE_LENGTH),
+                                        durationMs = trackData.durationMs.coerceAtLeast(0L),
+                                        artworkUrl = safeArtworkUrl(trackData.artworkUrl),
+                                        streamUrl = safeStreamUrl(trackData.providerId, trackData.sourceUrl),
+                                        providerId = trackData.providerId,
+                                    )
+                                }.distinctBy { it.id }
                         songRepository.upsertTracks(tracks)
                         importedTracks += tracks.size
-                        if (playlistData.name == FAVORITES_NAME && libraryRepository != null) {
+                        if (playlistData.name == FAVORITES_NAME) {
                             tracks.forEach { libraryRepository.addToFavorites(it) }
                             return@forEach
                         }
@@ -136,14 +197,107 @@ class PlaylistExchangeManager
                     }
                 }
                 // All-or-nothing: a malformed entry must not leave half-imported playlists.
-                if (database != null) database.withTransaction { write() } else write()
+                database.withTransaction { write() }
+                restoreExtras(cliBeatsFile)
                 importedTracks
             }
 
+        /** Applies the settings and saved albums/artists a v2 snapshot carries. */
+        private suspend fun restoreExtras(file: CliBeatsFile) {
+            file.prefs?.let { applyPrefs(it) }
+            file.albums.forEach { album ->
+                if (!libraryRepository.isAlbumSaved(album.id).first()) {
+                    libraryRepository.toggleSaveAlbum(
+                        Album(
+                            id = album.id,
+                            title = album.title,
+                            artist = album.artist,
+                            year = album.year,
+                            artworkUrl = safeArtworkUrl(album.artworkUrl),
+                            trackCount = album.trackCount.coerceAtLeast(0),
+                            providerId = album.providerId,
+                        ),
+                    )
+                }
+            }
+            file.artists.forEach { artist ->
+                if (!libraryRepository.isArtistSaved(artist.id).first()) {
+                    libraryRepository.toggleSaveArtist(
+                        Artist(
+                            id = artist.id,
+                            name = artist.name,
+                            artworkUrl = safeArtworkUrl(artist.artworkUrl),
+                            providerId = artist.providerId,
+                        ),
+                    )
+                }
+            }
+        }
+
+        private suspend fun applyPrefs(prefs: CliBeatsPrefs) {
+            prefs.themeMode?.let { appPreferences.setThemeMode(it) }
+            prefs.accentColorName?.let { appPreferences.setAccentColorName(it) }
+            prefs.activeProviderId
+                ?.takeIf { providerRegistry.getProvider(it) != null }
+                ?.let { appPreferences.setActiveProviderId(it) }
+            prefs.cacheMaxMb
+                ?.takeIf { it in MIN_CACHE_MB..MAX_CACHE_MB }
+                ?.let { appPreferences.setCacheMaxMb(it) }
+            prefs.artworkCacheMb
+                ?.takeIf { it in MIN_ARTWORK_MB..MAX_ARTWORK_MB }
+                ?.let { appPreferences.setArtworkCacheMb(it) }
+            prefs.highQualityStreaming?.let { appPreferences.setHighQualityStreaming(it) }
+            prefs.autoQueueRelated?.let { appPreferences.setAutoQueueRelated(it) }
+            // prefs.onboardingDone is ignored: a restore from the setup screen would otherwise close
+            // setup before the user picks a music folder and a default source.
+        }
+
+        /**
+         * Reads and validates an exchange file: bounded size, playlist/track counts, known providers,
+         * and only http(s)/content artwork. Anything invalid is skipped rather than trusted.
+         */
+        private suspend fun readFile(source: Uri): CliBeatsFile {
+            val text =
+                withContext(Dispatchers.IO) {
+                    val input = context.contentResolver.openInputStream(source) ?: error("Cannot open file")
+                    input.bufferedReader().use { reader ->
+                        val out = StringBuilder()
+                        val buffer = CharArray(READ_BUFFER_CHARS)
+                        while (true) {
+                            val read = reader.read(buffer)
+                            if (read < 0) break
+                            out.append(buffer, 0, read)
+                            require(out.length <= MAX_FILE_CHARS) { "File is too large (max 2 MB)" }
+                        }
+                        out.toString()
+                    }
+                }
+            val file = CliBeatsFileCodec.decode(text)
+            require(file.version <= CliBeatsFile.CURRENT_VERSION) {
+                "This backup was made by a newer CLIBeats version"
+            }
+            require(file.playlists.size <= MAX_PLAYLISTS) { "Too many playlists (max $MAX_PLAYLISTS)" }
+            require(file.playlists.sumOf { it.tracks.size } <= MAX_TOTAL_TRACKS) { "Too many tracks" }
+            return file
+        }
+
         companion object {
             const val FILE_NAME = "clibeats.json"
+            const val BACKUP_FILE_NAME = "clibeats-backup.json"
             const val FAVORITES_NAME = "♥ Favorites"
             private const val LOCAL_FILE_PREFIX = "localpl:"
+            private const val MAX_FILE_CHARS = 2 * 1024 * 1024
+            private const val READ_BUFFER_CHARS = 8 * 1024
+            private const val MAX_PLAYLISTS = 200
+            private const val MAX_TOTAL_TRACKS = 20_000
+            private const val MAX_TRACKS_PER_PLAYLIST = 5_000
+            private const val MAX_NAME_LENGTH = 200
+            private const val MAX_TITLE_LENGTH = 500
+            private const val MAX_SOURCE_ID_LENGTH = 512
+            private const val MIN_CACHE_MB = 64
+            private const val MAX_CACHE_MB = 4096
+            private const val MIN_ARTWORK_MB = 32
+            private const val MAX_ARTWORK_MB = 1024
 
             /**
              * Online URLs expire and must be re-resolved; only SAF content:// URIs are kept for
@@ -153,5 +307,12 @@ class PlaylistExchangeManager
                 providerId: String,
                 url: String?,
             ): String? = url?.takeIf { providerId == "local" && it.startsWith("content://") }
+
+            /** Remote artwork must be http(s) or a SAF content URI; data:/javascript:/file: are dropped. */
+            fun safeArtworkUrl(url: String?): String? {
+                val value = url?.trim()?.takeIf { it.isNotEmpty() && it.length <= MAX_SOURCE_ID_LENGTH } ?: return null
+                val scheme = runCatching { java.net.URI(value).scheme?.lowercase() }.getOrNull()
+                return value.takeIf { scheme == "http" || scheme == "https" || scheme == "content" }
+            }
         }
     }

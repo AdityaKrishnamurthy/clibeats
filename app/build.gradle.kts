@@ -21,16 +21,19 @@ android {
         minSdk = 26
         targetSdk = 34
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20200").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.2.0").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20300").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.3.0").get()
 
         // Optional free Jamendo API key (developer.jamendo.com). Empty by default.
         val jamendoClientId = providers.gradleProperty("JAMENDO_CLIENT_ID").orElse("").get()
         buildConfigField("String", "JAMENDO_CLIENT_ID", "\"${jamendoClientId.replace("\"", "\\\"")}\"")
     }
 
-    // Release signing from env (set by .github/workflows/release.yml). Falls back to the
-    // debug key locally so `assembleRelease` still works without secrets.
+    // Release signing from env (set by .github/workflows/release.yml). A release APK signed with
+    // the debug key cannot update an installed release in place (Android rejects the different
+    // certificate), so missing secrets are a hard error. Local test builds can opt out explicitly
+    // with -PallowDebugSigning=true; that APK must never be published.
+    val allowDebugSigning = providers.gradleProperty("allowDebugSigning").orNull?.toBoolean() == true
     val releaseKeystore = System.getenv("KEYSTORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
     signingConfigs {
         if (releaseKeystore != null) {
@@ -50,7 +53,25 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
-            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            signingConfig =
+                signingConfigs.findByName("release")
+                    ?: if (allowDebugSigning) signingConfigs.getByName("debug") else null
+        }
+    }
+
+    // Fail only when a release artifact is actually built, so debug/test tasks still work on a
+    // machine without the release keystore.
+    tasks.matching {
+        it.name == "assembleRelease" || it.name == "bundleRelease" || it.name == "packageRelease"
+    }.configureEach {
+        doFirst {
+            if (signingConfigs.findByName("release") == null && !allowDebugSigning) {
+                throw GradleException(
+                    "Release builds require KEYSTORE_FILE/KEYSTORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD " +
+                        "so the APK can update existing installs. For a throwaway local build, pass " +
+                        "-PallowDebugSigning=true (never publish that APK).",
+                )
+            }
         }
     }
 
@@ -115,7 +136,6 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.datastore.preferences)
-    implementation(libs.security.crypto)
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.common)
@@ -128,9 +148,11 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.palette.ktx)
     implementation(libs.newpipe.extractor)
+    implementation(libs.google.guava)
     detektPlugins(libs.detekt.formatting)
     debugImplementation(libs.compose.ui.tooling)
     testImplementation(libs.junit)
+    testImplementation(libs.google.truth)
     testImplementation(libs.room.testing)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.mockito.kotlin)

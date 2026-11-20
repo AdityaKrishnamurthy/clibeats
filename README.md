@@ -8,6 +8,7 @@
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
 [![Version](https://img.shields.io/badge/version-2.2.0-1DB954)](#)
+[![Downloads](https://img.shields.io/github/downloads/Omprakash-p06/clibeats/total?label=downloads&color=1DB954)](https://github.com/Omprakash-p06/clibeats/releases)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-UI-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/compose)
@@ -37,25 +38,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ## Screenshots
 
-<div align="center">
-
-**Home & Search**
-
-<img src="docs/screenshots/strip_home_search.png" width="100%" alt="Home swipe gestures and search">
-
-<br><br>
-
-**Library & Playlists**
-
-<img src="docs/screenshots/strip_library_playlists.png" width="100%" alt="Library online and offline, playlists grid">
-
-<br><br>
-
-**Settings**
-
-<img src="docs/screenshots/strip_settings.png" width="66%" alt="Settings: theme, music folders, storage and about">
-
-</div>
+New screenshots of the other screens are on the way. The current Now Playing screen is shown at the top.
 
 ---
 
@@ -85,13 +68,16 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   (with **Save as app playlist** to make an editable copy).
 
 ### Library, playlists & favourites
-- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
-- **Playlists grid:** ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
+- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums / Playlists.
+- **Playlists** (Library → Playlists, or `[3] PLAYLISTS` on Home): ♥ Favorites, Most Played (each with ✕ per song and a confirmed `[ CLEAR ALL ]`), your playlists (most recent first), a **+** tile, then local playlists.
 - **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
 - **Recent searches:** with the search box empty, Search lists the songs you picked from earlier searches.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
+- **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
+  `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
+  Settings sends a copy anywhere. Android's own backup also restores the library on a new phone.
 
 ### Now Playing
 - High-res cover art: the low-res thumbnail shows instantly and the full-quality cover fades in.
@@ -101,7 +87,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   gradient on Android 11 and older), with the cover's vivid colour on the controls, fading between songs.
 - **Waveform seek:** drag across the bars behind the controls to scrub. Playback keeps going, its position stays marked,
   and dragging back near it snaps onto it (letting go there doesn't seek).
-- Repeat · previous · play/pause · next · shuffle · sleep timer · queue · add to playlist · ♥.
+- Repeat · previous · play/pause · next · shuffle · sleep timer · queue (`[ QUEUE (n) ]`) · add to playlist · ♥.
 
 ### System integration
 - **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
@@ -129,7 +115,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 | Where | Gesture | Action |
 |---|---|---|
-| Anywhere outside a song row | Swipe left / right | Next / previous tab (Home → Search → Library → Queue → Playlists → Settings) |
+| Anywhere outside a song row | Swipe left / right | Next / previous tab (Home → Search → Library → Settings) |
 | Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
 | Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
 | Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
@@ -137,29 +123,29 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Bottom bar · **Search** | Tap again (on Search) | Switch the source Online ↔ Local |
 | Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
 | Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
-| Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
 | Mini player | Tap song / artwork | Open Now Playing |
 | Now Playing | **Drag down** on the artwork | Close the player |
-| Queue | **Hold** a song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
+| Queue | **Hold** an upcoming song (anywhere) and move it, or drag its ≡ handle | Reorder the queue |
 | Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
 | Repeat button | Tap repeatedly | Off → All → One |
 | Playlist tile | Long-press | Delete playlist (app playlists only) |
-| Back | — | Close player / playlist, then return to Home |
+| Back | — | Close queue / player / playlist, then return to Home |
 
 ---
 
 ## Navigation
 
 ```
- Home   Search   Library   Queue   Playlists   ⚙ Settings
+ Home   Search   Library   Settings
 ```
 
 - **Home** — source switch, recently played, trending, mini player.
 - **Search** — search the active source; play next / add to playlist / add to queue on each result.
-- **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
-- **Queue** — drag to reorder, remove, clear upcoming; tap to jump.
-- **Playlists** — Favorites, Most Played, app playlists, local M3U playlists.
-- **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange, about.
+- **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums · **Playlists** (Favorites, Most Played,
+  app playlists, local M3U playlists).
+- **Queue** — opens over any screen from ≡ in the top bar, the mini player or Now Playing: the playing song, then
+  Up Next to reorder, remove, shuffle or clear; tap to jump.
+- **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange & backup, about.
 
 ---
 
@@ -213,15 +199,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.2.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.3.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.2.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.3.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.2.0` → versionCode `20200`); local builds default to 2.2.0.
+left untouched. The version comes from the tag (`2.3.0` → versionCode `20300`); local builds default to 2.3.0.
 
 ---
 

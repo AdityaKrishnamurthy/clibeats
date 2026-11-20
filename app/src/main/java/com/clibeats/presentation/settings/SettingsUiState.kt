@@ -14,7 +14,6 @@ data class SettingsUiState(
     val providers: List<ProviderOption> = emptyList(),
     val cacheMaxMb: Int = 512,
     val highQualityStreaming: Boolean = true,
-    val hasAuthToken: Boolean = false,
     val currentCacheSizeBytes: Long = 0L,
     val exchangeMessage: String? = null,
     // Theme engine

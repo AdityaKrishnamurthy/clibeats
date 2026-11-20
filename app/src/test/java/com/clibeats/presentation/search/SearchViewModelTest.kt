@@ -75,11 +75,24 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `clearQuery resets query to empty string`() =
+    fun `clearQuery resets query to empty string and searchResults to Idle`() =
         runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.searchResults.collect()
+            }
+            whenever(musicProvider.search(any(), any())).thenReturn(
+                ProviderResult.Success(emptyList()),
+            )
             viewModel.onQueryChange("test")
+            advanceTimeBy(400L)
+            testDispatcher.scheduler.runCurrent()
+            assertThat(viewModel.searchResults.value).isInstanceOf(SearchUiState.Success::class.java)
+
             viewModel.clearQuery()
+            advanceTimeBy(400L)
+            testDispatcher.scheduler.runCurrent()
             assertThat(viewModel.query.value).isEmpty()
+            assertThat(viewModel.searchResults.value).isEqualTo(SearchUiState.Idle)
         }
 
     @Test

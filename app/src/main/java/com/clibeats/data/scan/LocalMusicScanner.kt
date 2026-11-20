@@ -1,4 +1,11 @@
-@file:Suppress("ForbiddenImport", "TooGenericExceptionCaught", "NestedBlockDepth", "SwallowedException")
+@file:Suppress(
+    "ForbiddenImport",
+    "TooGenericExceptionCaught",
+    "NestedBlockDepth",
+    "SwallowedException",
+    "LongMethod",
+    "CyclomaticComplexMethod",
+)
 
 package com.clibeats.data.scan
 
@@ -13,6 +20,8 @@ import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.domain.provider.ProviderId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -63,7 +72,12 @@ class LocalMusicScanner
             val playlists: List<AudioDoc>,
         )
 
-        private val emptyListing = Listing(emptyList(), emptyList())
+        /** A failed tree must never be treated as an empty tree: that would delete its songs. */
+        private sealed interface ListResult {
+            data class Ok(val listing: Listing) : ListResult
+
+            data object Failed : ListResult
+        }
 
         /**
          * Scans every chosen music folder in one pass and returns the number of local tracks.
@@ -75,23 +89,52 @@ class LocalMusicScanner
                 mutex.withLock {
                     try {
                         _status.value = ScanStatus.Scanning(0, 0)
-                        // A folder whose permission was revoked lists as empty (its songs are then removed).
-                        val listings =
+                        // A revoked/unreadable tree is a failure, not an empty folder: deleting its
+                        // songs (and cascading to playlists) is exactly the data loss this guards.
+                        val results =
                             treeUris.map { tree ->
-                                tree to (runCatching { listDocuments(tree) }.getOrNull() ?: emptyListing)
+                                tree to
+                                    runCatching { listDocuments(tree) }.fold(
+                                        onSuccess = { ListResult.Ok(it) },
+                                        onFailure = { ListResult.Failed },
+                                    )
                             }
+                        val listings =
+                            results.mapNotNull { (tree, result) ->
+                                (result as? ListResult.Ok)?.let { tree to it.listing }
+                            }
+                        val anyTreeFailed = results.any { (_, result) -> result is ListResult.Failed }
+                        val existing = songDao.getLocalSongs().associateBy { it.id }
+                        // Never wipe a real library because a folder failed or came back empty
+                        // (unmounted SD card, revoked permission, empty response).
+                        if (treeUris.isNotEmpty() && listings.isEmpty()) {
+                            _status.value =
+                                ScanStatus.Failed(
+                                    "Couldn't read any music folder. Your library was left unchanged.",
+                                )
+                            return@withLock existing.size
+                        }
                         // Nested/overlapping folder picks list the same file twice; keep one.
                         val pairs =
                             listings
                                 .flatMap { (tree, listing) -> listing.audio.map { tree to it } }
                                 .distinctBy { it.second.documentId }
-                        val existing = songDao.getLocalSongs().associateBy { it.id }
+                        if (pairs.isEmpty() && existing.isNotEmpty()) {
+                            _status.value =
+                                ScanStatus.Failed("Scan found no songs. Your library was left unchanged.")
+                            return@withLock existing.size
+                        }
                         val found = ArrayList<SongEntity>(pairs.size)
                         pairs.forEachIndexed { index, (treeUri, doc) ->
+                            currentCoroutineContext().ensureActive()
                             val id = ProviderId.composite(LOCAL, doc.documentId)
                             val previous = existing[id]
                             // cached_at = file last-modified for local songs; unchanged files skip tag reads.
-                            val unchanged = previous?.cachedAt == doc.lastModified && doc.lastModified != 0L
+                            // ...unless its extracted cover went missing or still sits in the old folder.
+                            val unchanged =
+                                previous?.cachedAt == doc.lastModified &&
+                                    doc.lastModified != 0L &&
+                                    hasUsableArtwork(previous)
                             val entity =
                                 if (previous != null && unchanged) {
                                     previous
@@ -102,9 +145,20 @@ class LocalMusicScanner
                             if (index % PROGRESS_EVERY == 0) _status.value = ScanStatus.Scanning(index + 1, pairs.size)
                         }
                         found.chunked(DB_CHUNK).forEach { songDao.upsertAll(it) }
-                        val foundIds = found.mapTo(HashSet()) { it.id }
-                        // Also drops stale rows for playlist files the old scanner stored as tracks.
-                        existing.keys.filterNot { it in foundIds }.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
+                        if (!anyTreeFailed) {
+                            val foundIds = found.mapTo(HashSet()) { it.id }
+                            // Also drops stale rows for playlist files the old scanner stored as tracks.
+                            val toDelete = existing.keys.filterNot { it in foundIds }
+                            toDelete.forEach { id ->
+                                runCatching {
+                                    val file = artworkFileForId(id)
+                                    if (file.exists()) file.delete()
+                                }
+                            }
+                            toDelete.chunked(DB_CHUNK).forEach { songDao.deleteByIds(it) }
+                            // Every song now points at the new cover folder; drop the pre-2.3 copies.
+                            runCatching { File(context.filesDir, ARTWORK_DIR).deleteRecursively() }
+                        }
                         val keepPlaylistIds = HashSet<String>()
                         listings.forEach { (treeUri, listing) ->
                             val pathToId =
@@ -113,9 +167,11 @@ class LocalMusicScanner
                                 }
                             keepPlaylistIds += syncLocalPlaylists(treeUri, listing, pathToId)
                         }
-                        playlistDao.getLocalFilePlaylistIds()
-                            .filterNot { it in keepPlaylistIds }
-                            .forEach { playlistDao.deleteById(it) }
+                        if (!anyTreeFailed) {
+                            playlistDao.getLocalFilePlaylistIds()
+                                .filterNot { it in keepPlaylistIds }
+                                .forEach { playlistDao.deleteById(it) }
+                        }
                         _status.value = ScanStatus.Done(found.size)
                         found.size
                     } catch (e: Exception) {
@@ -241,13 +297,35 @@ class LocalMusicScanner
             )
         }
 
+        /**
+         * Covers extracted from local files. Not cacheDir: Android may clear it at any time, and an
+         * unchanged file is never re-read. Not filesDir: Auto Backup would upload every cover and can
+         * pass its 25 MB quota, which skips the whole backup. Covers can always be re-extracted.
+         */
+        private fun artworkDir(): File = File(context.noBackupFilesDir, ARTWORK_DIR)
+
+        /** True when the song has no cover, or its cover file is in [artworkDir] and still exists. */
+        private fun hasUsableArtwork(song: SongEntity): Boolean {
+            val file = song.artworkUrl?.let { url -> runCatching { Uri.parse(url).path }.getOrNull() }?.let(::File)
+            return when {
+                song.artworkUrl == null -> true
+                file == null -> false
+                else -> file.parentFile == artworkDir() && file.isFile
+            }
+        }
+
+        private fun artworkFileForId(id: String): File {
+            val dir = artworkDir().apply { mkdirs() }
+            val filename = UUID.nameUUIDFromBytes(id.toByteArray()).toString() + ".img"
+            return File(dir, filename)
+        }
+
         private fun saveArtwork(
             id: String,
             bytes: ByteArray,
         ): String? =
             runCatching {
-                val dir = File(context.filesDir, "local_artwork").apply { mkdirs() }
-                val file = File(dir, UUID.nameUUIDFromBytes(id.toByteArray()).toString() + ".img")
+                val file = artworkFileForId(id)
                 file.writeBytes(bytes)
                 Uri.fromFile(file).toString()
             }.getOrNull()
@@ -255,6 +333,7 @@ class LocalMusicScanner
         companion object {
             const val LOCAL = "local"
             const val LOCAL_PLAYLIST_PREFIX = "localpl:"
+            private const val ARTWORK_DIR = "local_artwork"
             private const val UNKNOWN_ARTIST = "Unknown Artist"
             private const val UNKNOWN_ALBUM = "Unknown Album"
             private const val PROGRESS_EVERY = 10

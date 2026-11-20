@@ -144,7 +144,7 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     QuickShortcutButton(
-                        label = "[1] SEARCH MUSIC",
+                        label = "[1] SEARCH",
                         modifier = Modifier.weight(1f),
                         onClick = { onNavigate(NavDestination.Search) },
                     )
@@ -152,6 +152,11 @@ fun HomeScreen(
                         label = "[2] LIBRARY",
                         modifier = Modifier.weight(1f),
                         onClick = { onNavigate(NavDestination.Library) },
+                    )
+                    QuickShortcutButton(
+                        label = "[3] PLAYLISTS",
+                        modifier = Modifier.weight(1f),
+                        onClick = { onNavigate(NavDestination.Playlists) },
                     )
                 }
             }

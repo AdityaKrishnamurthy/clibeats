@@ -17,10 +17,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -96,20 +96,23 @@ class SearchViewModel
         val searchResults: StateFlow<SearchUiState> =
             _query
                 .debounce(DEBOUNCE_MS)
-                .filter { it.length >= MIN_QUERY_LENGTH }
                 .distinctUntilChanged()
                 .flatMapLatest { q ->
-                    activeProviderId.flatMapLatest { id ->
-                        val provider = providerRegistry.getProvider(id) ?: providerRegistry.defaultProvider()
-                        flow {
-                            emit(SearchUiState.Loading)
-                            emit(
-                                when (val result = provider.search(q)) {
-                                    is ProviderResult.Success -> SearchUiState.Success(result.data)
-                                    is ProviderResult.Error -> SearchUiState.Error(result.message)
-                                    is ProviderResult.Loading -> SearchUiState.Loading
-                                },
-                            )
+                    if (q.length < MIN_QUERY_LENGTH) {
+                        flowOf<SearchUiState>(SearchUiState.Idle)
+                    } else {
+                        activeProviderId.flatMapLatest { id ->
+                            val provider = providerRegistry.getProvider(id) ?: providerRegistry.defaultProvider()
+                            flow<SearchUiState> {
+                                emit(SearchUiState.Loading)
+                                emit(
+                                    when (val result = provider.search(q)) {
+                                        is ProviderResult.Success -> SearchUiState.Success(result.data)
+                                        is ProviderResult.Error -> SearchUiState.Error(result.message)
+                                        is ProviderResult.Loading -> SearchUiState.Loading
+                                    },
+                                )
+                            }
                         }
                     }
                 }

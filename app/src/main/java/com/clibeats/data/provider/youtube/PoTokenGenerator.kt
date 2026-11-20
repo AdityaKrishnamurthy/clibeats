@@ -83,6 +83,7 @@ class PoTokenGenerator
                 val handler = Handler(Looper.getMainLooper())
 
                 try {
+                    WebView.setWebContentsDebuggingEnabled(false)
                     val wv = WebView(context).also { webView = it }
                     wv.settings.javaScriptEnabled = true
                     wv.settings.domStorageEnabled = true
@@ -114,6 +115,14 @@ class PoTokenGenerator
 
                     wv.webViewClient =
                         object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?,
+                                request: android.webkit.WebResourceRequest?,
+                            ): Boolean {
+                                val host = request?.url?.host ?: return true
+                                return !(host == "youtube.com" || host.endsWith(".youtube.com"))
+                            }
+
                             override fun onPageFinished(
                                 view: WebView?,
                                 url: String?,

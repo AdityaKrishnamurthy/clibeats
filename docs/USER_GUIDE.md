@@ -5,7 +5,8 @@ Welcome to CLIBeats, the terminal-styled music player for Android.
 ## First run
 
 New installs open a short setup: pick a theme, optionally choose your music folder, and choose the default
-source (Online or Local). Everything can be changed later in Settings.
+source (Online or Local). Everything can be changed later in Settings. Reinstalling? The music step offers
+**RESTORE FROM A BACKUP FILE**: pick `clibeats-backup.json` from `Download/CLIBeats`.
 
 ## Tabs
 
@@ -15,10 +16,14 @@ Swipe left / right anywhere outside a song row to move between tabs.
 |---|---|
 | **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), trending songs. Tap the tab again to switch Online ↔ Local. |
 | **Search** | Search the active source. With the box empty it lists songs you picked from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
-| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
-| **Queue** | Hold a song (or drag its ≡ handle) and move it to reorder; remove, clear upcoming songs (the playing song stays); tap a song to jump to it. |
-| **Playlists** | ♥ Favorites, Most Played (✕ removes a song, `[ CLEAR ALL ]` asks first), your playlists, a **+** tile and local M3U playlists. Tap the tab again to go back to the grid. |
+| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums / **Playlists**. |
 | **Settings** | Theme & accent, music folders, playback, provider, storage, playlist exchange, about. |
+
+**Playlists** (Library → Playlists, or `[3] PLAYLISTS` on Home): ♥ Favorites, Most Played (✕ removes a song,
+`[ CLEAR ALL ]` asks first), your playlists, `[ + NEW ]` and local M3U playlists.
+
+**Queue** (≡ in the top bar, the mini player, or `[ QUEUE ]` in Now Playing): the playing song, then Up Next. Hold
+a song (or drag its ≡ handle) and move it to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it.
 
 ## Song gestures
 
@@ -70,3 +75,10 @@ check, download and install by hand. The downloaded APK is deleted after the upd
 
 Settings → Playlist exchange exports your playlists and Favorites to a `clibeats.json` file anywhere you
 choose, and imports them back (for example on a new phone or after reinstalling).
+
+## Backup
+
+CLIBeats saves a backup of your library once a day: playlists, Favorites, saved albums and artists, and
+settings. On Android 10+ a copy goes to `Download/CLIBeats/clibeats-backup.json`, which stays after an
+uninstall. Settings → **SHARE BACKUP** sends it to Drive, email or another phone. Android's own backup
+(Google account) also brings the library back when you set up a new phone.

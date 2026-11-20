@@ -37,6 +37,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -49,6 +50,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
@@ -87,9 +89,27 @@ fun SettingsScreen(
     val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+    val shareFile by viewModel.shareFile.collectAsState()
     val localTrackCount by viewModel.localTrackCount.collectAsState()
     val accent = LocalAccentColor.current
     val context = LocalContext.current
+
+    // Share the snapshot through any app the user has (Drive, email, Nearby, ...).
+    LaunchedEffect(shareFile) {
+        val file = shareFile ?: return@LaunchedEffect
+        runCatching {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val send =
+                Intent(Intent.ACTION_SEND).apply {
+                    type = "application/json"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    putExtra(Intent.EXTRA_SUBJECT, "CLIBeats library backup")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+            context.startActivity(Intent.createChooser(send, "Share CLIBeats backup"))
+        }
+        viewModel.clearShareFile()
+    }
 
     val pickFolder =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
@@ -361,24 +381,26 @@ fun SettingsScreen(
                         Text("IMPORT")
                     }
                 }
+                Button(
+                    onClick = { viewModel.shareSnapshot() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = accent),
+                ) {
+                    Text("SHARE BACKUP")
+                }
+                Text(
+                    text =
+                        "A backup is saved automatically once a day (on Android 10+ also to Download/CLIBeats, " +
+                            "so it survives an uninstall). Share it to keep an off-device copy.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 exchangeMessage?.let { message ->
                     Text(
                         text = message,
                         style = MaterialTheme.typography.labelSmall,
                         color = accent,
                     )
-                }
-            }
-        }
-
-        if (uiState.hasAuthToken) {
-            TuiBlock(title = "Session") {
-                Button(
-                    onClick = { viewModel.clearAuthToken() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                ) {
-                    Text("CLEAR SESSION CREDENTIALS")
                 }
             }
         }
