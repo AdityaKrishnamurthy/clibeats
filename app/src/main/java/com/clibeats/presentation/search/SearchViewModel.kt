@@ -130,14 +130,13 @@ class SearchViewModel
             _query.value = ""
         }
 
+        // Only playing a result counts as a recent search: queueing (or saving) a song isn't picking it.
         fun onAddToQueue(track: Track) {
             playbackRepository.addToQueue(track)
-            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
 
         fun onPlayNext(track: Track) {
             playbackRepository.playNext(track)
-            viewModelScope.launch { appPreferences.addRecentSearchTrack(track) }
         }
 
         /** Songs picked from search results, shown while the search box is empty. */
