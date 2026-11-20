@@ -280,10 +280,8 @@ responsible for complying with providers' terms of service and copyright law in 
 
 ## Downloads
 
-APK downloads from GitHub Releases, updated daily. These count downloads, not people: installing and
-later updating counts each download, and the checksum file the in-app updater fetches isn't counted.
-
-<img alt="CLIBeats APK downloads per release" src="https://raw.githubusercontent.com/Omprakash-p06/clibeats/stats/downloads-per-release.svg" />
+Total APK downloads across all releases, updated daily. These count downloads, not people: installing
+and later updating counts each download, and the checksum file the in-app updater fetches isn't counted.
 
 <img alt="CLIBeats APK downloads over time" src="https://raw.githubusercontent.com/Omprakash-p06/clibeats/stats/downloads-history.svg" />
 

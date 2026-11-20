@@ -6,7 +6,7 @@
 //
 // Usage: node download-stats.mjs <owner/repo> <output dir>   (GITHUB_TOKEN optional, raises the rate limit)
 // Writes into <output dir>: downloads.csv (date,total; one row per day), downloads-badge.json (shields
-// endpoint), downloads-history.svg and downloads-per-release.svg.
+// endpoint) and downloads-history.svg (the running total over time).
 
 import fs from "node:fs";
 import path from "node:path";
@@ -45,29 +45,6 @@ function svg(width, height, body, title) {
 ${body}
 </svg>
 `;
-}
-
-function perReleaseChart(releases) {
-  const n = releases.length;
-  const barW = 44;
-  const gap = 28;
-  const left = 16;
-  const top = 40;
-  const plotH = 140;
-  const width = Math.max(360, left * 2 + n * barW + (n - 1) * gap);
-  const height = top + plotH + 36;
-  const max = Math.max(1, ...releases.map((r) => r.apk));
-  let body = `<text class="t" x="${left}" y="20">&gt; downloads --per-release</text>`;
-  body += `<line x1="${left}" y1="${top + plotH}" x2="${width - left}" y2="${top + plotH}" stroke="${GRID}"/>`;
-  releases.forEach((r, i) => {
-    const h = Math.max(2, Math.round((r.apk / max) * (plotH - 18)));
-    const x = left + i * (barW + gap);
-    const y = top + plotH - h;
-    body += `<rect x="${x}" y="${y}" width="${barW}" height="${h}" rx="2" fill="${GREEN}"/>`;
-    body += `<text class="v" x="${x + barW / 2}" y="${y - 6}" text-anchor="middle">${compact(r.apk)}</text>`;
-    body += `<text x="${x + barW / 2}" y="${top + plotH + 18}" text-anchor="middle">${esc(r.tag)}</text>`;
-  });
-  return svg(width, height, body, "CLIBeats APK downloads per release");
 }
 
 function historyChart(rows) {
@@ -111,11 +88,8 @@ function historyChart(rows) {
 const releases = (await fetchReleases())
   .filter((r) => !r.draft)
   .map((r) => ({
-    tag: r.tag_name,
-    published: r.published_at,
     apk: r.assets.filter((a) => a.name.toLowerCase().endsWith(".apk")).reduce((sum, a) => sum + a.download_count, 0),
-  }))
-  .sort((a, b) => Date.parse(a.published) - Date.parse(b.published));
+  }));
 const total = releases.reduce((sum, r) => sum + r.apk, 0);
 const today = new Date().toISOString().slice(0, 10);
 
@@ -135,5 +109,4 @@ fs.writeFileSync(
   JSON.stringify({ schemaVersion: 1, label: "downloads", message: compact(total), color: "1DB954" }) + "\n",
 );
 fs.writeFileSync(path.join(outDir, "downloads-history.svg"), historyChart(kept));
-fs.writeFileSync(path.join(outDir, "downloads-per-release.svg"), perReleaseChart(releases));
 console.log(`APK downloads: ${total} across ${releases.length} releases`);
