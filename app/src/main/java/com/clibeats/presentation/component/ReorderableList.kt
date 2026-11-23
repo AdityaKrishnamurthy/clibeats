@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.systemGestureExclusion
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.DragHandle
 import androidx.compose.material3.Icon
@@ -52,7 +53,8 @@ class ReorderRowScope internal constructor(
             imageVector = Icons.Outlined.DragHandle,
             contentDescription = "Drag to reorder",
             tint = if (isDragging) CliBeatsAccent else CliBeatsTextSecondary,
-            modifier = handleModifier.size(HANDLE_DP.dp).padding(HANDLE_PADDING_DP.dp),
+            // Near the screen edge the system back gesture would steal the drag.
+            modifier = handleModifier.systemGestureExclusion().size(HANDLE_DP.dp).padding(HANDLE_PADDING_DP.dp),
         )
     }
 

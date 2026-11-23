@@ -195,7 +195,11 @@ class PlaybackRepositoryImpl
                 if (tracks.isEmpty()) {
                     queueDao.clearQueue()
                 } else {
-                    songDao.upsertAll(tracks.map { it.toEntity() })
+                    // Local songs belong to the scanner. The queue's copy can be stale (e.g. loaded before a
+                    // rescan fixed its tags or cover), so it may add a missing row but never overwrite one.
+                    val (local, online) = tracks.partition { it.providerId == LOCAL_PROVIDER }
+                    if (local.isNotEmpty()) songDao.insertAllIfAbsent(local.map { it.toEntity() })
+                    if (online.isNotEmpty()) songDao.upsertAll(online.map { it.toEntity() })
                     queueDao.replaceQueue(
                         tracks.mapIndexed { index, track ->
                             QueueEntity(position = index, songId = track.id)
@@ -274,6 +278,11 @@ class PlaybackRepositoryImpl
         ) = playerAdapter.moveTrack(fromIndex, toIndex)
 
         override fun removeFromQueue(index: Int) = playerAdapter.removeFromQueue(index)
+
+        override fun insertIntoQueue(
+            index: Int,
+            track: Track,
+        ) = playerAdapter.insertAt(index, track)
 
         override fun clearQueue() = playerAdapter.clearQueue()
 
@@ -363,6 +372,13 @@ class PlaybackRepositoryImpl
             }
         }
 
+        override suspend fun refreshLocalTracks() {
+            val ids = playerAdapter.queueFlow.value.filter { it.providerId == LOCAL_PROVIDER }.map { it.id }.distinct()
+            if (ids.isEmpty()) return
+            val fresh = runCatching { songDao.getByIds(ids) }.getOrNull()?.associate { it.id to it.toDomain() } ?: return
+            withContext(Dispatchers.Main) { playerAdapter.refreshTracks(fresh) }
+        }
+
         override fun setRepeatMode(mode: RepeatMode) = playerAdapter.setRepeatMode(mode)
 
         override fun toggleShuffle() = playerAdapter.toggleShuffle()
@@ -372,5 +388,6 @@ class PlaybackRepositoryImpl
             const val HISTORY_LIMIT = 100
             const val POSITION_SAVE_STEP_MS = 5_000L
             const val RESTART_THRESHOLD_MS = 3_000L
+            const val LOCAL_PROVIDER = "local"
         }
     }

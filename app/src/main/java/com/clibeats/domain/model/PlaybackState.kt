@@ -15,4 +15,6 @@ data class PlaybackState(
     val sampleRateHz: Int? = null,
     val bitDepth: Int? = null,
     val durationMs: Long = 0L,
+    // Position of the playing song in the queue (-1 if none); the same song can be queued twice.
+    val currentIndex: Int = -1,
 )

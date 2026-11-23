@@ -4,6 +4,7 @@ package com.clibeats.playback.service
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
@@ -12,13 +13,17 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import coil.ImageLoader
 import com.clibeats.R
+import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.ArtworkBitmapLoader
 import com.google.common.collect.ImmutableList
@@ -60,7 +65,7 @@ class PlaybackService : MediaLibraryService() {
         super.onCreate()
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this).build().apply {
-                setSmallIcon(R.drawable.ic_stat_music_note)
+                setSmallIcon(R.drawable.ic_stat_clibeats)
             },
         )
         val session =
@@ -73,6 +78,8 @@ class PlaybackService : MediaLibraryService() {
                 ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
+        session.setCustomLayout(repeatLayout())
+        player.addListener(repeatListener)
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
         // otherwise Media3 never posts the media notification.
         addSession(session)
@@ -130,6 +137,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         scope.cancel()
+        player.removeListener(repeatListener)
         // The ExoPlayer is a DI singleton owned by the app (PlayerAdapter), not by this service:
         // releasing it here would kill playback permanently.
         librarySession?.run {
@@ -137,6 +145,42 @@ class PlaybackService : MediaLibraryService() {
             librarySession = null
         }
         super.onDestroy()
+    }
+
+    /** Keeps the repeat button's icon in step with the mode, whichever screen or device changed it. */
+    private val repeatListener =
+        object : Player.Listener {
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                librarySession?.setCustomLayout(repeatLayout())
+            }
+        }
+
+    /** The repeat button on the notification / lock-screen card; its icon shows the current mode. */
+    private fun repeatLayout(): List<CommandButton> {
+        val (icon, label) =
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ALL -> androidx.media3.session.R.drawable.media3_icon_repeat_all to "Repeat: all"
+                Player.REPEAT_MODE_ONE -> androidx.media3.session.R.drawable.media3_icon_repeat_one to "Repeat: one"
+                else -> androidx.media3.session.R.drawable.media3_icon_repeat_off to "Repeat: off"
+            }
+        return listOf(
+            CommandButton.Builder()
+                .setDisplayName(label)
+                .setIconResId(icon)
+                .setSessionCommand(REPEAT_COMMAND)
+                .build(),
+        )
+    }
+
+    /** Same order as the in-app button: off → all → one → off. */
+    private fun cycleRepeat() {
+        val next =
+            when (playbackRepository.playbackState.value.repeatMode) {
+                RepeatMode.OFF -> RepeatMode.ALL
+                RepeatMode.ALL -> RepeatMode.ONE
+                RepeatMode.ONE -> RepeatMode.OFF
+            }
+        playbackRepository.setRepeatMode(next)
     }
 
     /** Tapping the notification / lock-screen card brings the existing app task to the front. */
@@ -180,7 +224,29 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             Log.i(TAG, "connect from ${controller.packageName} items=${player.mediaItemCount}")
-            return super.onConnect(session, controller)
+            // Let controllers (notification, lock screen) send the repeat button's command.
+            val commands =
+                MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                    .buildUpon()
+                    .add(REPEAT_COMMAND)
+                    .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .setCustomLayout(repeatLayout())
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            if (customCommand.customAction != REPEAT_ACTION) {
+                return super.onCustomCommand(session, controller, customCommand, args)
+            }
+            cycleRepeat()
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
         override fun onGetLibraryRoot(
@@ -283,6 +349,8 @@ class PlaybackService : MediaLibraryService() {
         const val TAG = "CLIBeatsSession"
         const val ROOT = "clibeats_root"
         const val RECENT_ROOT = "clibeats_recent"
+        const val REPEAT_ACTION = "clibeats.REPEAT"
+        val REPEAT_COMMAND = SessionCommand(REPEAT_ACTION, Bundle.EMPTY)
     }
 }
 

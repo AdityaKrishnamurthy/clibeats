@@ -8,5 +8,6 @@ sealed interface QueueUiState {
     data class Success(
         val tracks: List<Track>,
         val currentTrackId: String?,
+        val currentIndex: Int = -1,
     ) : QueueUiState
 }
