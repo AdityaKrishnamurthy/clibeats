@@ -103,6 +103,7 @@ class PlaylistImporter
         private val _state = MutableStateFlow<ImportState>(ImportState.Idle)
         val state: StateFlow<ImportState> = _state.asStateFlow()
         private var job: Job? = null
+        private val songSearch = SongSearch { query, songsOnly -> searchWithRetry(query, songsOnly) }
 
         /** Names of the user's own playlists, to warn before an import would duplicate one. */
         suspend fun existingNames(): Set<String> =
@@ -217,18 +218,8 @@ class PlaylistImporter
             index: Int,
             song: SpotifySong,
         ): ImportedSong {
-            val main = song.artists.firstOrNull().orEmpty()
-            val withArtist = "${song.title} $main".trim()
-            // Songs first (clean audio releases); then everything, for songs YouTube only has as a video.
-            val searches =
-                listOf(withArtist to true, song.title to true, withArtist to false).distinct()
-            var reached = false
-            for ((query, songsOnly) in searches) {
-                val results = searchWithRetry(query, songsOnly) ?: continue
-                reached = true
-                TrackMatcher.pick(song, results)?.let { return ImportedSong(index, song, it.storable()) }
-            }
-            return ImportedSong(index, song, match = null, searchFailed = !reached)
+            val outcome = songSearch.find(song)
+            return ImportedSong(index, song, outcome.match?.storable(), searchFailed = !outcome.reached)
         }
 
         /** Search results, or null if YouTube Music couldn't be reached after a few tries. */

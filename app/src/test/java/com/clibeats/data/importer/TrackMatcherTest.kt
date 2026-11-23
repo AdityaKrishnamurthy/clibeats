@@ -95,6 +95,64 @@ class TrackMatcherTest {
     }
 
     @Test
+    fun kannadaSong_neverTakesTheHindiDub() {
+        val s =
+            song(
+                "Raajana",
+                listOf("Hari Venu", "Mohan Das", "Ravi Ram"),
+                225_000,
+                album = "Film Four [KANNADA]",
+            )
+        // Real results: the Hindi "Raajan" shares a credit and the length.
+        val hindiNoLabel = yt("h", "Raajan", "Vikas Shah & Mohan Das", 226_000)
+        val hindiLabelled = yt("h2", "Raajana", "Hari Venu", 225_000).copy(album = "Film Four (Hindi)")
+        val kannada = yt("k", "Raajana", "Hari Venu & Mohan Das", 225_500).copy(album = "Film Four")
+
+        assertThat(TrackMatcher.pick(s, listOf(hindiNoLabel, hindiLabelled))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(hindiNoLabel, hindiLabelled, kannada))?.id).isEqualTo("k")
+    }
+
+    @Test
+    fun filmSong_creditedToAnotherSinger_matchesOnTheSameFilm() {
+        val s =
+            song(
+                "Ninna Nage",
+                listOf("S. Bhat", "A. Jay"),
+                252_000,
+                album = "Film Five (Original Motion Picture Soundtrack)",
+            )
+
+        val sameFilm = yt("v", "Ninna Nage", "Kiran Kher", 253_000).copy(album = "Film Five")
+        val otherFilm = yt("o", "Ninna Nage", "Kiran Kher", 253_000).copy(album = "Something Else")
+        assertThat(TrackMatcher.pick(s, listOf(otherFilm))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(otherFilm, sameFilm))?.id).isEqualTo("v")
+    }
+
+    @Test
+    fun artistLineWithSeveralNames_matchesAnyOfThem() {
+        val s = song("Amma Nanna", listOf("Pran's", "A. Jay"), 107_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(yt("a", "Amma Nanna", "Pran Jogi & A. Jay", 108_000)))?.id)
+            .isEqualTo("a")
+    }
+
+    @Test
+    fun sameSingerSameLength_butAnotherEnglishLetterTitle_isNotMatched() {
+        val s = song("Elli Hadu Elli", listOf("S. P. Venkataraman"), 285_000)
+        val other = yt("x", "Kanasu Ondu Bere", "S.P.Venkatraman, V. Chandra", 283_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(other))).isNull()
+    }
+
+    @Test
+    fun roughlySimilarTitle_needsTheSameLength() {
+        val s = song("Raajana", listOf("Hari Venu", "Asha Rao"), 225_000)
+        val chapterOneSong = yt("c1", "Rajan", "Asha Rao, Mohan Das, Hari Venu", 218_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(chapterOneSong))).isNull()
+    }
+
+    @Test
     fun noResults_noMatch() {
         assertThat(TrackMatcher.pick(song("A", listOf("B"), 1_000), emptyList())).isNull()
     }
