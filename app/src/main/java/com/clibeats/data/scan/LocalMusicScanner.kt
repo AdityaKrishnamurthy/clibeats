@@ -20,16 +20,22 @@ import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.domain.provider.ProviderId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,8 +89,14 @@ class LocalMusicScanner
          * Scans every chosen music folder in one pass and returns the number of local tracks.
          * One pass matters: "remove songs that are gone" must see all folders, or scanning one
          * folder would delete the others' songs.
+         *
+         * [force] (the Rescan button) re-reads every file's tags and cover, so edits show up even when
+         * the tag editor didn't change the file's date. Otherwise unchanged files are skipped.
          */
-        suspend fun scan(treeUris: List<Uri>): Int =
+        suspend fun scan(
+            treeUris: List<Uri>,
+            force: Boolean = false,
+        ): Int =
             withContext(Dispatchers.IO) {
                 mutex.withLock {
                     try {
@@ -124,26 +136,40 @@ class LocalMusicScanner
                                 ScanStatus.Failed("Scan found no songs. Your library was left unchanged.")
                             return@withLock existing.size
                         }
-                        val found = ArrayList<SongEntity>(pairs.size)
-                        pairs.forEachIndexed { index, (treeUri, doc) ->
-                            currentCoroutineContext().ensureActive()
-                            val id = ProviderId.composite(LOCAL, doc.documentId)
-                            val previous = existing[id]
-                            // cached_at = file last-modified for local songs; unchanged files skip tag reads.
-                            // ...unless its extracted cover went missing or still sits in the old folder.
-                            val unchanged =
-                                previous?.cachedAt == doc.lastModified &&
-                                    doc.lastModified != 0L &&
-                                    hasUsableArtwork(previous)
-                            val entity =
-                                if (previous != null && unchanged) {
-                                    previous
-                                } else {
-                                    readTags(treeUri, doc, id)
-                                }
-                            found += entity
-                            if (index % PROGRESS_EVERY == 0) _status.value = ScanStatus.Scanning(index + 1, pairs.size)
-                        }
+                        // Tag reads are the slow part and independent per file: run a few at once.
+                        val done = AtomicInteger(0)
+                        val gate = Semaphore(PARALLEL_READS)
+                        val found: List<SongEntity> =
+                            coroutineScope {
+                                pairs.map { (treeUri, doc) ->
+                                    async {
+                                        gate.withPermit {
+                                            currentCoroutineContext().ensureActive()
+                                            val id = ProviderId.composite(LOCAL, doc.documentId)
+                                            val previous = existing[id]
+                                            // cached_at = file last-modified; unchanged files skip tag reads, unless
+                                            // forced, or the cover went missing / sits in the old folder. A failed
+                                            // read is stored with cached_at 0, so it is always retried.
+                                            val unchanged =
+                                                !force &&
+                                                    previous?.cachedAt == doc.lastModified &&
+                                                    doc.lastModified != 0L &&
+                                                    hasUsableArtwork(previous)
+                                            val entity =
+                                                if (previous != null && unchanged) {
+                                                    previous
+                                                } else {
+                                                    readTags(treeUri, doc, id, previous)
+                                                }
+                                            val n = done.incrementAndGet()
+                                            if (n % PROGRESS_EVERY == 0 || n == pairs.size) {
+                                                _status.value = ScanStatus.Scanning(n, pairs.size)
+                                            }
+                                            entity
+                                        }
+                                    }
+                                }.awaitAll()
+                            }
                         found.chunked(DB_CHUNK).forEach { songDao.upsertAll(it) }
                         if (!anyTreeFailed) {
                             val foundIds = found.mapTo(HashSet()) { it.id }
@@ -257,10 +283,16 @@ class LocalMusicScanner
             return keepIds
         }
 
+        /**
+         * Reads [doc]'s tags and cover. If the file can't be read at all (e.g. the folder's permission
+         * was just removed), the song keeps its [previous] details and is marked to be read again on the
+         * next scan, instead of being saved as a bare filename with no cover.
+         */
         private fun readTags(
             treeUri: Uri,
             doc: AudioDoc,
             id: String,
+            previous: SongEntity?,
         ): SongEntity {
             val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, doc.documentId)
             val retriever = MediaMetadataRetriever()
@@ -278,9 +310,13 @@ class LocalMusicScanner
                 album = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUM)
                 durationMs =
                     retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
-                artworkPath = retriever.embeddedPicture?.let { saveArtwork(id, it) }
+                val picture = retriever.embeddedPicture
+                artworkPath = picture?.let { saveArtwork(id, it) }
+                // Cover removed from the file since the last scan: drop the old extracted copy.
+                if (picture == null) runCatching { artworkFileForId(id).delete() }
             } catch (e: Exception) {
-                // Unreadable tags: keep the file playable with filename-based fallbacks below.
+                // Unreadable: keep what we had (or filename fallbacks), and retry on the next scan.
+                return (previous ?: fallbackEntity(doc, id, uri)).copy(cachedAt = RETRY_NEXT_SCAN)
             } finally {
                 runCatching { retriever.release() }
             }
@@ -296,6 +332,22 @@ class LocalMusicScanner
                 cachedAt = doc.lastModified,
             )
         }
+
+        private fun fallbackEntity(
+            doc: AudioDoc,
+            id: String,
+            uri: Uri,
+        ) = SongEntity(
+            id = id,
+            title = doc.name.substringBeforeLast('.'),
+            artist = UNKNOWN_ARTIST,
+            album = UNKNOWN_ALBUM,
+            durationMs = 0L,
+            artworkUrl = null,
+            streamUrl = uri.toString(),
+            providerId = LOCAL,
+            cachedAt = doc.lastModified,
+        )
 
         /**
          * Covers extracted from local files. Not cacheDir: Android may clear it at any time, and an
@@ -337,6 +389,12 @@ class LocalMusicScanner
             private const val UNKNOWN_ARTIST = "Unknown Artist"
             private const val UNKNOWN_ALBUM = "Unknown Album"
             private const val PROGRESS_EVERY = 10
+
+            /** Files read at the same time. More barely helps: storage, not CPU, is the limit. */
+            private const val PARALLEL_READS = 4
+
+            /** cached_at for a file whose tags couldn't be read: never matches a real date, so it's retried. */
+            private const val RETRY_NEXT_SCAN = 0L
             private const val COL_ID = 0
             private const val COL_NAME = 1
             private const val COL_MIME = 2

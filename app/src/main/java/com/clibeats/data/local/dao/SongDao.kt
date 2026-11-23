@@ -4,6 +4,8 @@
 package com.clibeats.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import com.clibeats.data.local.entity.SongEntity
@@ -19,6 +21,10 @@ interface SongDao {
 
     @Upsert
     suspend fun upsertAll(songs: List<SongEntity>)
+
+    /** Adds songs that aren't stored yet and leaves existing rows untouched. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIfAbsent(songs: List<SongEntity>)
 
     @Query("SELECT * FROM songs WHERE id = :id")
     suspend fun getById(id: String): SongEntity?

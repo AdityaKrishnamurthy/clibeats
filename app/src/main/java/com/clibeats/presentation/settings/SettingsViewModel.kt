@@ -14,6 +14,7 @@ import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.domain.provider.ProviderRegistry
+import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.SongRepository
 import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
@@ -42,6 +43,7 @@ class SettingsViewModel
         private val snapshotManager: LibrarySnapshotManager? = null,
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
+        private val playbackRepository: PlaybackRepository? = null,
     ) : ViewModel() {
         val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
 
@@ -115,12 +117,15 @@ class SettingsViewModel
         }
 
         fun rescanLocalMusic() {
-            viewModelScope.launch { scanAllFolders() }
+            // The Rescan button re-reads every file, so tag and cover edits always show up.
+            viewModelScope.launch { scanAllFolders(force = true) }
         }
 
-        private suspend fun scanAllFolders() {
+        private suspend fun scanAllFolders(force: Boolean = false) {
             val folders = appPreferences.localMusicTreeUris.first().map(Uri::parse)
-            runCatching { localMusicScanner?.scan(folders) }
+            runCatching { localMusicScanner?.scan(folders, force = force) }
+            // Songs already in the queue still hold their old details; show the rescanned ones.
+            runCatching { playbackRepository?.refreshLocalTracks() }
         }
 
         private data class RawSettings(
