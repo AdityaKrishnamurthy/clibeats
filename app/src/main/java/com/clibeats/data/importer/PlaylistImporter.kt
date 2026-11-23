@@ -150,8 +150,12 @@ class PlaylistImporter
         }
 
         /** YouTube Music results for the "Find" sheet of a song that didn't match. */
-        suspend fun searchCandidates(query: String): List<Track> =
-            (youtube.search(query, MANUAL_RESULTS) as? ProviderResult.Success)?.data.orEmpty()
+        suspend fun searchCandidates(query: String): List<Track> {
+            val songs = (youtube.search(query, MANUAL_RESULTS) as? ProviderResult.Success)?.data.orEmpty()
+            // Videos too, after the songs: some songs only exist on YouTube as a music video.
+            val all = (youtube.searchIncludingVideos(query, MANUAL_RESULTS) as? ProviderResult.Success)?.data.orEmpty()
+            return (songs + all).distinctBy { it.id }
+        }
 
         /** The user picked [track] for a song that didn't match: add it to the saved playlist in its Spotify spot. */
         suspend fun resolveManually(
@@ -214,10 +218,13 @@ class PlaylistImporter
             song: SpotifySong,
         ): ImportedSong {
             val main = song.artists.firstOrNull().orEmpty()
-            val queries = listOf("${song.title} $main".trim(), song.title).distinct()
+            val withArtist = "${song.title} $main".trim()
+            // Songs first (clean audio releases); then everything, for songs YouTube only has as a video.
+            val searches =
+                listOf(withArtist to true, song.title to true, withArtist to false).distinct()
             var reached = false
-            for (query in queries) {
-                val results = searchWithRetry(query) ?: continue
+            for ((query, songsOnly) in searches) {
+                val results = searchWithRetry(query, songsOnly) ?: continue
                 reached = true
                 TrackMatcher.pick(song, results)?.let { return ImportedSong(index, song, it.storable()) }
             }
@@ -225,9 +232,18 @@ class PlaylistImporter
         }
 
         /** Search results, or null if YouTube Music couldn't be reached after a few tries. */
-        private suspend fun searchWithRetry(query: String): List<Track>? {
+        private suspend fun searchWithRetry(
+            query: String,
+            songsOnly: Boolean,
+        ): List<Track>? {
             repeat(SEARCH_ATTEMPTS) { attempt ->
-                when (val result = youtube.search(query, SEARCH_RESULTS)) {
+                val result =
+                    if (songsOnly) {
+                        youtube.search(query, SEARCH_RESULTS)
+                    } else {
+                        youtube.searchIncludingVideos(query, SEARCH_RESULTS)
+                    }
+                when (result) {
                     is ProviderResult.Success -> return result.data
                     else -> delay(RETRY_DELAY_MS * (attempt + 1))
                 }

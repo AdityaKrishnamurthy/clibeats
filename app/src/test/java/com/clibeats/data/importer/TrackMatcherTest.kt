@@ -60,6 +60,40 @@ class TrackMatcherTest {
         assertThat(TrackMatcher.pick(s, listOf(yt("l", "Ame", "Taro Yamada", 256_000)))?.id).isEqualTo("l")
     }
 
+    // The cases below follow real import misses (names changed).
+
+    @Test
+    fun sameTitleAndLength_butAnotherLatinArtist_isNotMatched() {
+        val s = song("Lights", listOf("Arden", "Mae"), 196_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(yt("w", "Lights", "Corvo", 197_000)))).isNull()
+    }
+
+    @Test
+    fun remixOnSpotify_doesNotTakeTheOriginal() {
+        val s = song("Nadiya Hoovu (Remix)", listOf("K. Mohan"), 256_000)
+        val original = yt("o", "Nadiya Hoovu", "K. Mohan", 257_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(original))).isNull()
+    }
+
+    @Test
+    fun plainTitle_prefersTheOriginalOverATwinVersion() {
+        val s = song("Coral", listOf("AURA"), 174_000)
+        val twin = yt("t", "Coral (Twin Version)", "AURA", 174_000)
+        val original = yt("o", "Coral", "AURA", 175_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(twin, original))?.id).isEqualTo("o")
+    }
+
+    @Test
+    fun japaneseTvSize_matchesEnglishTvSize() {
+        val s = song("sunrise! (TVサイズ)", listOf("Ken Ito"), 90_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(yt("d", "sunrise! (TV Size)", "Ken Ito", 90_500)))?.id)
+            .isEqualTo("d")
+    }
+
     @Test
     fun noResults_noMatch() {
         assertThat(TrackMatcher.pick(song("A", listOf("B"), 1_000), emptyList())).isNull()

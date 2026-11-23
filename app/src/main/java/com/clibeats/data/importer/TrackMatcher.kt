@@ -12,6 +12,7 @@ import kotlin.math.abs
  * length. It prefers missing a song over adding the wrong one: when nothing passes, the song is
  * reported as not matched so the user can pick it by hand.
  */
+@Suppress("TooManyFunctions") // small private text helpers for the matching rules
 object TrackMatcher {
     /** Results further off than this are a different recording (live, extended, a loop video...). */
     const val MAX_DURATION_DIFF_MS = 15_000L
@@ -34,12 +35,21 @@ object TrackMatcher {
     private const val LENGTH_WEIGHT = 2.0
     private const val RANK_PENALTY = 0.05
 
-    /** Versions that are never the original unless the Spotify title says so too. */
-    private val VERSION_WORDS =
+    /** Small push towards the result whose full title (brackets included) matches. */
+    private const val FULL_TITLE_WEIGHT = 0.5
+
+    /**
+     * A different recording from the song itself: both sides must agree. "Song" never matches "Song (Remix)",
+     * and "Song (Remix)" never matches plain "Song".
+     */
+    private val RECORDING_WORDS =
         listOf(
-            "karaoke", "instrumental", "cover", "8d", "slowed", "sped up", "speed up", "nightcore",
-            "reverb", "remix", "live", "acoustic", "lofi", "lo fi", "off vocal", "piano version",
+            "karaoke", "instrumental", "8d", "slowed", "sped up", "speed up", "nightcore", "reverb",
+            "remix", "live", "acoustic", "lofi", "lo fi", "off vocal", "tv size", "tv ver",
         )
+
+    /** Only rejected when the result has it and the Spotify title doesn't (Spotify often omits "Version"). */
+    private val EXTRA_VERSION_WORDS = listOf("cover", "piano version", "first take", "version", "ver")
 
     /** The best matching result from [candidates] (in search order), or null when none is trustworthy. */
     fun pick(
@@ -60,7 +70,8 @@ object TrackMatcher {
     ): Double? {
         val songTitle = normalize(song.title)
         val candidateTitle = normalize(candidate.title)
-        if (VERSION_WORDS.any { hasWord(candidateTitle, it) && !hasWord(songTitle, it) }) return null
+        if (RECORDING_WORDS.any { hasWord(candidateTitle, it) != hasWord(songTitle, it) }) return null
+        if (EXTRA_VERSION_WORDS.any { hasWord(candidateTitle, it) && !hasWord(songTitle, it) }) return null
 
         val diff =
             if (song.durationMs > 0 && candidate.durationMs > 0) abs(song.durationMs - candidate.durationMs) else null
@@ -76,14 +87,17 @@ object TrackMatcher {
                 artistOk && maxOf(titleSim, albumSim) >= TITLE_OK && (diff == null || diff <= LOOSE_LENGTH_MS) -> true
                 // Title in another script or language: same artist, same length, near the top of the results.
                 artistOk && diff != null && diff <= EXACT_LENGTH_MS && rank < CROSS_SCRIPT_MAX_RANK -> true
-                // Artist name written differently (山田太郎 vs Taro Yamada): same title, same length.
-                titleSim >= TITLE_STRONG && diff != null && diff <= EXACT_LENGTH_MS -> true
+                // Artist name in another script (山田太郎 vs Taro Yamada): same title, same length. Only when a
+                // script differs; two different Latin names are two different artists ("Lights" by Arden vs Corvo).
+                titleSim >= TITLE_STRONG && diff != null && diff <= EXACT_LENGTH_MS &&
+                    (song.artists.any(::hasNonLatinLetters) || hasNonLatinLetters(candidate.artist)) -> true
                 else -> false
             }
         if (!passes) return null
         val lengthScore = diff?.let { 1.0 - it.toDouble() / MAX_DURATION_DIFF_MS } ?: 0.0
+        val fullTitle = similarity(songTitle, candidateTitle)
         return maxOf(titleSim, albumSim) * TITLE_WEIGHT + (if (artistOk) ARTIST_WEIGHT else 0.0) +
-            lengthScore * LENGTH_WEIGHT - rank * RANK_PENALTY
+            lengthScore * LENGTH_WEIGHT + fullTitle * FULL_TITLE_WEIGHT - rank * RANK_PENALTY
     }
 
     /** Best similarity between the two titles, also trying each without "(feat. ...)" / " - Remastered" parts. */
@@ -112,6 +126,8 @@ object TrackMatcher {
     internal fun normalize(s: String): String =
         Normalizer.normalize(s, Normalizer.Form.NFKC)
             .lowercase(Locale.ROOT)
+            // Japanese titles write "TVサイズ" where YouTube writes "TV Size".
+            .replace("サイズ", " size")
             .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
             .trim()
 
@@ -155,6 +171,10 @@ object TrackMatcher {
     }
 
     private fun compact(s: String) = s.replace(" ", "")
+
+    /** True for names written in e.g. Japanese or Kannada script, where YouTube may show a romanized name. */
+    private fun hasNonLatinLetters(s: String) =
+        s.any { it.isLetter() && Character.UnicodeScript.of(it.code) != Character.UnicodeScript.LATIN }
 
     private fun hasWord(
         normalized: String,

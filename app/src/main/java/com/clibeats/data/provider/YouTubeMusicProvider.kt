@@ -46,12 +46,27 @@ class YouTubeMusicProvider
         override suspend fun search(
             query: String,
             limit: Int,
+        ): ProviderResult<List<Track>> = search(query, limit, songsOnly = true)
+
+        /**
+         * Search without the Songs filter, so music videos and uploads come back too. The playlist import
+         * uses it for songs that only exist on YouTube as a video (no audio-only release in this region).
+         */
+        suspend fun searchIncludingVideos(
+            query: String,
+            limit: Int,
+        ): ProviderResult<List<Track>> = search(query, limit, songsOnly = false)
+
+        private suspend fun search(
+            query: String,
+            limit: Int,
+            songsOnly: Boolean,
         ): ProviderResult<List<Track>> {
             val traceId = DiagnosticLogger.generateTraceId()
             DiagnosticLogger.logSearchRequest(traceId, query)
 
             return runCatching {
-                val response = api.search(SearchRequest.forQuery(query))
+                val response = api.search(SearchRequest.forQuery(query, filterSongs = songsOnly))
                 val tracks = response.toTrackList().take(limit)
                 DiagnosticLogger.logSearchResponse(traceId, tracks.size)
                 ProviderResult.Success(tracks)
