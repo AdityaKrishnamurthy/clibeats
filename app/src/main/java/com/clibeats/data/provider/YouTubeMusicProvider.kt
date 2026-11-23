@@ -10,6 +10,7 @@
 package com.clibeats.data.provider
 
 import com.clibeats.data.provider.api.InnerTubeApi
+import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
 import com.clibeats.data.provider.mapper.chartPlaylistBrowseId

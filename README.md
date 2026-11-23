@@ -74,7 +74,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **A song that can't be played is skipped** with a short notice above the player bar, so the queue never stalls.
 
 ### Sources
-- **Online:** YouTube Music, Internet Archive, Jamendo, Audius — pick from the `ONLINE ▾` drop-down.
+- **Online:** YouTube Music.
 - **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A (AAC / ALAC), AAC, OGG Vorbis, Opus** (each checked
   with a real sample file in the tests; ALAC also needs the phone's decoder). AIFF isn't supported.
 - **Trending by country** — Home shows YouTube Music's own chart for the country your SIM / mobile network is in
@@ -251,7 +251,7 @@ left untouched. The version comes from the tag (`2.4.0` → versionCode `20400`)
 
 ```text
 app/src/main/java/com/clibeats/
-├── data/          # providers (YouTube, IA, Jamendo, Audius, local), Room, DataStore,
+├── data/          # providers (YouTube Music, local), Room, DataStore,
 │                  # scan (local scanner, M3U parser), cache (song/artwork caches), playlist exchange
 ├── domain/        # models, repository + provider interfaces
 ├── playback/      # PlayerAdapter, StreamResolver, TrackUriResolver, PlaybackService

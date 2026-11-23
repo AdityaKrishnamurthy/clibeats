@@ -32,16 +32,12 @@ class ProviderRegistryTest {
     }
 
     private val youtube = FakeProvider("youtube_music", "YouTube Music")
-    private val internetArchive = FakeProvider("internet_archive", "Internet Archive")
-    private val audius = FakeProvider("audius", "Audius")
-    private val jamendo = FakeProvider("jamendo", "Jamendo")
     private val local = FakeProvider("local", "Local Device Media")
-    private val registry = MusicProviderRegistry(listOf(youtube, internetArchive, audius, jamendo, local))
+    private val registry = MusicProviderRegistry(listOf(youtube, local))
 
     @Test
     fun `getProvider returns provider by id`() {
         assertThat(registry.getProvider("youtube_music")).isSameInstanceAs(youtube)
-        assertThat(registry.getProvider("audius")).isSameInstanceAs(audius)
         assertThat(registry.getProvider("local")).isSameInstanceAs(local)
     }
 
@@ -59,7 +55,7 @@ class ProviderRegistryTest {
     @Test
     fun `providers preserves registration order`() {
         assertThat(registry.providers.map { it.providerId })
-            .containsExactly("youtube_music", "internet_archive", "audius", "jamendo", "local")
+            .containsExactly("youtube_music", "local")
             .inOrder()
     }
 }
