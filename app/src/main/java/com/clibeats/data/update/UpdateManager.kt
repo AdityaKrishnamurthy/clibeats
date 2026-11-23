@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -236,12 +237,13 @@ class UpdateManager
                 return
             }
             _state.value = UpdateState.Downloading(release, UNKNOWN_PROGRESS)
-            val checksums = release.checksumsUrl?.let { client.fetchText(it) }
-            val expected = checksums?.let { UpdateRules.sha256For(it, release.apkName) }
-            if (expected == null) {
+            if (release.checksumsUrl == null) {
                 _state.value = UpdateState.Failed(NO_CHECKSUM_MESSAGE, release)
                 return
             }
+            // The checksum list is fetched while the APK downloads instead of before it: one less round trip
+            // before bytes start flowing. verify() still refuses to install without it.
+            val expected = scope.async { expectedSha256(release) }
             // Keep only one update APK: delete the one we downloaded last time.
             preferences.updateRecord().downloadId.takeIf { it != NO_DOWNLOAD }?.let { removeDownload(it) }
 
@@ -266,8 +268,14 @@ class UpdateManager
                     _state.value = UpdateState.Failed("Couldn't start the download (${e.message})", release)
                     return
                 }
-            preferences.saveUpdateDownload(id, release.version, expected)
+            preferences.saveUpdateDownload(id, release.version, null)
             poll(release, id)
+            expected.await()?.let { sha ->
+                // Only if this download is still the current one (it may have been cancelled meanwhile).
+                if (preferences.updateRecord().downloadId == id) {
+                    preferences.saveUpdateDownload(id, release.version, sha)
+                }
+            }
         }
 
         private fun poll(
@@ -302,28 +310,34 @@ class UpdateManager
                 }
         }
 
+        /** SHA-256 of the release's APK from its `SHA256SUMS.txt`, or null when it can't be fetched. */
+        private suspend fun expectedSha256(release: ReleaseInfo): String? =
+            release.checksumsUrl?.let { client.fetchText(it) }?.let { UpdateRules.sha256For(it, release.apkName) }
+
         private suspend fun verify(
             release: ReleaseInfo,
             id: Long,
             expectedSha256: String?,
         ) {
             _state.value = UpdateState.Verifying(release)
-            val actual =
-                runCatching {
-                    val uri = downloadManager?.getUriForDownloadedFile(id) ?: return@runCatching null
-                    context.contentResolver.openInputStream(uri)?.use { input ->
-                        val digest = MessageDigest.getInstance("SHA-256")
-                        val buffer = ByteArray(BUFFER_SIZE)
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read < 0) break
-                            digest.update(buffer, 0, read)
-                        }
-                        digest.digest().joinToString("") { "%02x".format(it) }
-                    }
-                }.getOrNull()
-            val signerError = if (actual != null && actual == expectedSha256) verifySigner(id) else null
-            if (actual != null && actual == expectedSha256 && signerError == null) {
+            // The checksum is fetched during the download; if that hasn't landed (or failed), fetch it now.
+            val expected = expectedSha256 ?: expectedSha256(release)
+            if (expected == null) {
+                removeDownload(id)
+                _state.value = UpdateState.Failed(NO_CHECKSUM_MESSAGE, release)
+                startedFromPrompt = false
+                return
+            }
+            val temp = File(context.cacheDir, SIGNER_CHECK_FILE)
+            val (actual, signerError) =
+                try {
+                    // One pass over the file: hash it while copying it for the signature check.
+                    val hash = copyAndHash(id, temp)
+                    hash to if (hash == expected) signerError(temp) else null
+                } finally {
+                    temp.delete()
+                }
+            if (actual == expected && signerError == null) {
                 _state.value = UpdateState.ReadyToInstall(release)
                 // A download started from the pop-up brings it back when it's ready.
                 if (_promptVisible.value || startedFromPrompt) _promptVisible.value = true
@@ -335,36 +349,49 @@ class UpdateManager
             startedFromPrompt = false
         }
 
+        /** Copies the downloaded APK to [temp] and returns its SHA-256 (hex), or null if it can't be read. */
+        private fun copyAndHash(
+            id: Long,
+            temp: File,
+        ): String? =
+            runCatching {
+                val uri = downloadManager?.getUriForDownloadedFile(id) ?: return@runCatching null
+                val digest = MessageDigest.getInstance("SHA-256")
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    temp.outputStream().use { output ->
+                        val buffer = ByteArray(BUFFER_SIZE)
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            digest.update(buffer, 0, read)
+                            output.write(buffer, 0, read)
+                        }
+                    }
+                } ?: return@runCatching null
+                digest.digest().joinToString("") { "%02x".format(it) }
+            }.getOrNull()
+
         /**
          * Android refuses an in-place update signed with a different certificate, which forces the
          * user to uninstall and lose their library. Compare the downloaded APK's signer with the
          * installed app's before offering INSTALL. Null means "matches / safe to install".
          */
-        private fun verifySigner(id: Long): String? =
+        @Suppress("ReturnCount")
+        private fun signerError(apk: File): String? =
             runCatching {
-                val uri = downloadManager?.getUriForDownloadedFile(id) ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
-                val temp = File(context.cacheDir, SIGNER_CHECK_FILE)
-                try {
-                    val copied =
-                        context.contentResolver.openInputStream(uri)?.use { input ->
-                            temp.outputStream().use { output -> input.copyTo(output) }
-                        }
-                    if (copied == null || temp.length() == 0L) return@runCatching SIGNING_UNKNOWN_MESSAGE
-                    val archive =
-                        context.packageManager.archiveInfo(temp.absolutePath)
-                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
-                    val installed =
-                        context.packageManager.installedInfo(context.packageName)
-                            ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
-                    val archiveSigners = archive.signerDigests()
-                    val installedSigners = installed.signerDigests()
-                    when {
-                        archiveSigners.isEmpty() || installedSigners.isEmpty() -> SIGNING_UNKNOWN_MESSAGE
-                        archiveSigners == installedSigners -> null
-                        else -> SIGNING_MISMATCH_MESSAGE
-                    }
-                } finally {
-                    temp.delete()
+                if (apk.length() == 0L) return@runCatching SIGNING_UNKNOWN_MESSAGE
+                val archive =
+                    context.packageManager.archiveInfo(apk.absolutePath)
+                        ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                val installed =
+                    context.packageManager.installedInfo(context.packageName)
+                        ?: return@runCatching SIGNING_UNKNOWN_MESSAGE
+                val archiveSigners = archive.signerDigests()
+                val installedSigners = installed.signerDigests()
+                when {
+                    archiveSigners.isEmpty() || installedSigners.isEmpty() -> SIGNING_UNKNOWN_MESSAGE
+                    archiveSigners == installedSigners -> null
+                    else -> SIGNING_MISMATCH_MESSAGE
                 }
             }.getOrDefault(SIGNING_UNKNOWN_MESSAGE)
 

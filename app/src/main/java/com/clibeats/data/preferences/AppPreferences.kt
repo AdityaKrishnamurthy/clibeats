@@ -180,15 +180,20 @@ class AppPreferences
             dataStore.edit { it[Keys.UPDATE_SNOOZE_UNTIL] = until }
         }
 
+        /** [sha256] may arrive after the download starts (fetched in parallel); null leaves it unset. */
         suspend fun saveUpdateDownload(
             id: Long,
             version: String,
-            sha256: String,
+            sha256: String?,
         ) {
             dataStore.edit { prefs ->
                 prefs[Keys.UPDATE_DOWNLOAD_ID] = id
                 prefs[Keys.UPDATE_DOWNLOAD_VERSION] = version
-                prefs[Keys.UPDATE_DOWNLOAD_SHA256] = sha256
+                if (sha256 != null) {
+                    prefs[Keys.UPDATE_DOWNLOAD_SHA256] = sha256
+                } else {
+                    prefs.remove(Keys.UPDATE_DOWNLOAD_SHA256)
+                }
             }
         }
 
