@@ -44,7 +44,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Shrinking removes unused library code: a much smaller APK, so in-app updates download faster.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
