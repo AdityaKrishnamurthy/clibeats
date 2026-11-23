@@ -33,4 +33,23 @@ class TrackMapperTest {
     fun `parseDurationMs returns 0 for malformed input`() {
         assertThat(parseDurationMs("abc")).isEqualTo(0L)
     }
+
+    @Test
+    fun `parseSubtitle keeps every artist together and finds the album`() {
+        val s = parseSubtitle(listOf("Pran Jogi", " & ", "A. Jay", " • ", "Film Six", " • ", "1:48"))
+
+        assertThat(s).isEqualTo(Subtitle("Pran Jogi & A. Jay", "Film Six", "1:48"))
+    }
+
+    @Test
+    fun `parseSubtitle drops the type label and view counts of a video`() {
+        val s = parseSubtitle(listOf("Video", " • ", "ミナモ", " • ", "12M views", " • ", "4:21"))
+
+        assertThat(s).isEqualTo(Subtitle("ミナモ", "", "4:21"))
+    }
+
+    @Test
+    fun `parseSubtitle handles artist and duration only`() {
+        assertThat(parseSubtitle(listOf("MIRA", " • ", "3:58"))).isEqualTo(Subtitle("MIRA", "", "3:58"))
+    }
 }
