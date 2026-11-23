@@ -110,7 +110,7 @@ private fun AppContent() {
     BackHandler(enabled = showQueue) { showQueue = false }
 
     // Re-tapping the tab you're on: Home / Search = switch Online <-> Local (double-tap Search = search box),
-    // Library = next section (Playlists → Online → Offline).
+    // Library = next section (Playlists → Online → Local).
     var focusSearch by remember { mutableStateOf(false) }
     var toggleSearchSource by remember { mutableStateOf(false) }
     // Search tab: one tap (when already on Search) switches the source after a short wait, which a second
@@ -121,7 +121,8 @@ private fun AppContent() {
     var toggleLibraryMode by remember { mutableStateOf(false) }
     val onTabClick: (NavDestination) -> Unit = tabClick@{ destination ->
         if (destination == NavDestination.Queue) {
-            showQueue = true
+            // The queue button toggles: a second tap closes the queue and shows the tab underneath again.
+            showQueue = !showQueue
             return@tabClick
         }
         showQueue = false
