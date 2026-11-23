@@ -49,6 +49,7 @@ object ExportifyFiles {
         return nonEmpty
     }
 
+    @Suppress("LoopWithTooManyJumpStatements")
     private fun readZip(input: InputStream): List<SpotifyPlaylist> {
         val playlists = mutableListOf<SpotifyPlaylist>()
         ZipInputStream(input).use { zip ->
@@ -59,8 +60,9 @@ object ExportifyFiles {
                 val path = entry.name
                 val base = path.substringAfterLast('/')
                 // macOS adds __MACOSX/._name copies; they aren't real files.
-                val skip = entry.isDirectory || !base.endsWith(".csv", ignoreCase = true) ||
-                    base.startsWith("._") || path.startsWith("__MACOSX")
+                val skip =
+                    entry.isDirectory || !base.endsWith(".csv", ignoreCase = true) ||
+                        base.startsWith("._") || path.startsWith("__MACOSX")
                 if (!skip) {
                     runCatching { ExportifyCsv.parse(ExportifyCsv.playlistName(base), readText(zip)) }
                         .onSuccess { playlists += it }

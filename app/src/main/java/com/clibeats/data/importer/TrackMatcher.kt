@@ -28,6 +28,12 @@ object TrackMatcher {
     /** Only the top results are trusted on artist + length alone; lower ones are more often other songs. */
     private const val CROSS_SCRIPT_MAX_RANK = 3
 
+    // Ranking among results that pass: title counts most, then artist and length; earlier results win ties.
+    private const val TITLE_WEIGHT = 3.0
+    private const val ARTIST_WEIGHT = 2.0
+    private const val LENGTH_WEIGHT = 2.0
+    private const val RANK_PENALTY = 0.05
+
     /** Versions that are never the original unless the Spotify title says so too. */
     private val VERSION_WORDS =
         listOf(
@@ -46,7 +52,7 @@ object TrackMatcher {
             ?.first
 
     /** A score (higher is better) when [candidate] passes the rules, else null. */
-    @Suppress("ReturnCount")
+    @Suppress("ReturnCount", "CyclomaticComplexMethod")
     internal fun score(
         song: SpotifySong,
         candidate: Track,
@@ -76,7 +82,8 @@ object TrackMatcher {
             }
         if (!passes) return null
         val lengthScore = diff?.let { 1.0 - it.toDouble() / MAX_DURATION_DIFF_MS } ?: 0.0
-        return maxOf(titleSim, albumSim) * 3 + (if (artistOk) 2.0 else 0.0) + lengthScore * 2 - rank * 0.05
+        return maxOf(titleSim, albumSim) * TITLE_WEIGHT + (if (artistOk) ARTIST_WEIGHT else 0.0) +
+            lengthScore * LENGTH_WEIGHT - rank * RANK_PENALTY
     }
 
     /** Best similarity between the two titles, also trying each without "(feat. ...)" / " - Remastered" parts. */
@@ -114,6 +121,7 @@ object TrackMatcher {
             .substringBefore(" - ")
             .trim()
 
+    @Suppress("ReturnCount")
     private fun similarity(
         a: String,
         b: String,

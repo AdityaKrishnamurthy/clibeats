@@ -32,7 +32,8 @@ class ExportifyFilesTest {
             "﻿" +
                 csv(
                     "spotify:track:1,JP1,\"星空花\",\"Hoshizora\",\"MIRA\",2019-07-03,238586,4",
-                    "spotify:track:2,X,\"Film Two\",\"Film Two, Vol. 1\",\"D. Iyer;Vinay Prakash\",2016,257706,1",
+                    "spotify:track:2,X,\"Film Two\",\"Film Two, Vol. 1\"," +
+                        "\"D. Iyer;Vinay Prakash\",2016,257706,1",
                     "spotify:track:3,X,\"Say \"\"Hi\"\"\",\"A\",\"B\",2020,1000,1",
                 )
 
@@ -60,7 +61,9 @@ class ExportifyFilesTest {
 
     @Test
     fun read_singleCsv() {
-        val playlists = ExportifyFiles.read(ByteArrayInputStream(csv("u,i,Song,Album,Artist,d,1000,1").toByteArray()), "AM.csv")
+        val bytes = csv("u,i,Song,Album,Artist,d,1000,1").toByteArray()
+
+        val playlists = ExportifyFiles.read(ByteArrayInputStream(bytes), "AM.csv")
 
         assertThat(playlists.single().name).isEqualTo("AM")
     }

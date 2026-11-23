@@ -49,7 +49,7 @@ object ExportifyCsv {
         name: String,
         text: String,
     ): SpotifyPlaylist {
-        val rows = parseCsv(text.removePrefix("﻿"))
+        val rows = parseCsv(text.removePrefix(""))
         val header = rows.firstOrNull()?.map { it.trim() }
         val title = header?.indexOf(COL_TITLE) ?: -1
         val artists = header?.indexOf(COL_ARTISTS) ?: -1
@@ -87,6 +87,7 @@ object ExportifyCsv {
         val field = StringBuilder()
         var quoted = false
         var i = 0
+
         fun endRow() {
             row.add(field.toString())
             field.clear()

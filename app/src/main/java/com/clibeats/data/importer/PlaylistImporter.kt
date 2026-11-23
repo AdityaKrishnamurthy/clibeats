@@ -88,6 +88,7 @@ sealed interface ImportState {
  * phone (a progress notification shows it). Songs are searched a few at a time with a short pause, which
  * keeps YouTube from rate-limiting the app. The saved playlist keeps Spotify's song order.
  */
+@Suppress("TooManyFunctions") // import steps plus its progress notification, kept together
 @Singleton
 class PlaylistImporter
     @Inject
@@ -234,6 +235,7 @@ class PlaylistImporter
             return null
         }
 
+        @Suppress("ReturnCount")
         private suspend fun save(
             index: Int,
             name: String,
@@ -276,11 +278,15 @@ class PlaylistImporter
             }
         }
 
-        private fun orderedIds(results: List<ImportedSong>) =
-            results.sortedBy { it.index }.mapNotNull { it.match?.id }.distinct()
+        /** Matched song ids in the Spotify playlist's order. */
+        private fun orderedIds(results: List<ImportedSong>): List<String> {
+            val inOrder = results.sortedBy { it.index }
+            return inOrder.mapNotNull { it.match?.id }.distinct()
+        }
 
         // ── Notification ────────────────────────────────────────────────────────────
 
+        @Suppress("ReturnCount")
         private fun notifyProgress() {
             val running = _state.value as? ImportState.Running ?: return
             val playlist = running.playlists.getOrNull(running.current) ?: return
@@ -333,7 +339,8 @@ class PlaylistImporter
                 Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
-            if (allowed) runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build()) }
+            if (!allowed) return
+            runCatching { NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build()) }
         }
 
         private fun ensureChannel() {

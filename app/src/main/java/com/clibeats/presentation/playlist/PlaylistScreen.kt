@@ -52,6 +52,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +72,7 @@ import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
+import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -99,6 +101,12 @@ fun PlaylistScreen(
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
     var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
+    // Import from Spotify opens over the playlist list; saveable so rotating doesn't drop you out of it.
+    var showImport by rememberSaveable { mutableStateOf(false) }
+    if (showImport) {
+        ImportScreen(onClose = { showImport = false })
+        return
+    }
 
     // Re-tapping the Playlists tab while inside a playlist goes back to the grid.
     LaunchedEffect(showGridRequested) {
@@ -222,6 +230,7 @@ fun PlaylistScreen(
                             onFavoritesClick = viewModel::openFavorites,
                             onMostPlayedClick = viewModel::openMostPlayed,
                             onCreateClick = { showCreateDialog = true },
+                            onImportClick = { showImport = true },
                             onPlaylistClick = { viewModel.selectPlaylist(it.id) },
                             onDeleteClick = { pendingDelete = it },
                         )
