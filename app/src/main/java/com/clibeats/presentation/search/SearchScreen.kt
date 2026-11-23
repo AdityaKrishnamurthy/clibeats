@@ -52,10 +52,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
-import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.ProviderSwitcher
+import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiTextField
@@ -88,12 +89,13 @@ fun SearchScreen(
             onFocusHandled()
         }
     }
-    val favorites: FavoritesViewModel = hiltViewModel()
+    val trackActions: TrackActionsViewModel = hiltViewModel()
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
     val activeProviderId by viewModel.activeProviderId.collectAsState()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
+    var menuTrack by remember { mutableStateOf<Track?>(null) }
     val recentSearches by viewModel.recentSearches.collectAsState()
     val focusManager = LocalFocusManager.current
 
@@ -150,15 +152,15 @@ fun SearchScreen(
                         tracks = recentSearches,
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
                         onClear = viewModel::clearRecentSearches,
-                        onAddToQueue = viewModel::onAddToQueue,
+                        onAddToQueue = { track ->
+                            trackActions.addToQueue(track)
+                            viewModel.rememberPick(track)
+                        },
                         onFavorite = { track ->
-                            favorites.add(track)
+                            trackActions.favorite(track)
                             viewModel.rememberPick(track)
                         },
-                        onAddToPlaylist = { track ->
-                            playlistPickerTrack = track
-                            viewModel.rememberPick(track)
-                        },
+                        onMore = { menuTrack = it },
                     )
                 }
                 return@TuiBlock
@@ -174,16 +176,23 @@ fun SearchScreen(
                         SearchResultsList(
                             tracks = currentState.tracks,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
-                            onAddToQueue = viewModel::onAddToQueue,
-                            onFavorite = { track ->
-                                favorites.add(track)
+                            onAddToQueue = { track ->
+                                trackActions.addToQueue(track)
                                 viewModel.rememberPick(track)
                             },
-                            onPlayNext = viewModel::onPlayNext,
+                            onFavorite = { track ->
+                                trackActions.favorite(track)
+                                viewModel.rememberPick(track)
+                            },
+                            onPlayNext = { track ->
+                                trackActions.playNext(track)
+                                viewModel.rememberPick(track)
+                            },
                             onAddToPlaylist = { track ->
                                 playlistPickerTrack = track
                                 viewModel.rememberPick(track)
                             },
+                            onMore = { menuTrack = it },
                         )
                     }
             }
@@ -192,6 +201,9 @@ fun SearchScreen(
 
     playlistPickerTrack?.let { track ->
         AddToPlaylistDialog(track = track, onDismiss = { playlistPickerTrack = null })
+    }
+    menuTrack?.let { track ->
+        SongActionsSheet(track = track, onDismiss = { menuTrack = null }, onPicked = viewModel::rememberPick)
     }
 }
 
@@ -203,7 +215,7 @@ private fun RecentSearchesList(
     onClear: () -> Unit,
     onAddToQueue: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
-    onAddToPlaylist: (Track) -> Unit,
+    onMore: (Track) -> Unit,
 ) {
     val accent = LocalAccentColor.current
     LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -231,7 +243,7 @@ private fun RecentSearchesList(
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
                 onSwipeLeft = { onFavorite(track) },
-                onLongPress = { onAddToPlaylist(track) },
+                onLongPress = { onMore(track) },
             )
         }
     }
@@ -319,6 +331,7 @@ private fun SearchResultsList(
     onFavorite: (Track) -> Unit,
     onPlayNext: (Track) -> Unit,
     onAddToPlaylist: (Track) -> Unit,
+    onMore: (Track) -> Unit,
 ) {
     LazyColumn(modifier = Modifier.fillMaxSize()) {
         item {
@@ -337,7 +350,7 @@ private fun SearchResultsList(
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
                 onSwipeLeft = { onFavorite(track) },
-                onLongPress = { onAddToPlaylist(track) },
+                onLongPress = { onMore(track) },
                 actions = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         IconButton(

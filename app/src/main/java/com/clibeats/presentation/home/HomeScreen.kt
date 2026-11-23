@@ -6,10 +6,13 @@
 
 package com.clibeats.presentation.home
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,6 +23,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,16 +41,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
-import com.clibeats.presentation.component.AddToPlaylistDialog
-import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.ProviderSwitcher
+import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.playlist.PlaylistViewMode
+import com.clibeats.presentation.playlist.ViewModeBar
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
@@ -56,7 +64,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
  * Home dashboard in the spotify-tui style.
  *
  * Shows a system status block, quick navigation shortcuts, and a live
- * trending tracks feed (Audius) so songs are listed on launch.
+ * trending tracks feed (YouTube Music) so songs are listed on launch.
  */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
@@ -72,16 +80,17 @@ fun HomeScreen(
             onToggleSourceHandled()
         }
     }
-    val favorites: FavoritesViewModel = hiltViewModel()
+    val trackActions: TrackActionsViewModel = hiltViewModel()
     val uiState by homeViewModel.uiState.collectAsState()
     val isRefreshing by homeViewModel.isRefreshing.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
     val activeProviderId by homeViewModel.activeProviderId.collectAsState()
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
     val isOnline by homeViewModel.isOnline.collectAsState()
+    val viewMode by homeViewModel.viewMode.collectAsState()
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
-        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+        SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
 
     LazyColumn(
@@ -110,7 +119,7 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "● ACTIVE PROVIDER",
+                            text = "● ACTIVE PROVIDER: ${providerName.uppercase()}",
                             style = MaterialTheme.typography.labelMedium,
                             color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )
@@ -120,12 +129,6 @@ fun HomeScreen(
                             color = if (isSystemOnline) CliBeatsAccent else MaterialTheme.colorScheme.error,
                         )
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "PROVIDER : $providerName",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = CliBeatsTextSecondary,
-                    )
                     Spacer(modifier = Modifier.height(8.dp))
                     ProviderSwitcher(
                         providers = homeViewModel.providers,
@@ -134,6 +137,8 @@ fun HomeScreen(
                     )
                 }
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            ViewModeBar(label = "View", selected = viewMode, onSelect = homeViewModel::setViewMode)
             Spacer(modifier = Modifier.height(12.dp))
         }
 
@@ -141,23 +146,20 @@ fun HomeScreen(
         if (recentlyPlayed.isNotEmpty()) {
             item {
                 SectionHeader(
-                    title = "RECENTLY PLAYED",
+                    title = "Recently Played",
                     actionLabel = "[ CLEAR ]",
                     onAction = homeViewModel::clearRecentlyPlayed,
                 )
             }
-            itemsIndexed(recentlyPlayed, key = { _, t -> "recent_${t.id}" }) { index, track ->
-                SongTableRow(
-                    trackTitle = track.title,
-                    artist = track.artist,
-                    duration = formatDuration(track.durationMs),
-                    artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                    onClick = { homeViewModel.playFromList(recentlyPlayed, index) },
-                    onSwipeRight = { homeViewModel.addToQueue(track) },
-                    onSwipeLeft = { favorites.add(track) },
-                    onLongPress = { addToPlaylistTrack = track },
-                )
-            }
+            homeTracks(
+                keyPrefix = "recent",
+                tracks = recentlyPlayed,
+                mode = viewMode,
+                onPlay = { index -> homeViewModel.playFromList(recentlyPlayed, index) },
+                onQueue = trackActions::addToQueue,
+                onFavorite = trackActions::favorite,
+                onLongPress = { addToPlaylistTrack = it },
+            )
             item { Spacer(modifier = Modifier.height(12.dp)) }
         }
 
@@ -166,13 +168,13 @@ fun HomeScreen(
             // Trending loads once when the app opens; after that only this button reloads it.
             val busy = isRefreshing || uiState is HomeUiState.Loading
             SectionHeader(
-                title = "TRENDING / ${providerName.uppercase()}",
+                title = "Trending / $providerName",
                 actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ REFRESH ]",
                 onAction = homeViewModel::refreshTrending,
                 actionEnabled = !busy,
                 actionDescription = "Refresh trending",
             )
-            SongTableHeader()
+            if (!viewMode.isGrid) SongTableHeader()
         }
 
         // 4. Track List Content
@@ -207,18 +209,15 @@ fun HomeScreen(
                         EmptyHomeState()
                     }
                 } else {
-                    itemsIndexed(state.tracks, key = { _, t -> "trend_${t.id}" }) { index, track ->
-                        SongTableRow(
-                            trackTitle = track.title,
-                            artist = track.artist,
-                            duration = formatDuration(track.durationMs),
-                            artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                            onClick = { homeViewModel.playFromList(state.tracks, index) },
-                            onSwipeRight = { homeViewModel.addToQueue(track) },
-                            onSwipeLeft = { favorites.add(track) },
-                            onLongPress = { addToPlaylistTrack = track },
-                        )
-                    }
+                    homeTracks(
+                        keyPrefix = "trend",
+                        tracks = state.tracks,
+                        mode = viewMode,
+                        onPlay = { index -> homeViewModel.playFromList(state.tracks, index) },
+                        onQueue = trackActions::addToQueue,
+                        onFavorite = trackActions::favorite,
+                        onLongPress = { addToPlaylistTrack = it },
+                    )
                 }
             }
             is HomeUiState.Error -> {
@@ -312,3 +311,102 @@ private fun EmptyHomeState() {
 }
 
 private const val DISABLED_ALPHA = 0.5f
+
+/**
+ * Home song lists in the chosen view: List (compact rows), Details (taller rows, bigger covers), or a
+ * small / large grid of covers. Tap plays; hold adds to a playlist; in the row views, swipe right queues
+ * and swipe left adds to favorites.
+ */
+@Suppress("LongParameterList")
+private fun LazyListScope.homeTracks(
+    keyPrefix: String,
+    tracks: List<Track>,
+    mode: PlaylistViewMode,
+    onPlay: (Int) -> Unit,
+    onQueue: (Track) -> Unit,
+    onFavorite: (Track) -> Unit,
+    onLongPress: (Track) -> Unit,
+) {
+    if (!mode.isGrid) {
+        val large = mode == PlaylistViewMode.DETAILS
+        itemsIndexed(tracks, key = { _, t -> "${keyPrefix}_${t.id}" }) { index, track ->
+            SongTableRow(
+                trackTitle = track.title,
+                artist = track.artist,
+                duration = formatDuration(track.durationMs),
+                artworkContent = {
+                    TrackArtwork(artworkUrl = track.artworkUrl, size = if (large) DETAILS_ART_DP else LIST_ART_DP)
+                },
+                large = large,
+                onClick = { onPlay(index) },
+                onSwipeRight = { onQueue(track) },
+                onSwipeLeft = { onFavorite(track) },
+                onLongPress = { onLongPress(track) },
+            )
+        }
+        return
+    }
+    val rows = tracks.withIndex().chunked(mode.columns)
+    items(rows.size, key = { "${keyPrefix}_grid_${mode.columns}_$it" }) { row ->
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            rows[row].forEach { (index, track) ->
+                SongTile(
+                    track = track,
+                    onClick = { onPlay(index) },
+                    onLongClick = { onLongPress(track) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            // Keep the last row's tiles the same width as the rest.
+            repeat(mode.columns - rows[row].size) { Spacer(modifier = Modifier.weight(1f)) }
+        }
+    }
+}
+
+@Suppress("FunctionNaming")
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SongTile(
+    track: Track,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    BoxWithConstraints(
+        modifier =
+            modifier
+                .semantics(mergeDescendants = true) {}
+                .combinedClickable(
+                    onClickLabel = "Play",
+                    onLongClickLabel = "Add to playlist",
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                ),
+    ) {
+        val side = maxWidth.value.toInt()
+        Column {
+            TrackArtwork(artworkUrl = track.artworkUrl, size = side)
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = track.title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = track.artist,
+                style = MaterialTheme.typography.labelSmall,
+                color = CliBeatsTextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private const val LIST_ART_DP = 32
+private const val DETAILS_ART_DP = 52

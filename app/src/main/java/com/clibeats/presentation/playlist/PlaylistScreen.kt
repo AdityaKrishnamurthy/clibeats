@@ -64,10 +64,10 @@ import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
-import com.clibeats.presentation.component.AddToPlaylistDialog
-import com.clibeats.presentation.component.FavoritesViewModel
 import com.clibeats.presentation.component.ReorderableList
+import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
@@ -91,7 +91,7 @@ fun PlaylistScreen(
     onCreateDialogHandled: () -> Unit = {},
     viewModel: PlaylistViewModel = hiltViewModel(),
 ) {
-    val favorites: FavoritesViewModel = hiltViewModel()
+    val trackActions: TrackActionsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -132,7 +132,7 @@ fun PlaylistScreen(
                     s.isFavoritesOpen -> {
                         BackHandler { viewModel.selectPlaylist(null) }
                         PlaylistDetailView(
-                            title = "♥ FAVORITES",
+                            title = "♥ Favorites",
                             subtitle = "${tracks.size} tracks",
                             tracks = tracks,
                             emptyText = "No favorites yet. Tap ♥ in Now Playing to add songs.",
@@ -141,8 +141,8 @@ fun PlaylistScreen(
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
                             onReorder = viewModel::reorderFavorites,
-                            onSwipeRight = viewModel::addToQueue,
-                            onSwipeLeft = favorites::add,
+                            onSwipeRight = trackActions::addToQueue,
+                            onSwipeLeft = trackActions::favorite,
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.FAVORITES },
@@ -151,7 +151,7 @@ fun PlaylistScreen(
                     s.isMostPlayedOpen -> {
                         BackHandler { viewModel.selectPlaylist(null) }
                         PlaylistDetailView(
-                            title = "MOST PLAYED",
+                            title = "Most Played",
                             subtitle = "${tracks.size} tracks · by play count",
                             tracks = tracks,
                             emptyText = "Nothing played yet. Your most played songs will show up here.",
@@ -159,8 +159,8 @@ fun PlaylistScreen(
                             onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
                             onRemoveClick = viewModel::removeFromMostPlayed,
                             removeLabel = "Remove from Most Played",
-                            onSwipeRight = viewModel::addToQueue,
-                            onSwipeLeft = favorites::add,
+                            onSwipeRight = trackActions::addToQueue,
+                            onSwipeLeft = trackActions::favorite,
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.MOST_PLAYED },
@@ -195,8 +195,8 @@ fun PlaylistScreen(
                                 } else {
                                     { reordered -> viewModel.reorderPlaylist(selected.id, reordered) }
                                 },
-                            onSwipeRight = viewModel::addToQueue,
-                            onSwipeLeft = favorites::add,
+                            onSwipeRight = trackActions::addToQueue,
+                            onSwipeLeft = trackActions::favorite,
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 if (readOnly && tracks.isNotEmpty()) {
@@ -296,7 +296,7 @@ fun PlaylistScreen(
         )
     }
     addToPlaylistTrack?.let { track ->
-        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+        SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
 }
 

@@ -43,12 +43,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
-import com.clibeats.presentation.component.AddToPlaylistDialog
-import com.clibeats.presentation.component.FavoritesViewModel
+import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
+import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.playlist.PlaylistScreen
+import com.clibeats.presentation.playlist.PlaylistViewModel
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -64,21 +66,37 @@ fun LibraryScreen(
     toggleModeRequested: Boolean = false,
     onToggleModeHandled: () -> Unit = {},
 ) {
-    val favorites: FavoritesViewModel = hiltViewModel()
+    val trackActions: TrackActionsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val mode by viewModel.mode.collectAsState()
-    // Tapping the Library tab while already on it flips Online <-> Offline.
+    // Same instance PlaylistScreen uses below (same owner), so we can see whether a playlist is open.
+    val playlistViewModel: PlaylistViewModel = hiltViewModel()
+    // Tapping the Library tab while already on it: inside a playlist, back to the playlist list first;
+    // otherwise the next section (Playlists → Online → Local).
     LaunchedEffect(toggleModeRequested) {
         if (toggleModeRequested) {
-            viewModel.setMode(if (mode == LibraryMode.ONLINE) LibraryMode.OFFLINE else LibraryMode.ONLINE)
+            if (mode == LibraryMode.PLAYLISTS && playlistViewModel.isPlaylistOpen) {
+                playlistViewModel.selectPlaylist(null)
+            } else {
+                viewModel.nextMode()
+            }
             onToggleModeHandled()
         }
+    }
+    if (mode == LibraryMode.PLAYLISTS) {
+        Column(modifier = Modifier.fillMaxSize().background(CliBeatsBackground)) {
+            Box(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
+                LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
+            }
+            Box(modifier = Modifier.weight(1f)) { PlaylistScreen() }
+        }
+        return
     }
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
-        AddToPlaylistDialog(track = track, onDismiss = { addToPlaylistTrack = null })
+        SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
     val tabs = listOf("Tracks", "Artists", "Albums")
 
@@ -110,7 +128,7 @@ fun LibraryScreen(
             if (mode == LibraryMode.ONLINE) {
                 "Online · played"
             } else {
-                "Offline · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
+                "Local · $trackCount ${if (trackCount == 1) "track" else "tracks"}"
             }
         val titleText = "Library — $modeLabel (${tabs[selectedTabIndex]})"
         TuiBlock(
@@ -182,8 +200,8 @@ fun LibraryScreen(
                                     onTrackClick = { track, index ->
                                         viewModel.onTrackClick(track, currentState.tracks, index)
                                     },
-                                    onSwipeRight = viewModel::onSwipeAddToQueue,
-                                    onSwipeLeft = favorites::add,
+                                    onSwipeRight = trackActions::addToQueue,
+                                    onSwipeLeft = trackActions::favorite,
                                     onLongPress = { addToPlaylistTrack = it },
                                 )
                             1 -> ArtistsList(artists = currentState.artists)
@@ -235,7 +253,7 @@ private fun LibraryModeToggle(
     mode: LibraryMode,
     onSelect: (LibraryMode) -> Unit,
 ) {
-    // Two equal-width segments, matching the Online / Local switch on Home and Search.
+    // Equal-width segments, matching the Online / Local switch on Home and Search.
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         LibraryMode.entries.forEach { option ->
             val selected = option == mode
@@ -251,7 +269,7 @@ private fun LibraryModeToggle(
                         .semantics { this.selected = selected }
                         .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
                         .clickable(role = Role.Tab) { onSelect(option) }
-                        .padding(horizontal = 10.dp, vertical = 10.dp),
+                        .padding(horizontal = 4.dp, vertical = 10.dp),
             )
         }
     }

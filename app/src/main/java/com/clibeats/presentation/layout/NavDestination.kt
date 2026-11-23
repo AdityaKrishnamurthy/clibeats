@@ -12,7 +12,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 /**
  * All navigable destinations in the CLIBeats app.
  *
- * Bottom navigation: Home, Search, Library, Queue, Playlists, Settings ([mainTabs]).
+ * Bottom navigation: Home, Search, Library, Settings ([mainTabs]). Playlists live inside Library;
+ * Queue opens full screen from the mini player or Now Playing.
  */
 sealed class NavDestination(
     val route: String,
@@ -63,12 +64,12 @@ sealed class NavDestination(
     )
 
     companion object {
-        /** Bottom navigation tabs. Settings is the gear on the right (replaces the old More menu). */
+        /** Bottom navigation tabs. */
         val mainTabs: List<NavDestination>
-            get() = listOf(Home, Search, Library, Queue, Playlists, Settings)
+            get() = listOf(Home, Search, Library, Settings)
 
         /** Every destination in the app. */
         val all: List<NavDestination>
-            get() = mainTabs
+            get() = mainTabs + listOf(Queue, Playlists)
     }
 }

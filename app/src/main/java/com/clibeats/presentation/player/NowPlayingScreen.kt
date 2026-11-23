@@ -269,8 +269,8 @@ fun NowPlayingScreen(
                     modifier =
                         Modifier
                             .weight(1f, fill = false)
-                            .fillMaxWidth()
-                            .aspectRatio(1f)
+                            // Height first: on short screens the cover shrinks instead of spilling over the title.
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
                             .clip(RoundedCornerShape(8.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                             .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
@@ -620,9 +620,6 @@ internal fun qualityLine(state: PlaybackState): String {
 private fun providerLabel(id: String): String =
     when (id) {
         "youtube_music" -> "YouTube Music"
-        "jamendo" -> "Jamendo"
-        "audius" -> "Audius"
-        "internet_archive" -> "Internet Archive"
         else -> id.replace('_', ' ').replaceFirstChar { it.uppercase() }
     }
 

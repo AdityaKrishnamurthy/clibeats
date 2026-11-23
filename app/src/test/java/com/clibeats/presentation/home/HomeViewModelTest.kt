@@ -49,7 +49,8 @@ class HomeViewModelTest {
         whenever(providerRegistry.getProvider(any())).thenReturn(musicProvider)
         whenever(providerRegistry.defaultProvider()).thenReturn(musicProvider)
         whenever(providerRegistry.providers).thenReturn(listOf(musicProvider))
-        whenever(appPreferences.activeProviderId).thenReturn(flowOf("audius"))
+        whenever(appPreferences.activeProviderId).thenReturn(flowOf("youtube_music"))
+        whenever(appPreferences.homeView).thenReturn(flowOf(null))
         // Trending loads as soon as the ViewModel starts; tests that care stub their own result.
         runBlocking { whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(emptyList())) }
 
@@ -139,13 +140,13 @@ class HomeViewModelTest {
     @Test
     fun `activeProviderName reflects selected provider`() =
         runTest {
-            whenever(musicProvider.displayName).thenReturn("Audius")
+            whenever(musicProvider.displayName).thenReturn("YouTube Music")
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
                 viewModel.activeProviderName.collect()
             }
             testDispatcher.scheduler.advanceUntilIdle()
 
-            assertThat(viewModel.activeProviderName.value).isEqualTo("Audius")
+            assertThat(viewModel.activeProviderName.value).isEqualTo("YouTube Music")
         }
 
     private fun fakeTrack(): Track =

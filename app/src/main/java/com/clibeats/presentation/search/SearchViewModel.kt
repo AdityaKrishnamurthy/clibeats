@@ -74,11 +74,11 @@ class SearchViewModel
         ) {
             viewModelScope.launch {
                 appPreferences.addRecentSearchTrack(tracks[index])
-                // "Auto-queue related" off: play only the tapped song, no suggestions after it.
+                // "Auto-queue related" off: play only the tapped song (songs already queued stay queued).
                 if (appPreferences.autoQueueRelated.first()) {
                     playbackRepository.setQueue(tracks, index)
                 } else {
-                    playbackRepository.setQueue(listOf(tracks[index]), 0)
+                    playbackRepository.playTrack(tracks[index])
                 }
             }
         }
@@ -131,15 +131,6 @@ class SearchViewModel
         }
 
         // Anything done with a result (play, queue, play next, favorite, add to playlist) makes it a recent search.
-        fun onAddToQueue(track: Track) {
-            playbackRepository.addToQueue(track)
-            rememberPick(track)
-        }
-
-        fun onPlayNext(track: Track) {
-            playbackRepository.playNext(track)
-            rememberPick(track)
-        }
 
         /** Lists [track] under recent searches (used for favorite / add to playlist from the results). */
         fun rememberPick(track: Track) {

@@ -140,7 +140,7 @@ internal fun ReleaseNotesLink(
     if (release.pageUrl.isBlank()) return
     val context = LocalContext.current
     Text(
-        text = "release notes",
+        text = "Release Notes",
         style = MaterialTheme.typography.labelMedium,
         color = accent,
         textDecoration = TextDecoration.Underline,

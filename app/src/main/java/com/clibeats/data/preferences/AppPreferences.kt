@@ -34,6 +34,7 @@ class AppPreferences
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
+            val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val ARTWORK_CACHE_MB = intPreferencesKey("artwork_cache_mb")
             val ONBOARDING_DONE = booleanPreferencesKey("onboarding_done")
@@ -41,6 +42,7 @@ class AppPreferences
             val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
             val HOME_RECENTS_CLEARED_AT = longPreferencesKey("home_recents_cleared_at")
             val LIBRARY_HISTORY_CLEARED_AT = longPreferencesKey("library_history_cleared_at")
+            val LIBRARY_SECTION = stringPreferencesKey("library_section")
             val RECENT_SEARCH_TRACKS = stringPreferencesKey("recent_search_tracks")
             val MOST_PLAYED_CLEARED_AT = longPreferencesKey("most_played_cleared_at")
             val MOST_PLAYED_SONG_RESETS = stringSetPreferencesKey("most_played_song_resets")
@@ -62,6 +64,13 @@ class AppPreferences
 
         suspend fun setHomeRecentsClearedAt(epochMs: Long) {
             dataStore.edit { it[Keys.HOME_RECENTS_CLEARED_AT] = epochMs }
+        }
+
+        /** The Library section last open (Playlists / Online / Offline), so Library reopens there. */
+        val librarySection: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_SECTION] }
+
+        suspend fun setLibrarySection(name: String) {
+            dataStore.edit { it[Keys.LIBRARY_SECTION] = name }
         }
 
         suspend fun setLibraryHistoryClearedAt(epochMs: Long) {
@@ -300,6 +309,13 @@ class AppPreferences
 
         /** Playlists overview layout (a PlaylistViewMode name); null = default. */
         val playlistView: Flow<String?> = dataStore.data.map { it[Keys.PLAYLIST_VIEW] }
+
+        /** Home song list layout (a PlaylistViewMode name); null = default. */
+        val homeView: Flow<String?> = dataStore.data.map { it[Keys.HOME_VIEW] }
+
+        suspend fun setHomeView(name: String) {
+            dataStore.edit { it[Keys.HOME_VIEW] = name }
+        }
 
         suspend fun setPlaylistView(name: String) {
             dataStore.edit { it[Keys.PLAYLIST_VIEW] = name }

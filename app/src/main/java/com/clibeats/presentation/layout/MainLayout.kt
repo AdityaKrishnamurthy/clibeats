@@ -18,19 +18,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Menu
-import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
@@ -56,13 +48,11 @@ import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
-import com.clibeats.presentation.player.HintTarget
 import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
+import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDestructive
-import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.update.UpdateStatusBar
 
 /**
@@ -70,7 +60,6 @@ import com.clibeats.presentation.update.UpdateStatusBar
  *
  * Contains:
  * - Adaptive navigation (Rail on compact/medium, Drawer on expanded)
- * - TopAppBar (48dp, flat, no elevation)
  * - Content area slot for screen content
  * - Bottom slot for persistent PlayerBar
  *
@@ -85,7 +74,6 @@ fun MainLayout(
     content: @Composable () -> Unit = {},
 ) {
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = showNowPlaying) { showNowPlaying = false }
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavigationSuiteScaffold(
@@ -102,16 +90,8 @@ fun MainLayout(
             ),
             containerColor = MaterialTheme.colorScheme.background,
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                CliBeatsTopAppBar(
-                    onSearchClick = { onDestinationSelected(NavDestination.Search) },
-                )
-
-                HorizontalDivider(
-                    thickness = 1.dp,
-                    color = CliBeatsDivider,
-                )
-
+            // No top bar: screens start right under the status bar.
+            Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
                 // Update download progress (only while an update is downloading or ready to install).
                 UpdateStatusBar()
 
@@ -128,6 +108,7 @@ fun MainLayout(
                 PlayerBarHost(
                     playerViewModel,
                     onExpandClick = { showNowPlaying = true },
+                    onQueueClick = { onDestinationSelected(NavDestination.Queue) },
                 )
             }
         }
@@ -138,6 +119,8 @@ fun MainLayout(
             enter = slideInVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
             exit = slideOutVertically(tween(NOW_PLAYING_ANIM_MS)) { it },
         ) {
+            // Registered after the screens below, so back closes Now Playing before the Queue or a tab.
+            BackHandler { showNowPlaying = false }
             NowPlayingScreen(
                 viewModel = playerViewModel,
                 onClose = { showNowPlaying = false },
@@ -157,11 +140,14 @@ private const val NOW_PLAYING_ANIM_MS = 250
 private fun PlayerBarHost(
     playerViewModel: PlayerViewModel,
     onExpandClick: () -> Unit,
+    onQueueClick: () -> Unit,
 ) {
     val playbackState by playerViewModel.playbackState.collectAsState()
-    val hint by playerViewModel.hint.collectAsState()
     val playerMessage by playerViewModel.playerMessage.collectAsState()
-    PlayerMessageLine(playerMessage)
+    val queueSize = playerViewModel.queue.collectAsState().value.size
+    val notice by playerViewModel.notice.collectAsState()
+    // Errors (a song that couldn't play) win over confirmations like "Added to queue".
+    PlayerMessageLine(playerMessage ?: notice, isError = playerMessage != null)
     // Prefetch the high-res cover as soon as a track starts, so Now Playing opens with it ready.
     val context = LocalContext.current
     val artworkUrl = playbackState.currentTrack?.artworkUrl
@@ -193,9 +179,8 @@ private fun PlayerBarHost(
         onSkipNextClick = playerViewModel::onSkipNextClick,
         onSkipPreviousClick = playerViewModel::onSkipPreviousClick,
         onSeek = playerViewModel::seekTo,
-        repeatMode = playbackState.repeatMode,
-        onRepeatClick = playerViewModel::onRepeatClick,
-        repeatHint = hint?.takeIf { it.target == HintTarget.REPEAT }?.text,
+        upNextCount = (queueSize - playbackState.currentIndex - 1).coerceAtLeast(0),
+        onQueueClick = onQueueClick,
         onExpandClick = onExpandClick,
     )
 }
@@ -203,15 +188,20 @@ private fun PlayerBarHost(
 /** One-line notice above the player bar, e.g. a song that couldn't be played and was skipped. */
 @Suppress("FunctionNaming")
 @Composable
-private fun PlayerMessageLine(message: String?) {
+private fun PlayerMessageLine(
+    message: String?,
+    isError: Boolean,
+) {
     // Keep the last text while fading out so the line doesn't empty mid-animation.
-    val last = remember { arrayOf("") }
-    message?.let { last[0] = it }
+    val last = remember { arrayOf("" to true) }
+    message?.let { last[0] = it to isError }
+    val (text, error) = last[0]
+    val color = if (error) CliBeatsDestructive else CliBeatsAccent
     AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut()) {
         Text(
-            text = "! " + last[0],
+            text = if (error) "! $text" else "> $text",
             style = MaterialTheme.typography.labelMedium,
-            color = CliBeatsDestructive,
+            color = color,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier =
@@ -219,7 +209,7 @@ private fun PlayerMessageLine(message: String?) {
                     .fillMaxWidth()
                     .semantics { liveRegion = LiveRegionMode.Polite }
                     .background(CliBeatsSurface)
-                    .border(1.dp, CliBeatsDestructive)
+                    .border(1.dp, color)
                     .padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
@@ -248,42 +238,4 @@ private fun NavigationSuiteScope.buildNavItems(
             },
         )
     }
-}
-
-@Suppress("FunctionNaming")
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CliBeatsTopAppBar(onSearchClick: () -> Unit = {}) {
-    TopAppBar(
-        modifier = Modifier.height(48.dp),
-        title = {
-            Text(
-                text = "CLIBeats",
-                style = MaterialTheme.typography.titleMedium,
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = {}) {
-                Icon(
-                    imageVector = Icons.Outlined.Menu,
-                    contentDescription = "Open navigation",
-                    tint = CliBeatsTextSecondary,
-                )
-            }
-        },
-        actions = {
-            IconButton(onClick = onSearchClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Search,
-                    contentDescription = "Open search",
-                    tint = CliBeatsTextSecondary,
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = CliBeatsSurface,
-            titleContentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-        scrollBehavior = null,
-    )
 }
