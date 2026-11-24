@@ -21,8 +21,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20502").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.5.2").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20503").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.5.3").get()
     }
 
     // Release signing from env (set by .github/workflows/release.yml). A release APK signed with
@@ -137,6 +137,7 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.session)
     implementation(libs.media3.common)
+    implementation(libs.media3.datasource.okhttp)
     implementation(libs.androidx.media)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)

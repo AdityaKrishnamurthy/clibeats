@@ -5,6 +5,8 @@
     "LongMethod",
     "MaxLineLength",
     "CyclomaticComplexMethod",
+    "TooManyFunctions",
+    "LongParameterList",
 )
 
 package com.clibeats.data.provider
@@ -12,6 +14,7 @@ package com.clibeats.data.provider
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.InnerTubeContext
+import com.clibeats.data.provider.dto.NextRequest
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
 import com.clibeats.data.provider.mapper.AlbumHit
@@ -21,12 +24,16 @@ import com.clibeats.data.provider.mapper.pageCover
 import com.clibeats.data.provider.mapper.pageTitle
 import com.clibeats.data.provider.mapper.playlistTracks
 import com.clibeats.data.provider.mapper.toAlbumHits
+import com.clibeats.data.provider.mapper.toRadioTrackList
 import com.clibeats.data.provider.mapper.toTrack
 import com.clibeats.data.provider.mapper.toTrackList
+import com.clibeats.data.provider.youtube.ExtractedStreamInfo
 import com.clibeats.data.provider.youtube.NewPipeExtractorResolver
 import com.clibeats.data.provider.youtube.PoTokenGenerator
+import com.clibeats.data.provider.youtube.PoTokenResult
 import com.clibeats.data.provider.youtube.StreamCacheManager
 import com.clibeats.data.provider.youtube.StreamUrlDeobfuscator
+import com.clibeats.data.provider.youtube.YouTubeClientConfig
 import com.clibeats.data.provider.youtube.YouTubeClientStrategy
 import com.clibeats.domain.model.PlaybackException
 import com.clibeats.domain.model.Playlist
@@ -35,6 +42,8 @@ import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderId
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.util.DiagnosticLogger
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -181,98 +190,161 @@ class YouTubeMusicProvider
                 return ProviderResult.Success(cached.url)
             }
 
-            // 2. Primary: NewPipeExtractor v0.27.1 maintained extraction
+            val highQuality = true
+
+            // 2. Fast path: direct InnerTube call with ANDROID_MUSIC (no PO token, 1.2s budget)
+            val fast =
+                resolveWithInnerTube(
+                    rawId = rawId,
+                    traceId = traceId,
+                    highQuality = highQuality,
+                    clients = listOf(YouTubeClientStrategy.PRIMARY),
+                    timeoutMs = FAST_PATH_TIMEOUT_MS,
+                    poTokenResult = null,
+                )
+            if (fast.info != null) {
+                logAndCache(traceId, rawId, fast.info)
+                return ProviderResult.Success(fast.info.url)
+            }
+
+            // 3. Secondary: NewPipeExtractor v0.27.1 maintained extraction
             val newPipeExtracted = newPipeExtractorResolver.resolveStream(rawId, traceId)
             if (newPipeExtracted != null) {
-                DiagnosticLogger.logStreamFormatSelected(
-                    traceId = traceId,
-                    itag = newPipeExtracted.itag,
-                    mimeType = newPipeExtracted.mimeType,
-                    bitrate = newPipeExtracted.bitrate,
-                )
-                DiagnosticLogger.logStreamUrlResolved(
-                    traceId = traceId,
-                    host = newPipeExtracted.host,
-                    itag = newPipeExtracted.itag,
-                    mimeType = newPipeExtracted.mimeType,
-                    expiresAtMs = newPipeExtracted.expiresAtMs,
-                )
-
-                streamCacheManager.put(providerId, rawId, newPipeExtracted)
+                logAndCache(traceId, rawId, newPipeExtracted)
                 return ProviderResult.Success(newPipeExtracted.url)
             }
 
-            // 3. Fallback: InnerTube player API with PO-token
+            // 4. Fallback: InnerTube player API with PO-token
             val poTokenResult = poTokenGenerator.getPoToken(traceId, rawId)
-            var lastErrorMessage = "Unknown player error"
-            for (clientConfig in YouTubeClientStrategy.FALLBACK_CHAIN) {
-                DiagnosticLogger.logPlayerRequest(traceId, clientConfig.name, rawId)
-
-                val requestResult =
-                    runCatching {
-                        val playerReq =
-                            PlayerRequest.forClient(
-                                videoId = rawId,
-                                config = clientConfig,
-                                poToken = poTokenResult?.poToken,
-                                visitorData = poTokenResult?.visitorData,
-                            )
-                        api.player(playerReq)
-                    }
-
-                val playerResp = requestResult.getOrNull()
-                if (playerResp == null) {
-                    val err = requestResult.exceptionOrNull()?.message ?: "HTTP failure"
-                    DiagnosticLogger.logPlayerResponse(traceId, clientConfig.name, "HTTP_ERROR: $err")
-                    lastErrorMessage = err
-                    continue
-                }
-
-                val status = playerResp.playabilityStatus?.status ?: "OK"
-                DiagnosticLogger.logPlayerResponse(traceId, clientConfig.name, status)
-
-                if (status == "LOGIN_REQUIRED" || status == "UNPLAYABLE" || status == "ERROR") {
-                    val reason = playerResp.playabilityStatus?.reason ?: status
-                    lastErrorMessage = reason
-                    if (status == "LOGIN_REQUIRED") {
-                        DiagnosticLogger.logError(traceId, "BOT_CHECK_FAILED", reason)
-                    }
-                    continue
-                }
-
-                val streamingData = playerResp.streamingData
-                if (streamingData == null) {
-                    lastErrorMessage = "No streamingData in player response"
-                    continue
-                }
-
-                // Extract the best audio format from adaptiveFormats or formats.
-                val extracted = StreamUrlDeobfuscator.extractAudioStream(streamingData, traceId)
-                if (extracted != null) {
-                    DiagnosticLogger.logStreamFormatSelected(
-                        traceId = traceId,
-                        itag = extracted.itag,
-                        mimeType = extracted.mimeType,
-                        bitrate = extracted.bitrate,
-                    )
-                    DiagnosticLogger.logStreamUrlResolved(
-                        traceId = traceId,
-                        host = extracted.host,
-                        itag = extracted.itag,
-                        mimeType = extracted.mimeType,
-                        expiresAtMs = extracted.expiresAtMs,
-                    )
-
-                    streamCacheManager.put(providerId, rawId, extracted)
-                    return ProviderResult.Success(extracted.url)
-                }
+            val full =
+                resolveWithInnerTube(
+                    rawId = rawId,
+                    traceId = traceId,
+                    highQuality = highQuality,
+                    clients = YouTubeClientStrategy.FALLBACK_CHAIN,
+                    timeoutMs = FULL_PATH_TIMEOUT_MS,
+                    poTokenResult = poTokenResult,
+                )
+            if (full.info != null) {
+                logAndCache(traceId, rawId, full.info)
+                return ProviderResult.Success(full.info.url)
             }
 
+            val lastErrorMessage = full.lastError.ifBlank { "Unknown player error" }
             DiagnosticLogger.logError(traceId, "STREAM_RESOLUTION_FAILED", lastErrorMessage)
             return ProviderResult.Error(
                 message = "Failed to resolve stream for $rawId: $lastErrorMessage",
                 cause = PlaybackException.StreamResolutionFailed(lastErrorMessage),
             )
+        }
+
+        override suspend fun relatedTracks(
+            trackId: String,
+            limit: Int,
+        ): ProviderResult<List<Track>> {
+            val rawId = ProviderId.rawSourceId(providerId, trackId)
+            return runCatching {
+                val nextJson = api.next(NextRequest.radio(rawId))
+                val tracks =
+                    nextJson.toRadioTrackList()
+                        .filter { ProviderId.rawSourceId(providerId, it.id) != rawId }
+                        .take(limit)
+                ProviderResult.Success(tracks)
+            }.getOrElse { e ->
+                ProviderResult.Error(
+                    message = "Radio failed for $rawId: ${e.message}",
+                    cause = e,
+                )
+            }
+        }
+
+        private data class InnerTubeAttempt(
+            val info: ExtractedStreamInfo?,
+            val lastError: String,
+        )
+
+        /** Tries [clients] in order; returns the first playable audio format and the last error seen. */
+        private suspend fun resolveWithInnerTube(
+            rawId: String,
+            traceId: String,
+            highQuality: Boolean,
+            clients: List<YouTubeClientConfig>,
+            timeoutMs: Long,
+            poTokenResult: PoTokenResult?,
+        ): InnerTubeAttempt {
+            var lastErrorMessage = ""
+            val info =
+                withTimeoutOrNull(timeoutMs) {
+                    for (clientConfig in clients) {
+                        DiagnosticLogger.logPlayerRequest(traceId, clientConfig.name, rawId)
+                        val requestResult =
+                            runCatching {
+                                api.player(
+                                    PlayerRequest.forClient(
+                                        videoId = rawId,
+                                        config = clientConfig,
+                                        poToken = poTokenResult?.poToken,
+                                        visitorData = poTokenResult?.visitorData,
+                                    ),
+                                )
+                            }
+                        val playerResp = requestResult.getOrNull()
+                        if (playerResp == null) {
+                            lastErrorMessage =
+                                requestResult.exceptionOrNull()?.message ?: "HTTP failure"
+                            DiagnosticLogger.logPlayerResponse(
+                                traceId,
+                                clientConfig.name,
+                                "HTTP_ERROR: $lastErrorMessage",
+                            )
+                            continue
+                        }
+
+                        val status = playerResp.playabilityStatus?.status ?: "OK"
+                        DiagnosticLogger.logPlayerResponse(traceId, clientConfig.name, status)
+                        if (status == "LOGIN_REQUIRED" || status == "UNPLAYABLE" || status == "ERROR") {
+                            lastErrorMessage = playerResp.playabilityStatus?.reason ?: status
+                            if (status == "LOGIN_REQUIRED") {
+                                DiagnosticLogger.logError(traceId, "BOT_CHECK_FAILED", lastErrorMessage)
+                            }
+                            continue
+                        }
+
+                        val streamingData = playerResp.streamingData
+                        if (streamingData == null) {
+                            lastErrorMessage = "No streamingData in player response"
+                            continue
+                        }
+
+                        val extracted =
+                            StreamUrlDeobfuscator.extractAudioStream(streamingData, traceId, highQuality)
+                        if (extracted != null) return@withTimeoutOrNull extracted
+                        lastErrorMessage = "No playable audio format in player response"
+                    }
+                    null
+                }
+            return InnerTubeAttempt(info, lastErrorMessage)
+        }
+
+        private fun logAndCache(
+            traceId: String,
+            rawId: String,
+            extracted: ExtractedStreamInfo,
+        ) {
+            DiagnosticLogger.logStreamFormatSelected(
+                traceId = traceId,
+                itag = extracted.itag,
+                mimeType = extracted.mimeType,
+                bitrate = extracted.bitrate,
+            )
+            DiagnosticLogger.logStreamUrlResolved(
+                traceId = traceId,
+                host = extracted.host,
+                itag = extracted.itag,
+                mimeType = extracted.mimeType,
+                expiresAtMs = extracted.expiresAtMs,
+            )
+            streamCacheManager.put(providerId, rawId, extracted)
         }
 
         /** Bitrate (kbps) of the stream extracted for [trackId], if it's still cached. */
@@ -297,3 +369,5 @@ class YouTubeMusicProvider
     }
 
 private const val BITS_PER_KBIT = 1000
+private const val FAST_PATH_TIMEOUT_MS = 1_200L
+private const val FULL_PATH_TIMEOUT_MS = 20_000L

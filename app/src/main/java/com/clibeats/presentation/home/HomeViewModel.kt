@@ -12,6 +12,7 @@ import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.playback.StreamResolver
 import com.clibeats.presentation.playlist.PlaylistViewMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -35,6 +36,7 @@ private const val RETRY_DELAY_MS = 1_500L
 private const val NETWORK_WAIT_MS = 15_000L
 private const val RECENT_SHOWN = 5
 private const val LOCAL_ID = "local"
+private const val WARM_TRACKS_COUNT = 3
 
 @HiltViewModel
 class HomeViewModel
@@ -43,6 +45,7 @@ class HomeViewModel
         private val providerRegistry: ProviderRegistry,
         private val appPreferences: AppPreferences,
         private val networkMonitor: NetworkMonitor,
+        private val streamResolver: StreamResolver? = null,
         private val historyRepository: HistoryRepository? = null,
         private val playbackRepository: PlaybackRepository? = null,
     ) : ViewModel() {
@@ -177,6 +180,7 @@ class HomeViewModel
                             // Local trending reflects the library, which can change with a rescan: not cached.
                             if (providerId != LOCAL_ID) trendingCache[providerId] = result.data
                             _uiState.value = HomeUiState.Success(result.data)
+                            streamResolver?.warmTracks(result.data, WARM_TRACKS_COUNT)
                         }
                         is ProviderResult.Error -> if (!keepShown) _uiState.value = HomeUiState.Error(result.message)
                         is ProviderResult.Loading -> Unit

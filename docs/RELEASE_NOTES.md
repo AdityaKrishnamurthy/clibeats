@@ -1,3 +1,26 @@
+# CLIBeats v2.5.3 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.3.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.8 MB
+
+## Infinite Radio & Autoplay
+
+- **Continuous Radio**: When your queue approaches the end (at the second-to-last track), CLIBeats automatically fetches related tracks from YouTube Music and appends them to your queue.
+- **Queue Toggle**: `[ ∞ AUTOPLAY: ON / OFF ]` header button in Queue screen lets you turn infinite radio on or off anytime.
+- **Deduplication**: Tracks already played in the current listening session are never repeated.
+
+## Durable Offline Downloads
+
+- **Offline-First Playback**: Downloaded songs are stored safely in app storage and prioritized during playback with instant `file://` local playback.
+- **Song Actions**: Hold any song to open the action sheet and select "Download for offline" or "Remove download".
+- **Visual Badging**: Downloaded songs display a `[↓]` badge indicator in table rows.
+
+## Instant Playback & Performance
+
+- **Warm HTTP/2 Connection Pooling**: ExoPlayer Media3 connects over shared OkHttp connection pools, cutting stream setup latency.
+- **Lazy Audio Cache**: Audio cache initialization is deferred off the main thread for faster app launch.
+- **Pre-Tap Stream Warming**: Quick picks on Home and search results prefetch audio streams to enable sub-second playback.
+
 # CLIBeats v2.5.2 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.2.apk` (verify with `SHA256SUMS.txt`)
