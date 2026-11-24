@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -90,6 +91,7 @@ import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
 private const val EXPORTIFY_URL = "https://exportify.net"
+private const val TUNEMYMUSIC_URL = "https://www.tunemymusic.com"
 
 /**
  * Import from Spotify: instructions → pick a file → choose playlists → live progress → summary with
@@ -194,6 +196,15 @@ private fun TitleBar(onBack: () -> Unit) {
 
 // ── Step 1: instructions ────────────────────────────────────────────────────────
 
+/** Where the playlists come from; each has its own export steps. */
+private enum class ImportSource(
+    val label: String,
+) {
+    SPOTIFY("Spotify"),
+    YOUTUBE_MUSIC("YouTube Music"),
+    OTHER("Others"),
+}
+
 @Composable
 private fun InstructionsView(
     reading: Boolean,
@@ -201,6 +212,12 @@ private fun InstructionsView(
     onChooseFile: () -> Unit,
 ) {
     val context = LocalContext.current
+    var source by rememberSaveable { mutableStateOf(ImportSource.SPOTIFY) }
+    val open: (String) -> Unit = { url ->
+        runCatching {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+    }
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -209,40 +226,62 @@ private fun InstructionsView(
         item {
             Text(
                 text =
-                    "Bring your playlists into CLIBeats. Export them as a file (Exportify for Spotify, " +
-                        "TuneMyMusic for other services), and CLIBeats finds each song on YouTube Music.",
+                    "Export your playlists as a file, then choose it here. CLIBeats finds each song on " +
+                        "YouTube Music.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = CliBeatsTextSecondary,
             )
         }
-        item { Step(1, "Open Exportify", "It's a free website. Log in with your Spotify account there.") }
         item {
-            CliButton(text = "Open exportify.net ↗", primary = false) {
-                runCatching {
-                    context.startActivity(
-                        Intent(Intent.ACTION_VIEW, Uri.parse(EXPORTIFY_URL)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ImportSource.entries.forEach { option ->
+                    SourceTab(option.label, selected = option == source, modifier = Modifier.weight(1f)) {
+                        source = option
+                    }
                 }
             }
         }
-        item {
-            Step(
-                2,
-                "Export your playlists",
-                "Tap Export next to one playlist to get a .csv file, or Export All at the top to get a " +
-                    ".zip with all of them.",
-            )
-        }
-        item { Step(3, "Choose the file here", "Pick the .csv or .zip from your Downloads.") }
-        item {
-            Text(
-                text =
-                    "Using Apple Music, YouTube Music, Deezer or another service? On tunemymusic.com, pick it as " +
-                        "the source, choose your playlists, then Export to file (CSV) and pick that file here. " +
-                        "One file can hold many playlists.",
-                style = MaterialTheme.typography.bodySmall,
-                color = CliBeatsTextSecondary,
-            )
+        when (source) {
+            ImportSource.SPOTIFY -> {
+                item { Step(1, "Open Exportify", "A free website. Log in with your Spotify account there.") }
+                item { CliButton(text = "Open exportify.net ↗", primary = false) { open(EXPORTIFY_URL) } }
+                item {
+                    Step(
+                        2,
+                        "Export your playlists",
+                        "Tap Export next to one playlist for a .csv file, or Export All at the top for a .zip " +
+                            "with all of them.",
+                    )
+                }
+                item { Step(3, "Choose the file here", "Pick the .csv or .zip from your Downloads.") }
+                item {
+                    Hint(
+                        "Also works: a CSV from TuneMyMusic with Spotify as the source (see the YouTube Music " +
+                            "steps, picking Spotify instead).",
+                    )
+                }
+            }
+            ImportSource.YOUTUBE_MUSIC, ImportSource.OTHER -> {
+                val service =
+                    if (source == ImportSource.OTHER) {
+                        "your service (Apple Music, Amazon Music, Deezer, Tidal and more)"
+                    } else {
+                        "YouTube Music"
+                    }
+                item {
+                    Step(1, "Open TuneMyMusic", "A free website. Choose $service as the source and sign in.")
+                }
+                item { CliButton(text = "Open tunemymusic.com ↗", primary = false) { open(TUNEMYMUSIC_URL) } }
+                item {
+                    Step(
+                        2,
+                        "Export to a file",
+                        "Select your playlists, choose Export to file as the destination, and pick CSV. One file " +
+                            "can hold all your playlists.",
+                    )
+                }
+                item { Step(3, "Choose the file here", "Pick the .csv from your Downloads.") }
+            }
         }
         item {
             if (reading) {
@@ -263,16 +302,43 @@ private fun InstructionsView(
             item { Text(text = "! $error", style = MaterialTheme.typography.bodyMedium, color = CliBeatsDestructive) }
         }
         item {
-            Text(
-                text =
-                    "Songs are matched by title, artist and length. A few may not be found or may be a " +
-                        "different version; you'll see the ones that weren't found at the end and can " +
-                        "pick them yourself.",
-                style = MaterialTheme.typography.bodySmall,
-                color = CliBeatsTextSecondary,
+            Hint(
+                "Songs are matched by title, artist, album and length. Any that aren't found are listed at the " +
+                    "end, and you can pick them yourself.",
             )
         }
     }
+}
+
+@Composable
+private fun SourceTab(
+    label: String,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier =
+            modifier
+                .height(40.dp)
+                .then(if (selected) Modifier.background(CliBeatsAccent, shape) else Modifier)
+                .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider, shape)
+                .semantics { this.selected = selected }
+                .clickable(role = Role.Tab, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected) CliBeatsBackground else CliBeatsTextPrimary,
+        )
+    }
+}
+
+@Composable
+private fun Hint(text: String) {
+    Text(text = text, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
 }
 
 @Composable
