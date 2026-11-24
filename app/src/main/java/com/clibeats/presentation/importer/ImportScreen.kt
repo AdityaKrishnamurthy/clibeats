@@ -9,8 +9,11 @@
 
 package com.clibeats.presentation.importer
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,10 +63,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.ClipboardManager
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -451,11 +457,6 @@ private fun ProgressView(
                 style = MaterialTheme.typography.labelMedium,
                 color = CliBeatsTextSecondary,
             )
-            Text(
-                text = "You can leave this screen; the import keeps going.",
-                style = MaterialTheme.typography.bodySmall,
-                color = CliBeatsTextSecondary,
-            )
         }
         LazyColumn(modifier = Modifier.weight(1f)) {
             if (missed.isNotEmpty()) {
@@ -497,6 +498,9 @@ private fun SummaryView(
 ) {
     // Which playlist's lists are open; the first one with misses starts open.
     var open by rememberSaveable { mutableStateOf(state.playlists.indexOfFirst { it.missed.isNotEmpty() }) }
+    val copy = rememberCopyAction()
+    val withMisses = state.playlists.filter { it.missed.isNotEmpty() }
+    val missedTotal = withMisses.sumOf { it.missed.size }
     Column(modifier = Modifier.fillMaxSize()) {
         Text(
             text = if (state.cancelled) "Import stopped" else "Import finished",
@@ -518,11 +522,23 @@ private fun SummaryView(
                     SummaryHeader(playlist = playlist, expanded = open == i) { open = if (open == i) -1 else i }
                 }
                 if (open == i && !playlist.skipped) {
-                    playlistDetails(i, playlist, onFind)
+                    playlistDetails(i, playlist, onFind, onCopy = { copy(songList(it)) })
                 }
             }
         }
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (missedTotal > 0) {
+                // Every song that wasn't matched, as "Title — Artist" lines, to search for or keep a note of.
+                CliButton(text = "Copy ${songCount(missedTotal)} not matched", primary = false) {
+                    copy(
+                        if (withMisses.size == 1) {
+                            songList(withMisses.single().missed)
+                        } else {
+                            withMisses.joinToString("\n\n") { "${it.name}\n${songList(it.missed)}" }
+                        },
+                    )
+                }
+            }
             CliButton(text = "Done", primary = true, onClick = onDone)
         }
     }
@@ -579,10 +595,16 @@ private fun LazyListScope.playlistDetails(
     playlistIndex: Int,
     playlist: PlaylistImport,
     onFind: (Int, ImportedSong) -> Unit,
+    onCopy: (List<ImportedSong>) -> Unit,
 ) {
     val missed = playlist.missed
     if (missed.isNotEmpty()) {
-        section("p${playlistIndex}_missed", "✗ COULDN'T MATCH · ${missed.size}", good = false)
+        section(
+            "p${playlistIndex}_missed",
+            "✗ COULDN'T MATCH · ${missed.size}",
+            good = false,
+            action = "[ Copy ]" to { onCopy(missed) },
+        )
         items(missed, key = { "p${playlistIndex}_m${it.index}" }) { song ->
             SpotifyRow(song, onFind = { onFind(playlistIndex, song) })
         }
@@ -600,15 +622,57 @@ private fun LazyListScope.section(
     key: String,
     title: String,
     good: Boolean,
+    action: Pair<String, () -> Unit>? = null,
 ) {
     item(key = key) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelMedium,
-            // Read inside the item: the accent colour comes from the theme, which needs composition.
-            color = if (good) CliBeatsAccent else CliBeatsDestructive,
-            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.labelMedium,
+                // Read inside the item: the accent colour comes from the theme, which needs composition.
+                color = if (good) CliBeatsAccent else CliBeatsDestructive,
+                modifier = Modifier.weight(1f),
+            )
+            if (action != null) {
+                Text(
+                    text = action.first,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsAccent,
+                    modifier =
+                        Modifier
+                            .clickable(role = Role.Button, onClick = action.second)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                )
+            }
+        }
+    }
+}
+
+/** "the song — the artist" per line: plain text, ready to paste into a search box or a note. */
+private fun songList(songs: List<ImportedSong>): String =
+    songs.sortedBy { it.index }.joinToString("\n") { s ->
+        if (s.song.artistLine.isEmpty()) s.song.title else "${s.song.title} — ${s.song.artistLine}"
+    }
+
+/** Copies text to the clipboard and confirms it (Android 13+ shows its own confirmation). */
+@Composable
+private fun rememberCopyAction(): (String) -> Unit {
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    return remember(clipboard, context) { { text -> copyText(clipboard, context, text) } }
+}
+
+private fun copyText(
+    clipboard: ClipboardManager,
+    context: Context,
+    text: String,
+) {
+    clipboard.setText(AnnotatedString(text))
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
     }
 }
 

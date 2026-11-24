@@ -109,7 +109,6 @@ fun NowPlayingScreen(
     onOpenQueue: () -> Unit,
 ) {
     val state by viewModel.playbackState.collectAsState()
-    val queue by viewModel.queue.collectAsState()
     val hint by viewModel.hint.collectAsState()
     val sleepTimer by viewModel.sleepTimer.collectAsState()
     val isLiked by viewModel.isCurrentLiked.collectAsState()
@@ -226,29 +225,10 @@ fun NowPlayingScreen(
                             .size(width = 36.dp, height = 4.dp)
                             .background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)),
                     )
-                    Spacer(Modifier.height(8.dp))
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "> now_playing",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = CliBeatsAccent,
-                            modifier = Modifier.align(Alignment.Center),
-                        )
-                        val queueLabel = if (queue.isNotEmpty()) "[ QUEUE (${queue.size}) ]" else "[ QUEUE ]"
-                        Text(
-                            text = queueLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = CliBeatsAccent,
-                            modifier =
-                                Modifier
-                                    .align(Alignment.CenterEnd)
-                                    .clickable(onClick = onOpenQueue)
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                        )
-                    }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                // The queue opens from the button under the controls; no header line, so the cover sits higher.
+                Spacer(Modifier.height(4.dp))
 
                 // ── Artwork ──
                 // Two layers: the small thumbnail (already cached by the lists, so near-instant) underneath,
