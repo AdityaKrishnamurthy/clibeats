@@ -66,15 +66,23 @@ private fun colorsFrom(
     palette: Palette,
     lightTheme: Boolean,
 ): ArtworkColors? {
+    val deep = palette.darkMutedSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch ?: return null
+    // The accent must be a colour that covers a real part of the cover. Palette's "vibrant" pick can be a
+    // tiny patch (a blue ring on Hoshizora, a purple glint on a dark cover), which then coloured the
+    // whole screen. Among colourful swatches, the one with the most area times colour wins.
+    val total = palette.swatches.sumOf { it.population }.coerceAtLeast(1)
     val vivid =
-        palette.vibrantSwatch ?: palette.lightVibrantSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch
-    val deep = palette.darkMutedSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch ?: vivid
-    if (vivid == null || deep == null) return null
+        palette.swatches
+            .filter { it.population >= total * MIN_AREA_SHARE && saturationOf(it) >= MIN_SATURATION }
+            .maxByOrNull { it.population * saturationOf(it) }
     val hsv = FloatArray(HSV_SIZE)
-    android.graphics.Color.colorToHSV(vivid.rgb, hsv)
-    if (hsv[1] < MIN_SATURATION) {
-        softAccent(palette, vivid, lightTheme, hsv)
+    if (vivid == null) {
+        // No colour worth borrowing (dark or black-and-white cover): soft silver, never the theme accent.
+        android.graphics.Color.colorToHSV((palette.dominantSwatch ?: deep).rgb, hsv)
+        hsv[1] = SILVER_SATURATION
+        hsv[2] = if (lightTheme) LIGHT_SILVER_VALUE else DARK_SILVER_VALUE
     } else {
+        android.graphics.Color.colorToHSV(vivid.rgb, hsv)
         // Bright enough to read on a dark screen, dark enough on a light one.
         hsv[1] = hsv[1].coerceAtLeast(ACCENT_MIN_SATURATION)
         hsv[2] =
@@ -88,24 +96,7 @@ private fun colorsFrom(
     )
 }
 
-/**
- * For a dark or nearly colourless cover (a dark cover, Hoshizora) there is no vivid colour to borrow, and
- * the theme accent clashed with it (purple on black). Writes into [hsv] a soft colour from the cover itself:
- * the hue of its most colourful part, kept pale. A cover with no colour at all gets silver.
- */
-private fun softAccent(
-    palette: Palette,
-    vivid: Palette.Swatch,
-    lightTheme: Boolean,
-    hsv: FloatArray,
-) {
-    val sizeable = palette.swatches.filter { it.population >= vivid.population / HINT_MIN_SHARE }
-    val hint = sizeable.maxByOrNull { it.hsl[1] } ?: vivid
-    val hintHsv = FloatArray(HSV_SIZE).also { android.graphics.Color.colorToHSV(hint.rgb, it) }
-    hsv[0] = hintHsv[0]
-    hsv[1] = if (hintHsv[1] >= HINT_SATURATION) MUTED_ACCENT_SATURATION else SILVER_SATURATION
-    hsv[2] = if (lightTheme) LIGHT_MUTED_VALUE else DARK_MUTED_VALUE
-}
+private fun saturationOf(swatch: Palette.Swatch): Float = FloatArray(HSV_SIZE).also { android.graphics.Color.colorToHSV(swatch.rgb, it) }[1]
 
 private const val PALETTE_SOURCE_PX = 128
 private const val HSV_SIZE = 3
@@ -116,10 +107,10 @@ private const val DARK_MIN_VALUE = 0.78f
 private const val LIGHT_MIN_VALUE = 0.38f
 private const val LIGHT_MAX_VALUE = 0.58f
 
-// Colourless covers: a pale tint of the cover's hue, or silver when there is no hue to speak of.
-private const val HINT_MIN_SHARE = 8
-private const val HINT_SATURATION = 0.12f
-private const val MUTED_ACCENT_SATURATION = 0.32f
-private const val SILVER_SATURATION = 0.06f
-private const val DARK_MUTED_VALUE = 0.88f
-private const val LIGHT_MUTED_VALUE = 0.38f
+// A colour must cover at least this share of the cover to become the accent.
+private const val MIN_AREA_SHARE = 0.05f
+
+// Covers without such a colour: soft silver.
+private const val SILVER_SATURATION = 0.05f
+private const val DARK_SILVER_VALUE = 0.86f
+private const val LIGHT_SILVER_VALUE = 0.40f

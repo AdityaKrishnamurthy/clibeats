@@ -327,7 +327,8 @@ fun NowPlayingScreen(
                     )
                 }
 
-                Spacer(Modifier.height(40.dp))
+                // A little extra room so the action icons sit clear of the waveform.
+                Spacer(Modifier.height(52.dp))
 
                 // ── Bottom actions: sleep timer · queue · add to playlist · favourite ──
                 Row(
