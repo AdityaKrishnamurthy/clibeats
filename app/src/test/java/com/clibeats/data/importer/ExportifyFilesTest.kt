@@ -99,7 +99,7 @@ class ExportifyFilesTest {
 
         val playlists = ExportifyFiles.read(ByteArrayInputStream(bytes), "spotify_playlists.zip")
 
-        assertThat(playlists.map { it.name }).containsExactly("Favorites", "anime").inOrder()
+        assertThat(playlists.map { it.name }).containsExactly("anime", "Favorites").inOrder()
         assertThat(playlists.first { it.name == "Favorites" }.songs).hasSize(2)
     }
 

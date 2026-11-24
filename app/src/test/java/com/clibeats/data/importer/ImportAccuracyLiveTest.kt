@@ -27,7 +27,7 @@ import java.util.Locale
  * Skipped unless pointed at Exportify files:
  *
  * ```
- * CLIBEATS_IMPORT_CSV_DIR=/path/to/unzipped/exportify  CLIBEATS_IMPORT_PLAYLISTS="anime.csv,Favorites.csv"
+ * CLIBEATS_IMPORT_CSV_DIR=/path/to/unzipped/exportify  CLIBEATS_IMPORT_PLAYLISTS="mix.csv,favorites.csv"
  * CLIBEATS_IMPORT_REPORT=/path/report.txt  ./gradlew testDebugUnitTest --tests "*ImportAccuracyLiveTest*"
  * ```
  *
