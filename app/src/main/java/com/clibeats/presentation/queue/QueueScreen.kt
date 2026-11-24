@@ -114,6 +114,17 @@ fun QueueScreen(
                         color = CliBeatsTextPrimary,
                     )
                 }
+
+                val autoplay by viewModel.autoplayEnabled.collectAsState()
+                Text(
+                    text = if (autoplay) "[ ∞ AUTOPLAY: ON ]" else "[ ∞ AUTOPLAY: OFF ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (autoplay) CliBeatsAccent else CliBeatsTextSecondary,
+                    modifier =
+                        Modifier
+                            .clickable { viewModel.toggleAutoplay() }
+                            .padding(4.dp),
+                )
             }
 
             when (val currentState = state) {

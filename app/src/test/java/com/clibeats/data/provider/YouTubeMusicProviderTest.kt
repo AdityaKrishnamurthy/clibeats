@@ -92,6 +92,16 @@ class YouTubeMusicProviderTest {
         }
 
     @Test
+    fun `relatedTracks returns Error when next throws exception`() =
+        runTest {
+            whenever(api.next(any())).thenThrow(RuntimeException("radio error"))
+
+            val result = provider.relatedTracks("vid123")
+
+            assertThat(result).isInstanceOf(ProviderResult.Error::class.java)
+        }
+
+    @Test
     fun `provider has correct id and displayName`() {
         assertThat(provider.providerId).isEqualTo("youtube_music")
         assertThat(provider.displayName).isEqualTo("YouTube Music")
