@@ -27,6 +27,8 @@ object TrackMatcher {
     private const val EXACT_TITLE = 0.999
     private const val ALBUM_SIMILAR = 0.85
     private const val ARTIST_SIMILAR = 0.8
+    private const val LONG_ARTIST_SIMILAR = 0.75
+    private const val LONG_NAME = 12
 
     /** Only the top results are trusted on artist + length alone; lower ones are more often other songs. */
     private const val CROSS_SCRIPT_MAX_RANK = 3
@@ -53,6 +55,12 @@ object TrackMatcher {
     private val FROM_FILM = Regex("""\bfrom\s*["“”']([^"“”']+)["“”']""", RegexOption.IGNORE_CASE)
     private val LANGUAGES =
         listOf("kannada", "telugu", "tamil", "hindi", "malayalam", "marathi", "bengali", "punjabi", "gujarati")
+
+    /** "[KANNADA]", "(Kannada)", "- Kannada", "Kannada Version": a language edition, not a compilation's name. */
+    private val EDITION_MARKERS =
+        LANGUAGES.associateWith {
+            Regex("""[\[(]\s*$it\b|\b$it\s*[\])]|-\s*$it\b|\b$it\s+ver""", RegexOption.IGNORE_CASE)
+        }
     private const val MIN_CONTAINED_NAME = 4
     private val ARTIST_SEPARATORS = Regex(""",|&|、| x | and |\bfeat\.?|\bft\.?| with """, RegexOption.IGNORE_CASE)
 
@@ -107,10 +115,13 @@ object TrackMatcher {
 
         val titleSim = titleSimilarity(song.title, candidate.title)
         val artistOk = artistMatches(song.artists, candidate.artist)
-        val wanted = languages("${song.title} ${song.album}")
+        val wanted = editionLanguages(song)
         // The channel counts for videos: a label channel named after a language uploads that version.
         val offered = languages("${candidate.title} ${candidate.album} ${candidate.artist}")
         if (!sameLanguage(song, candidate, wanted, offered)) return null
+        // A compilation named after a language still rules out a result that says it's in another one.
+        val hinted = languages("${song.title} ${song.album}")
+        if (hinted.isNotEmpty() && offered.isNotEmpty() && hinted.none { it in offered }) return null
         // A song in a named language takes only an official audio track. Videos can carry another language's
         // audio under this title and album (an album page can list another dub's lyric video), so it's not found.
         if (wanted.isNotEmpty() && candidate.isVideo) return null
@@ -221,7 +232,9 @@ object TrackMatcher {
         if (a == b) return true
         // Containment only for names long enough not to hit by accident ("K" is inside many names).
         val containable = minOf(a.length, b.length) >= MIN_CONTAINED_NAME
-        return (containable && (a.contains(b) || b.contains(a))) || dice(a, b) >= ARTIST_SIMILAR
+        // Long transliterated names vary in more than one letter ("...subrahmanyam" / "...subramaniam").
+        val similar = if (minOf(a.length, b.length) >= LONG_NAME) LONG_ARTIST_SIMILAR else ARTIST_SIMILAR
+        return (containable && (a.contains(b) || b.contains(a))) || dice(a, b) >= similar
     }
 
     /**
@@ -256,7 +269,7 @@ object TrackMatcher {
         song: SpotifySong,
         track: Track,
     ): Boolean {
-        val wanted = languages("${song.title} ${song.album}")
+        val wanted = editionLanguages(song)
         if (wanted.isEmpty()) return true
         val offered = languages("${track.title} ${track.album} ${track.artist}")
         // An exact title isn't enough: YouTube Music can list one language's audio under the other's title.
@@ -264,7 +277,7 @@ object TrackMatcher {
     }
 
     /** The language named in the Spotify title or album (e.g. "[KANNADA]"), to search for that version. */
-    fun languageOf(song: SpotifySong): String? = languages("${song.title} ${song.album}").firstOrNull()
+    fun languageOf(song: SpotifySong): String? = editionLanguages(song).firstOrNull()
 
     /** Same album once "(Original Motion Picture Soundtrack)"-style suffixes are dropped. */
     fun sameAlbumName(
@@ -292,6 +305,15 @@ object TrackMatcher {
     private fun languages(text: String): Set<String> {
         val words = " ${normalize(text)} "
         return LANGUAGES.filterTo(mutableSetOf()) { words.contains(" $it ") }
+    }
+
+    /**
+     * The language edition Spotify asks for. A compilation named after a language ("Kannada Love Songs")
+     * doesn't say which edition its songs are, so it doesn't count here.
+     */
+    private fun editionLanguages(song: SpotifySong): Set<String> {
+        val text = "${song.title} ${song.album}"
+        return LANGUAGES.filterTo(mutableSetOf()) { EDITION_MARKERS.getValue(it).containsMatchIn(text) }
     }
 
     /**

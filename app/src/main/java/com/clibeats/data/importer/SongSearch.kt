@@ -4,6 +4,7 @@ package com.clibeats.data.importer
 
 import com.clibeats.data.provider.mapper.AlbumHit
 import com.clibeats.domain.model.Track
+import kotlinx.coroutines.delay
 
 /**
  * How one Spotify song is looked up on YouTube Music: several searches, from most to least specific,
@@ -19,6 +20,7 @@ class SongSearch(
     private val search: suspend (query: String, songsOnly: Boolean) -> List<Track>?,
     private val searchAlbums: suspend (query: String) -> List<AlbumHit>? = { emptyList() },
     private val albumTracks: suspend (AlbumHit) -> List<Track>? = { emptyList() },
+    private val retryPauseMs: Long = RETRY_PAUSE_MS,
 ) {
     data class Outcome(
         val match: Track?,
@@ -41,15 +43,27 @@ class SongSearch(
     ): Outcome {
         var reached = false
         val seen = mutableListOf<Track>()
-        for (step in steps(song)) {
-            val results = step() ?: continue
-            reached = true
-            seen += results
-            // Stop early only on a certain match. When Spotify names a language, a near-spelling without that
-            // language may be another dub of the same film; keep looking and let the best overall win below.
-            val match = TrackMatcher.pick(song, results)
-            if (match != null && TrackMatcher.isCertainVersion(song, match)) {
-                return Outcome(match, reached = true, seen = seen)
+        val failed = mutableListOf<suspend () -> List<Track>?>()
+        // A search YouTube Music refused (it throttles long imports for a while) is tried again once after a
+        // pause, before the song counts as not found.
+        for (round in 0..1) {
+            val steps = if (round == 0) steps(song) else failed.toList().also { failed.clear() }
+            if (steps.isEmpty()) break
+            if (round > 0) delay(retryPauseMs)
+            for (step in steps) {
+                val results = step()
+                if (results == null) {
+                    failed += step
+                    continue
+                }
+                reached = true
+                seen += results
+                // Stop early only on a certain match. When Spotify names a language, a near-spelling without
+                // that language may be another dub of the same film; keep looking, the best overall wins below.
+                val match = TrackMatcher.pick(song, results)
+                if (match != null && TrackMatcher.isCertainVersion(song, match)) {
+                    return Outcome(match, reached = true, seen = seen)
+                }
             }
         }
         // Each search alone found nothing trustworthy; judge everything together (a result can rank
@@ -89,9 +103,9 @@ class SongSearch(
                 "$title $main".trim(),
                 language?.let { "$title $album $it".replace("  ", " ").trim() },
             ).distinct()
-        return songQueries.map { q -> suspend { search(q, true) } } +
+        return songQueries.map { q -> suspend { search(plain(q), true) } } +
             listOf(suspend { albumCandidates(song) }) +
-            videoQueries.map { q -> suspend { search(q, false) } }
+            videoQueries.map { q -> suspend { search(plain(q), false) } }
     }
 
     /**
@@ -112,7 +126,7 @@ class SongSearch(
         var reached = false
         val hits = mutableListOf<AlbumHit>()
         for (query in queries) {
-            hits += searchAlbums(query)?.also { reached = true }.orEmpty()
+            hits += searchAlbums(plain(query))?.also { reached = true }.orEmpty()
         }
         val unique = hits.distinctBy { it.browseId }
         // Albums that clearly match first; then the top results anyway, since a single's title or artist may be
@@ -125,9 +139,17 @@ class SongSearch(
         return if (reached) likely.flatMap { albumTracks(it).orEmpty() } else null
     }
 
-    private companion object {
+    /**
+     * The query without search operators: a word starting with "-" ("Song -Reprised Version") makes YouTube
+     * leave out every result containing it, including the song itself.
+     */
+    internal fun plain(query: String): String = query.replace(EXCLUDE_OPERATOR, "$1").trim()
+
+    internal companion object {
+        private val EXCLUDE_OPERATOR = Regex("""(^|\s)-+(?=\S)""")
         const val MAX_QUERY_ARTISTS = 3
         const val MAX_ALBUMS = 3
         const val TOP_ALBUMS = 2
+        const val RETRY_PAUSE_MS = 5_000L
     }
 }

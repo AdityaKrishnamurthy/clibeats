@@ -1,7 +1,21 @@
-# CLIBeats v2.5.0 — Release Notes
+# CLIBeats v2.5.1 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.0.apk` (verify with `SHA256SUMS.txt`)
-· **Size:** about 5.7 MB (was 18 MB)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.1.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.7 MB
+
+## Playlist import fixes
+
+- Songs no longer show as "couldn't match" when YouTube Music briefly refused searches during a long import;
+  those searches are tried again before giving up.
+- Songs Spotify files under a compilation named after a language ("… Love Songs", "… Hits") are found again.
+- Titles with a dash before a word ("Song -Reprised Version") are found again.
+- Artist names spelt differently on Spotify and YouTube Music are recognised more often.
+- Film songs in a named language take only the official audio track: a lyric video or a fan upload in another
+  language is never used. Such songs are listed under "couldn't match", with **Find** and **Copy**.
+- Files without song lengths (TuneMyMusic) no longer pick a cover video; another song from the same album is
+  no longer taken by mistake.
+
+# What's new in v2.5.0
 
 ## New: import your playlists
 

@@ -263,6 +263,25 @@ class TrackMatcherTest {
     }
 
     @Test
+    fun compilationNamedAfterALanguage_isNotALanguageEdition() {
+        // Spotify files the song under a compilation; YouTube Music under its film.
+        val s = song("Ondu Saari", listOf("Kiran", "Shila Rao"), 199_000, album = "Kannada Love Songs")
+        val film = yt("f", "Ondu Saari", "Kiran,Shila Rao", 200_000).copy(album = "Film Six")
+        val otherLanguage = yt("t", "Ondu Saari", "Kiran", 200_000).copy(album = "Film Six (Telugu)")
+
+        assertThat(TrackMatcher.pick(s, listOf(film))?.id).isEqualTo("f")
+        assertThat(TrackMatcher.pick(s, listOf(otherLanguage))).isNull()
+    }
+
+    @Test
+    fun longNameSpelledTwoWays_isTheSameArtist() {
+        val s = song("Hadu Baa", listOf("S. P. Venkatasubrahmanyam"), 285_000, album = "Best Of Ten")
+        val track = yt("v", "Hadu Baa", "S. P. Venkatasubramaniam", 288_000).copy(album = "Film Seven")
+
+        assertThat(TrackMatcher.pick(s, listOf(track))?.id).isEqualTo("v")
+    }
+
+    @Test
     fun namedLanguage_prefersTheAlbumThatSaysSo() {
         val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
         // Same title, credits and length on two albums; only one says which language it is.
