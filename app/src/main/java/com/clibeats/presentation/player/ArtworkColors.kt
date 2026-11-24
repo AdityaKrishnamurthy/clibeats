@@ -96,7 +96,11 @@ private fun colorsFrom(
     )
 }
 
-private fun saturationOf(swatch: Palette.Swatch): Float = FloatArray(HSV_SIZE).also { android.graphics.Color.colorToHSV(swatch.rgb, it) }[1]
+private fun saturationOf(swatch: Palette.Swatch): Float {
+    val hsv = FloatArray(HSV_SIZE)
+    android.graphics.Color.colorToHSV(swatch.rgb, hsv)
+    return hsv[1]
+}
 
 private const val PALETTE_SOURCE_PX = 128
 private const val HSV_SIZE = 3
