@@ -46,6 +46,7 @@ object TrackMatcher {
      * one language's audio under an album that doesn't say which language it is.
      */
     private const val LANGUAGE_WEIGHT = 3.0
+    private const val CHANNEL_LANGUAGE_WEIGHT = 1.0
 
     /** Only with singer, film and length all agreeing; titles transliterated differently share about half. */
     private const val TITLE_LOOSE = 0.45
@@ -111,6 +112,7 @@ object TrackMatcher {
         val offered = languages("${candidate.title} ${candidate.album} ${candidate.artist}")
         if (!sameLanguage(song, candidate, wanted, offered)) return null
         val languageConfirmed = wanted.isNotEmpty() && wanted.any { it in offered }
+        val channelLanguages = languages("${candidate.artist} ${candidate.album}")
         // Film songs are credited differently on each service (composer vs singer), but share the film.
         val albumOk = albumMatches(song, candidate)
         // Services label the same recording differently: a title marked "(Remix)" on Spotify can be the plain
@@ -162,7 +164,7 @@ object TrackMatcher {
             (if (languageConfirmed) LANGUAGE_WEIGHT else 0.0) +
             // The language in the channel or album name (a label's language channel) beats it only in a title,
             // which fan uploads add as a hashtag.
-            (if (languageConfirmed && wanted.any { it in languages("${candidate.artist} ${candidate.album}") }) 1.0 else 0.0) -
+            (if (languageConfirmed && wanted.any { it in channelLanguages }) CHANNEL_LANGUAGE_WEIGHT else 0.0) -
             rank * RANK_PENALTY
     }
 
