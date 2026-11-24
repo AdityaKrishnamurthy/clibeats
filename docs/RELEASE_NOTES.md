@@ -1,3 +1,16 @@
+# CLIBeats v2.5.4 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.4.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.8 MB
+
+## Offline Downloads & Library
+
+- **Pinned Downloaded Playlist**: Library screen now features a pinned `Downloaded` playlist (`↓`) to view, manage, and play all offline tracks.
+- **Settings Storage Management**: Settings → Storage shows total downloaded audio footprint with options to clear all downloads or remove individual tracks.
+- **Local Track Filtering**: "Download for offline" and "Remove download" are automatically hidden when holding local device tracks.
+- **Reliable Removal**: Removing downloads immediately purges physical files and clears database records.
+- **Queue Autoplay Setting Cleanup**: Removed redundant auto-queue toggle from Settings; infinite autoplay radio remains accessible directly from the Queue header.
+
 # CLIBeats v2.5.3 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.3.apk` (verify with `SHA256SUMS.txt`)
