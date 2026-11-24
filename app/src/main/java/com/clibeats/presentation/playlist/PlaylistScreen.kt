@@ -34,12 +34,15 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +83,7 @@ import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import java.text.Collator
 
 enum class PlaylistFilter { ALL, LOCAL_M3U }
 
@@ -145,7 +149,7 @@ fun PlaylistScreen(
                             tracks = tracks,
                             emptyText = "No favorites yet. Tap ♥ in Now Playing to add songs.",
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
                             onReorder = viewModel::reorderFavorites,
@@ -164,7 +168,7 @@ fun PlaylistScreen(
                             tracks = tracks,
                             emptyText = "Nothing played yet. Your most played songs will show up here.",
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
                             onRemoveClick = viewModel::removeFromMostPlayed,
                             removeLabel = "Remove from Most Played",
                             onSwipeRight = trackActions::addToQueue,
@@ -189,7 +193,7 @@ fun PlaylistScreen(
                                     "Playlist is empty. Long-press any song to add it."
                                 },
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { index -> viewModel.playPlaylist(tracks, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
                             onRemoveClick =
                                 if (readOnly) {
                                     null
@@ -256,8 +260,13 @@ fun PlaylistScreen(
                 viewModel.setPlaylistCoverImage(playlist.id, uri.toString())
                 coverChangePlaylist = null
             },
-            onSave = { newUrl ->
-                viewModel.updatePlaylistArtwork(playlist.id, newUrl)
+            onSave = { newName, newUrl ->
+                viewModel.renamePlaylist(playlist, newName)
+                if (newUrl != null) viewModel.updatePlaylistArtwork(playlist.id, newUrl)
+                coverChangePlaylist = null
+            },
+            onResetCover = {
+                viewModel.updatePlaylistArtwork(playlist.id, null)
                 coverChangePlaylist = null
             },
         )
@@ -316,7 +325,8 @@ private fun PlaylistDetailView(
     tracks: List<Track>,
     emptyText: String,
     onBackClick: () -> Unit,
-    onTrackClick: (Int) -> Unit,
+    /** The list as shown (sorted on screen, if a sort was picked for a fixed-order list) and the tapped row. */
+    onTrackClick: (List<Track>, Int) -> Unit,
     onRemoveClick: ((Track) -> Unit)?,
     removeLabel: String,
     onSwipeRight: (Track) -> Unit,
@@ -328,6 +338,13 @@ private fun PlaylistDetailView(
     /** Non-null: rows get a ≡ handle to drag them into a new order (long-press stays "add to playlist"). */
     onReorder: ((List<Track>) -> Unit)? = null,
 ) {
+    // A list you can reorder is re-saved in the picked order (and can still be dragged after). Fixed lists
+    // (Most Played, M3U files) are only sorted on screen, until you leave them.
+    var viewSort by remember(title) { mutableStateOf<SongSort?>(null) }
+    val shown = remember(tracks, viewSort) { viewSort?.let { sortSongs(tracks, it) } ?: tracks }
+    val onSort: (SongSort) -> Unit = { sort ->
+        if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -376,11 +393,12 @@ private fun PlaylistDetailView(
                 )
                 Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
             }
+            if (tracks.size > 1) SortButton(onSort = onSort)
             if (onChangeCoverClick != null) {
                 IconButton(onClick = onChangeCoverClick) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Change playlist cover",
+                        contentDescription = "Edit playlist name and cover",
                         tint = CliBeatsAccent,
                     )
                 }
@@ -402,7 +420,7 @@ private fun PlaylistDetailView(
             }
         } else if (onReorder != null) {
             ReorderableList(
-                items = tracks,
+                items = shown,
                 itemId = { it.id },
                 onReorder = { _, _, reordered -> onReorder(reordered) },
             ) { track, index ->
@@ -416,10 +434,10 @@ private fun PlaylistDetailView(
                         TrackArtwork(
                             artworkUrl = track.artworkUrl,
                             size = 32,
-                            modifier = Modifier.artworkHandle { onTrackClick(index) },
+                            modifier = Modifier.artworkHandle { onTrackClick(shown, index) },
                         )
                     },
-                    onClick = { if (!isAnyDragging) onTrackClick(index) },
+                    onClick = { if (!isAnyDragging) onTrackClick(shown, index) },
                     onSwipeRight = { onSwipeRight(track) },
                     onSwipeLeft = { onSwipeLeft(track) },
                     onLongPress = { onLongPress(track) },
@@ -441,14 +459,14 @@ private fun PlaylistDetailView(
             }
         } else {
             LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {
-                itemsIndexed(items = tracks, key = { index, track -> "${track.id}_$index" }) { index, track ->
+                itemsIndexed(items = shown, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     SongTableRow(
                         trackTitle = track.title,
                         artist = track.artist,
                         duration = formatDuration(track.durationMs),
                         index = index + 1,
                         artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                        onClick = { onTrackClick(index) },
+                        onClick = { onTrackClick(shown, index) },
                         onSwipeRight = { onSwipeRight(track) },
                         onSwipeLeft = { onSwipeLeft(track) },
                         onLongPress = { onLongPress(track) },
@@ -524,8 +542,11 @@ private fun ChangeCoverDialog(
     playlist: Playlist,
     onDismiss: () -> Unit,
     onPickImage: (Uri) -> Unit,
-    onSave: (String?) -> Unit,
+    /** New name (unchanged if the same) and a new cover URL, or null to keep the cover. */
+    onSave: (String, String?) -> Unit,
+    onResetCover: () -> Unit,
 ) {
+    var name by remember { mutableStateOf(playlist.name) }
     var urlText by remember { mutableStateOf("") }
     // The copy into app storage happens off the main thread in the repository.
     val pickImageLauncher =
@@ -536,14 +557,18 @@ private fun ChangeCoverDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.border(1.dp, CliBeatsAccent),
-        title = { Text(text = "> edit --cover", style = MaterialTheme.typography.titleMedium) },
+        title = { Text(text = "> edit playlist", style = MaterialTheme.typography.titleMedium) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "Change thumbnail for \"${playlist.name}\"",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = CliBeatsTextSecondary,
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Name") },
+                    singleLine = true,
+                    isError = name.isBlank(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
+                Text(text = "Cover", style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
                 Button(
                     onClick = { pickImageLauncher.launch("image/*") },
                     colors = ButtonDefaults.buttonColors(containerColor = CliBeatsAccent),
@@ -561,7 +586,7 @@ private fun ChangeCoverDialog(
                 // Only a custom cover can be reset; otherwise the first song's art is already shown.
                 if (!playlist.artworkUrl.isNullOrBlank()) {
                     TextButton(
-                        onClick = { onSave(null) },
+                        onClick = onResetCover,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Reset to default cover", color = MaterialTheme.colorScheme.error)
@@ -571,8 +596,8 @@ private fun ChangeCoverDialog(
         },
         confirmButton = {
             TextButton(
-                onClick = { onSave(urlText.trim().ifBlank { null }) },
-                enabled = urlText.isNotBlank(),
+                onClick = { onSave(name, urlText.trim().ifBlank { null }) },
+                enabled = name.isNotBlank() && (name.trim() != playlist.name || urlText.isNotBlank()),
             ) {
                 Text("Save", color = CliBeatsAccent)
             }
@@ -587,6 +612,60 @@ private fun ChangeCoverDialog(
 }
 
 private enum class ClearTarget { FAVORITES, MOST_PLAYED }
+
+/** Orders offered by the sort button in a playlist. */
+internal enum class SongSort(
+    val label: String,
+) {
+    TITLE_ASC("Title A → Z"),
+    TITLE_DESC("Title Z → A"),
+    ARTIST_ASC("Artist A → Z"),
+    ARTIST_DESC("Artist Z → A"),
+}
+
+/**
+ * [tracks] in [sort] order. Letters compare the way people expect (case and accents don't split the list),
+ * and songs by the same artist stay in title order.
+ */
+internal fun sortSongs(
+    tracks: List<Track>,
+    sort: SongSort,
+): List<Track> {
+    val collator = Collator.getInstance().apply { strength = Collator.PRIMARY }
+    val byTitle = Comparator<Track> { a, b -> collator.compare(a.title, b.title) }
+    val byArtist = Comparator<Track> { a, b -> collator.compare(a.artist, b.artist) }.then(byTitle)
+    return when (sort) {
+        SongSort.TITLE_ASC -> tracks.sortedWith(byTitle)
+        SongSort.TITLE_DESC -> tracks.sortedWith(byTitle.reversed())
+        SongSort.ARTIST_ASC -> tracks.sortedWith(byArtist)
+        SongSort.ARTIST_DESC -> tracks.sortedWith(byArtist.reversed())
+    }
+}
+
+@Composable
+private fun SortButton(onSort: (SongSort) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.Sort,
+                contentDescription = "Sort songs",
+                tint = CliBeatsAccent,
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = CliBeatsSurface) {
+            SongSort.entries.forEach { sort ->
+                DropdownMenuItem(
+                    text = { Text(sort.label, color = CliBeatsTextPrimary) },
+                    onClick = {
+                        open = false
+                        onSort(sort)
+                    },
+                )
+            }
+        }
+    }
+}
 
 private fun clearAllAction(
     enabled: Boolean,

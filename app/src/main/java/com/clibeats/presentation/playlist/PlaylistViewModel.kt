@@ -215,6 +215,16 @@ class PlaylistViewModel
             }
         }
 
+        /** Renames one of your playlists (blank names are ignored). Its songs and cover are untouched. */
+        fun renamePlaylist(
+            playlist: Playlist,
+            name: String,
+        ) {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty() || trimmed == playlist.name) return
+            viewModelScope.launch { playlistRepository.upsertPlaylist(playlist.copy(name = trimmed)) }
+        }
+
         /**
          * Sets a custom cover image for [playlistId].
          * Pass [artworkUrl] = null to clear the custom cover and revert to the first-song thumbnail.
