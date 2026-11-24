@@ -21,12 +21,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PlayArrow
-import androidx.compose.material.icons.outlined.Repeat
-import androidx.compose.material.icons.outlined.RepeatOne
 import androidx.compose.material.icons.outlined.SkipNext
 import androidx.compose.material.icons.outlined.SkipPrevious
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,8 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import com.clibeats.domain.model.RepeatMode
-import com.clibeats.presentation.theme.CliBeatsAccent
+import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
@@ -93,15 +93,14 @@ fun PlayerBar(
     onPlayPauseClick: () -> Unit = {},
     onSkipNextClick: () -> Unit = {},
     onSkipPreviousClick: () -> Unit = {},
-    repeatMode: RepeatMode = RepeatMode.OFF,
-    onRepeatClick: () -> Unit = {},
-    repeatHint: String? = null,
+    // Songs waiting after the current one; shown as a small count on the queue button.
+    upNextCount: Int = 0,
+    onQueueClick: () -> Unit = {},
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
     onExpandClick: () -> Unit = {},
 ) {
     val accent = LocalAccentColor.current
-    val repeatIcon = if (repeatMode == RepeatMode.ONE) Icons.Outlined.RepeatOne else Icons.Outlined.Repeat
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
 
     TuiBlock(
@@ -192,16 +191,23 @@ fun PlayerBar(
                         )
                     }
 
-                    HintedControl(hint = repeatHint) {
-                        IconButton(
-                            onClick = onRepeatClick,
-                            modifier =
-                                Modifier.semantics { contentDescription = "Repeat: ${repeatMode.name.lowercase()}" },
+                    IconButton(
+                        onClick = onQueueClick,
+                        modifier = Modifier.semantics { contentDescription = "Queue, $upNextCount up next" },
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (upNextCount > 0) {
+                                    Badge(containerColor = accent, contentColor = CliBeatsBackground) {
+                                        Text(if (upNextCount > MAX_BADGE) "$MAX_BADGE+" else "$upNextCount")
+                                    }
+                                }
+                            },
                         ) {
                             Icon(
-                                imageVector = repeatIcon,
+                                imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
                                 contentDescription = null,
-                                tint = if (repeatMode == RepeatMode.OFF) CliBeatsTextSecondary else CliBeatsAccent,
+                                tint = CliBeatsTextSecondary,
                                 modifier = Modifier.size(20.dp),
                             )
                         }
@@ -366,3 +372,5 @@ private fun formatPlayerTime(ms: Long): String {
         "%d:%02d".format(minutes, seconds)
     }
 }
+
+private const val MAX_BADGE = 99

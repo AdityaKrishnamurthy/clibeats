@@ -5,6 +5,7 @@ package com.clibeats.data.repository
 import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.SongEntity
+import com.clibeats.data.local.mapper.toEntity
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
@@ -359,4 +360,16 @@ class PlaybackRepositoryImplTest {
         verify(playerAdapter).skipToNext()
         verify(playerAdapter, never()).playForward(any())
     }
+
+    @Test
+    fun `saving the queue never overwrites a local song row`() =
+        runTest {
+            val local = Track("local:1", "Hoshizora", "MIRA", "Album", 1L, null, "content://x", "local")
+            val online = Track("yt:1", "Song", "Artist", "Album", 1L, "https://img", null, "youtube_music")
+
+            queueFlow.value = listOf(local, online)
+
+            verify(songDao).insertAllIfAbsent(listOf(local.toEntity()))
+            verify(songDao).upsertAll(listOf(online.toEntity()))
+        }
 }

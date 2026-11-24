@@ -31,10 +31,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -95,6 +97,36 @@ fun SettingsScreen(
     val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
+    // [ x ] removes a whole music folder, so it asks first (an accidental tap used to drop the folder at once).
+    var folderToRemove by remember { mutableStateOf<String?>(null) }
+    folderToRemove?.let { folder ->
+        val appContext = LocalContext.current
+        AlertDialog(
+            onDismissRequest = { folderToRemove = null },
+            title = { Text("Remove folder?") },
+            text = {
+                Text(
+                    "\"${folderLabel(folder)}\" and its songs will be removed from your library. " +
+                        "The files on your phone are not deleted.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    folderToRemove = null
+                    runCatching {
+                        appContext.contentResolver.releasePersistableUriPermission(
+                            Uri.parse(folder),
+                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                        )
+                    }
+                    viewModel.removeLocalFolder(folder)
+                }) { Text("REMOVE", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { folderToRemove = null }) { Text("CANCEL") }
+            },
+        )
+    }
     val shareFile by viewModel.shareFile.collectAsState()
     val localTrackCount by viewModel.localTrackCount.collectAsState()
     val accent = LocalAccentColor.current
@@ -208,15 +240,8 @@ fun SettingsScreen(
                             modifier =
                                 Modifier
                                     .semantics { contentDescription = "Remove folder ${folderLabel(folder)}" }
-                                    .clickable(role = Role.Button) {
-                                        runCatching {
-                                            context.contentResolver.releasePersistableUriPermission(
-                                                Uri.parse(folder),
-                                                Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                                            )
-                                        }
-                                        viewModel.removeLocalFolder(folder)
-                                    }.padding(8.dp),
+                                    .clickable(role = Role.Button) { folderToRemove = folder }
+                                    .padding(8.dp),
                         )
                     }
                 }
@@ -432,7 +457,7 @@ fun SettingsScreen(
                 DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "source: github.com/Omprakash-p06/clibeats · MIT",
+                    text = "Source: github.com/Omprakash-p06/clibeats · MIT",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier =

@@ -15,6 +15,14 @@ data class SearchRequest(
         // Base64-encoded protobuf param that filters to "songs" type
         private const val SONGS_FILTER_PARAM = "EgWKAQIIAWoMEA4QChADEAQQCRAF"
 
+        // Same, filtering to music videos. Unlike an unfiltered search, these rows include the length.
+        private const val VIDEOS_FILTER_PARAM = "EgWKAQIQAWoMEA4QChADEAQQCRAF"
+
+        // Same, filtering to albums, singles and EPs.
+        private const val ALBUMS_FILTER_PARAM = "EgWKAQIYAWoMEA4QChADEAQQCRAF"
+
+        fun forAlbums(query: String): SearchRequest = forQuery(query).copy(params = ALBUMS_FILTER_PARAM)
+
         fun forQuery(
             query: String,
             filterSongs: Boolean = true,
@@ -30,7 +38,8 @@ data class SearchRequest(
                         ),
                     ),
                 query = query,
-                params = if (filterSongs) SONGS_FILTER_PARAM else null,
+                // false = music videos (songs that only exist as a video, e.g. a label's lyrical upload).
+                params = if (filterSongs) SONGS_FILTER_PARAM else VIDEOS_FILTER_PARAM,
             )
     }
 }

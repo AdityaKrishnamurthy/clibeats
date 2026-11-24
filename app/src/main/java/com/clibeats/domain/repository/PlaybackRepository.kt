@@ -47,6 +47,15 @@ interface PlaybackRepository {
 
     fun removeFromQueue(index: Int)
 
+    /** After a local rescan: swaps queued local songs for their freshly scanned details (tags, cover). */
+    suspend fun refreshLocalTracks()
+
+    /** Puts [track] back at [index] (undo of a removal); the playing song keeps playing. */
+    fun insertIntoQueue(
+        index: Int,
+        track: Track,
+    )
+
     fun clearQueue()
 
     fun play()

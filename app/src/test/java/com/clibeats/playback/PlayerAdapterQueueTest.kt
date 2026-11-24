@@ -174,6 +174,48 @@ class PlayerAdapterQueueTest {
     }
 
     @Test
+    fun playTrack_withQueue_playsNowAndKeepsUpcomingSongs() {
+        adapter.setQueue(listOf(track("t1"), track("t2"), track("t3")), 0)
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(0)
+
+        adapter.playTrack(track("new"))
+
+        assertEquals(listOf("t1", "new", "t2", "t3"), adapter.queueFlow.value.map { it.id })
+        verify(exoPlayer).addMediaItem(eq(1), any())
+        verify(exoPlayer).seekTo(1, 0L)
+    }
+
+    @Test
+    fun addToQueue_withShuffleOn_landsAmongUpcomingSongs() {
+        val tracks = (1..6).map { track("t$it") }
+        adapter.setQueue(tracks, 2)
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(2)
+        adapter.toggleShuffle() // playing song moves to index 0
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(0)
+
+        repeat(20) { adapter.addToQueue(track("a$it")) }
+
+        val queue = adapter.queueFlow.value.map { it.id }
+        assertEquals("t3", queue.first())
+        assertEquals(26, queue.size)
+        // Mixed in, not all 20 stacked at the end.
+        assertThat(queue.takeLast(20).all { it.startsWith("a") }).isFalse()
+    }
+
+    @Test
+    fun refreshTracks_swapsStaleCopiesForFreshOnes() {
+        adapter.setQueue(listOf(track("t1"), track("t2")), 0)
+        val fresh = track("t2").copy(title = "Fixed title", artworkUrl = "file:///cover.img")
+
+        adapter.refreshTracks(mapOf("t2" to fresh))
+
+        val queue = adapter.queueFlow.value
+        assertEquals("Fixed title", queue[1].title)
+        assertEquals("file:///cover.img", queue[1].artworkUrl)
+        assertEquals("Title t1", queue[0].title)
+    }
+
+    @Test
     fun clearQueue_keepsCurrentlyPlayingTrack() {
         adapter.setQueue(listOf(track("t1"), track("t2"), track("t3")), 1)
         whenever(exoPlayer.currentMediaItemIndex).thenReturn(1)

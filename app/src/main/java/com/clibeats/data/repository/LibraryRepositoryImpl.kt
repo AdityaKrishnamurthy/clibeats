@@ -51,7 +51,12 @@ class LibraryRepositoryImpl
             } else {
                 // Signed (expiring) stream URLs are re-resolved at playback; don't persist them.
                 val storable = if (track.streamUrl?.contains("expire") == true) track.copy(streamUrl = null) else track
-                songDao.upsert(storable.toEntity())
+                // A local song's row is the scanner's; don't overwrite it with this (possibly stale) copy.
+                if (storable.providerId == "local") {
+                    songDao.insertAllIfAbsent(listOf(storable.toEntity()))
+                } else {
+                    songDao.upsert(storable.toEntity())
+                }
                 likedSongDao.likeSong(track.id)
             }
         }

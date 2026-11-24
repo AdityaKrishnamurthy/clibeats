@@ -4,6 +4,7 @@ package com.clibeats.playback.service
 
 import android.app.PendingIntent
 import android.content.Intent
+import android.os.Bundle
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
@@ -12,13 +13,18 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.session.CommandButton
 import androidx.media3.session.DefaultMediaNotificationProvider
 import androidx.media3.session.LibraryResult
 import androidx.media3.session.MediaLibraryService
 import androidx.media3.session.MediaSession
+import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionError
+import androidx.media3.session.SessionResult
 import coil.ImageLoader
 import com.clibeats.R
+import com.clibeats.domain.model.RepeatMode
+import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.ArtworkBitmapLoader
 import com.google.common.collect.ImmutableList
@@ -28,8 +34,13 @@ import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -45,6 +56,7 @@ import javax.inject.Inject
  * tapping the card restores the saved queue via [MediaSession.Callback.onPlaybackResumption].
  */
 @OptIn(UnstableApi::class)
+@Suppress("TooManyFunctions") // session callbacks plus the notification buttons
 @AndroidEntryPoint
 class PlaybackService : MediaLibraryService() {
     @Inject lateinit var player: ExoPlayer
@@ -53,6 +65,11 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var imageLoader: ImageLoader
 
+    @Inject lateinit var libraryRepository: LibraryRepository
+
+    /** Whether the playing song is in Favorites; drives the heart on the notification. */
+    @Volatile private var currentLiked = false
+
     private var librarySession: MediaLibrarySession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
@@ -60,7 +77,7 @@ class PlaybackService : MediaLibraryService() {
         super.onCreate()
         setMediaNotificationProvider(
             DefaultMediaNotificationProvider.Builder(this).build().apply {
-                setSmallIcon(R.drawable.ic_stat_music_note)
+                setSmallIcon(R.drawable.ic_stat_clibeats)
             },
         )
         val session =
@@ -73,6 +90,9 @@ class PlaybackService : MediaLibraryService() {
                 ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
+        session.setCustomLayout(customLayout())
+        player.addListener(repeatListener)
+        watchFavorite()
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
         // otherwise Media3 never posts the media notification.
         addSession(session)
@@ -130,6 +150,7 @@ class PlaybackService : MediaLibraryService() {
 
     override fun onDestroy() {
         scope.cancel()
+        player.removeListener(repeatListener)
         // The ExoPlayer is a DI singleton owned by the app (PlayerAdapter), not by this service:
         // releasing it here would kill playback permanently.
         librarySession?.run {
@@ -137,6 +158,78 @@ class PlaybackService : MediaLibraryService() {
             librarySession = null
         }
         super.onDestroy()
+    }
+
+    /** Keeps the repeat button's icon in step with the mode, whichever screen or device changed it. */
+    private val repeatListener =
+        object : Player.Listener {
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                librarySession?.setCustomLayout(customLayout())
+            }
+        }
+
+    /** Follows the playing song's ♥ (changed here, in the app, or from another song) and redraws the heart. */
+    @kotlin.OptIn(ExperimentalCoroutinesApi::class)
+    private fun watchFavorite() {
+        scope.launch {
+            playbackRepository.playbackState
+                .map { it.currentTrack?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { id -> if (id == null) flowOf(false) else libraryRepository.isLiked(id) }
+                .collect { liked ->
+                    currentLiked = liked
+                    librarySession?.setCustomLayout(customLayout())
+                }
+        }
+    }
+
+    /** Notification / lock-screen buttons next to play controls: repeat, then ♥ favourite. */
+    private fun customLayout(): List<CommandButton> = repeatLayout() + favoriteButton()
+
+    private fun favoriteButton(): CommandButton =
+        CommandButton.Builder()
+            .setDisplayName(if (currentLiked) "Remove from favorites" else "Add to favorites")
+            .setIconResId(
+                if (currentLiked) {
+                    androidx.media3.session.R.drawable.media3_icon_heart_filled
+                } else {
+                    androidx.media3.session.R.drawable.media3_icon_heart_unfilled
+                },
+            ).setSessionCommand(FAVORITE_COMMAND)
+            .build()
+
+    /** Same as tapping ♥ in Now Playing: adds the playing song to Favorites, or removes it. */
+    private fun toggleFavorite() {
+        val track = playbackRepository.playbackState.value.currentTrack ?: return
+        scope.launch { runCatching { libraryRepository.toggleLike(track) } }
+    }
+
+    /** The repeat button on the notification / lock-screen card; its icon shows the current mode. */
+    private fun repeatLayout(): List<CommandButton> {
+        val (icon, label) =
+            when (player.repeatMode) {
+                Player.REPEAT_MODE_ALL -> androidx.media3.session.R.drawable.media3_icon_repeat_all to "Repeat: all"
+                Player.REPEAT_MODE_ONE -> androidx.media3.session.R.drawable.media3_icon_repeat_one to "Repeat: one"
+                else -> androidx.media3.session.R.drawable.media3_icon_repeat_off to "Repeat: off"
+            }
+        return listOf(
+            CommandButton.Builder()
+                .setDisplayName(label)
+                .setIconResId(icon)
+                .setSessionCommand(REPEAT_COMMAND)
+                .build(),
+        )
+    }
+
+    /** Same order as the in-app button: off → all → one → off. */
+    private fun cycleRepeat() {
+        val next =
+            when (playbackRepository.playbackState.value.repeatMode) {
+                RepeatMode.OFF -> RepeatMode.ALL
+                RepeatMode.ALL -> RepeatMode.ONE
+                RepeatMode.ONE -> RepeatMode.OFF
+            }
+        playbackRepository.setRepeatMode(next)
     }
 
     /** Tapping the notification / lock-screen card brings the existing app task to the front. */
@@ -180,7 +273,31 @@ class PlaybackService : MediaLibraryService() {
             controller: MediaSession.ControllerInfo,
         ): MediaSession.ConnectionResult {
             Log.i(TAG, "connect from ${controller.packageName} items=${player.mediaItemCount}")
-            return super.onConnect(session, controller)
+            // Let controllers (notification, lock screen) send the repeat button's command.
+            val commands =
+                MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
+                    .buildUpon()
+                    .add(REPEAT_COMMAND)
+                    .add(FAVORITE_COMMAND)
+                    .build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
+                .setAvailableSessionCommands(commands)
+                .setCustomLayout(customLayout())
+                .build()
+        }
+
+        override fun onCustomCommand(
+            session: MediaSession,
+            controller: MediaSession.ControllerInfo,
+            customCommand: SessionCommand,
+            args: Bundle,
+        ): ListenableFuture<SessionResult> {
+            when (customCommand.customAction) {
+                REPEAT_ACTION -> cycleRepeat()
+                FAVORITE_ACTION -> toggleFavorite()
+                else -> return super.onCustomCommand(session, controller, customCommand, args)
+            }
+            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
         override fun onGetLibraryRoot(
@@ -283,6 +400,10 @@ class PlaybackService : MediaLibraryService() {
         const val TAG = "CLIBeatsSession"
         const val ROOT = "clibeats_root"
         const val RECENT_ROOT = "clibeats_recent"
+        const val REPEAT_ACTION = "clibeats.REPEAT"
+        val REPEAT_COMMAND = SessionCommand(REPEAT_ACTION, Bundle.EMPTY)
+        const val FAVORITE_ACTION = "clibeats.FAVORITE"
+        val FAVORITE_COMMAND = SessionCommand(FAVORITE_ACTION, Bundle.EMPTY)
     }
 }
 

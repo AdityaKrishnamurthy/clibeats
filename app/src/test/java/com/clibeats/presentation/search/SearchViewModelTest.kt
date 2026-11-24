@@ -147,27 +147,11 @@ class SearchViewModelTest {
         }
 
     @Test
-    fun `onAddToQueue delegates to playbackRepository`() {
-        val track = Track("1", "Title", "Artist", "Album", 180000L, null, null, "local")
-        viewModel.onAddToQueue(track)
-        verify(playbackRepository).addToQueue(track)
-    }
-
-    @Test
-    fun `queueing or saving a result adds it to recent searches`() =
+    fun `picking a result adds it to recent searches`() =
         runTest {
             val track = Track("1", "Title", "Artist", "Album", 180000L, null, null, "local")
-            viewModel.onAddToQueue(track)
-            viewModel.onPlayNext(track)
             viewModel.rememberPick(track)
             testDispatcher.scheduler.advanceUntilIdle()
-            verify(appPreferences, times(3)).addRecentSearchTrack(track)
+            verify(appPreferences, times(1)).addRecentSearchTrack(track)
         }
-
-    @Test
-    fun `onPlayNext delegates to playbackRepository`() {
-        val track = Track("1", "Title", "Artist", "Album", 180000L, null, null, "local")
-        viewModel.onPlayNext(track)
-        verify(playbackRepository).playNext(track)
-    }
 }

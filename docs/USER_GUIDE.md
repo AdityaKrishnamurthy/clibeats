@@ -16,17 +16,37 @@ Swipe left / right anywhere outside a song row to move between tabs.
 |---|---|
 | **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), and trending songs for your country (from your SIM / mobile network). Trending loads once each time you open the app; `[ ↻ REFRESH ]` reloads it. Tap the tab again to switch Online ↔ Local. |
 | **Search** | Search the active source. With the box empty it lists songs you played, queued, favourited or added to a playlist from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
-| **Library** | `[ ONLINE ]` = songs you've played, `[ OFFLINE ]` = music on your device (with the track count). Tap the tab again to switch. Tracks / Artists / Albums. |
-| **Queue** | The playing song, then Up Next: drag a song's ≡ handle, or hold its cover and drag, to reorder; remove, shuffle or clear upcoming songs; tap one to jump to it. Shuffle mixes the list you see (the playing song moves to the top); turning it off puts the original order back. Also opens from `[ QUEUE ]` in Now Playing. |
-| **Playlists** | ♥ Favorites and Most Played pinned at the top (✕ removes a song, `[ CLEAR ALL ]` asks first), then your playlists (`[ + NEW ]`), then local M3U playlists. The buttons at the top switch between small grid, large grid, list and details. Inside Favorites or your own playlists, drag a song's ≡ handle (or hold its cover) to reorder. Tap the tab again to go back to the overview. |
-| **Settings** | Theme & accent (nine colours plus **Custom**: hue, saturation and brightness sliders or a hex code), music folders, playback, provider, storage, playlist exchange, updates, about. |
+| **Library** | Three sections: **Playlists** (♥ Favorites and Most Played pinned, then your playlists with `[ ↓ IMPORT ]` and `[ + NEW ]`, then local M3U playlists; small grid, large grid, list or details), **Online** (songs you've played) and **Local** (music on your device: Tracks / Artists / Albums). Tap the tab again to leave an open playlist, then to move through the sections. |
+| **Settings** | Theme & accent (nine colours plus **Custom**: hue, saturation and brightness sliders or a hex code), music folders, playback, storage, playlist exchange, updates, about. |
+
+**Queue:** tap the queue button in the mini player (it shows how many songs are up next); tap it again to go back.
+The playing song is 1 and Up Next starts at 2. Swipe a song right to remove it (**Undo** brings it back); drag ≡ or
+hold a cover to reorder.
+
+## Importing playlists
+
+Library → Playlists → `[ ↓ IMPORT ]`, then choose where your playlists are:
+
+- **Spotify:** on [exportify.net](https://exportify.net), log in and tap **Export** (one playlist, `.csv`) or
+  **Export All** (`.zip`).
+- **YouTube Music** or **Others** (Apple Music, Amazon Music, Deezer, Tidal…): on
+  [tunemymusic.com](https://www.tunemymusic.com), choose your service as the source, select playlists, choose
+  **Export to file** and pick CSV.
+
+Tap **Choose File**, tick the playlists and tap **Import**. Songs that couldn't be matched are listed at the end:
+**Find** picks one yourself, **Copy** copies the list as text.
+
+## Editing playlists
+
+Inside one of your playlists, the pencil renames it or changes its cover, and the sort button orders songs by
+title or artist (A–Z or Z–A).
 
 ## Song gestures
 
 - **Tap** — play (with "Auto-queue related songs" on in Settings → Playback, the rest of the list is queued after it; off by default).
 - **Swipe right** — add to queue.
 - **Swipe left** — add to ♥ Favorites.
-- **Long-press** — add to a playlist (or create a new one).
+- **Hold** — menu: Play next, Add to queue, Add to playlist, Add to favorites.
 
 ## Player
 
@@ -68,7 +88,7 @@ the media card in Quick Settings resumes the last song from where you left off.
 ## Updates
 
 When a new version is released, a pop-up offers **DOWNLOAD** or **LATER** (hides it for a day). The APK is
-saved to your Downloads folder (a progress bar under the top bar shows how far along it is; `[×]` hides it) and
+saved to your Downloads folder (a progress bar above the player shows how far along it is; `[×]` hides it) and
 checked against the release's checksum; then tap **INSTALL** and confirm
 Android's update screen. The first time, Android asks you to allow installs from CLIBeats.
 

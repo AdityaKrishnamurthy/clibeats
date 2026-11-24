@@ -73,6 +73,9 @@ private fun colorsFrom(
     val hsv = FloatArray(HSV_SIZE)
     android.graphics.Color.colorToHSV(vivid.rgb, hsv)
     if (hsv[1] < MIN_SATURATION) return null // black-and-white cover: keep the theme accent
+    // Near-black or grey picks (a very dark blue-black can count as 33% saturated) would be brightened into
+    // an unrelated purple; dark covers keep the theme accent chosen in Settings instead.
+    if (chromaOf(vivid.rgb) < MIN_CHROMA) return null
     // Bright enough to read on a dark screen, dark enough on a light one.
     hsv[1] = hsv[1].coerceAtLeast(ACCENT_MIN_SATURATION)
     hsv[2] = if (lightTheme) hsv[2].coerceIn(LIGHT_MIN_VALUE, LIGHT_MAX_VALUE) else hsv[2].coerceAtLeast(DARK_MIN_VALUE)
@@ -84,6 +87,14 @@ private fun colorsFrom(
     )
 }
 
+/** Visible colour, 0 (grey, black or white) to 1: the spread between the strongest and weakest channel. */
+private fun chromaOf(rgb: Int): Float {
+    val r = android.graphics.Color.red(rgb)
+    val g = android.graphics.Color.green(rgb)
+    val b = android.graphics.Color.blue(rgb)
+    return (maxOf(r, g, b) - minOf(r, g, b)) / CHANNEL_MAX
+}
+
 private const val PALETTE_SOURCE_PX = 128
 private const val HSV_SIZE = 3
 private const val PALETTE_COLORS = 16
@@ -92,3 +103,5 @@ private const val ACCENT_MIN_SATURATION = 0.45f
 private const val DARK_MIN_VALUE = 0.78f
 private const val LIGHT_MIN_VALUE = 0.38f
 private const val LIGHT_MAX_VALUE = 0.58f
+private const val MIN_CHROMA = 0.12f
+private const val CHANNEL_MAX = 255f

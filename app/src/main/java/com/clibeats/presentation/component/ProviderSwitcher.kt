@@ -36,7 +36,7 @@ const val LOCAL_PROVIDER_ID = "local"
 
 /**
  * Two-way source switch with two equal-width segments: [ ONLINE ▾ ] | [ LOCAL ].
- * The online segment opens a dropdown of online providers (YouTube Music, Internet Archive, ...);
+ * The online segment opens a dropdown of online providers (YouTube Music);
  * the chosen one is marked with ● in that list.
  */
 @Suppress("FunctionNaming", "LongMethod")

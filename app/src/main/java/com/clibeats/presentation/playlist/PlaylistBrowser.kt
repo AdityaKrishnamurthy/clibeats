@@ -115,6 +115,7 @@ internal fun PlaylistBrowser(
     onFavoritesClick: () -> Unit,
     onMostPlayedClick: () -> Unit,
     onCreateClick: () -> Unit,
+    onImportClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
     onDeleteClick: (Playlist) -> Unit,
 ) {
@@ -179,15 +180,26 @@ internal fun PlaylistBrowser(
         verticalArrangement = Arrangement.spacedBy(if (viewMode.isGrid) GRID_GAP_DP.dp else 0.dp),
     ) {
         item(key = "toolbar", span = fullSpan) {
-            ViewModeBar(total = total, selected = viewMode, onSelect = onViewModeChange)
+            ViewModeBar(
+                label = if (total == 1) "1 playlist" else "$total playlists",
+                selected = viewMode,
+                onSelect = onViewModeChange,
+            )
         }
         if (filter == PlaylistFilter.ALL) {
             header("pinned_h", "PINNED")
             entries(pinned, viewMode)
-            header("own_h", "YOUR PLAYLISTS · ${own.size}", action = "[ + NEW ]", onAction = onCreateClick)
+            header(
+                "own_h",
+                "YOUR PLAYLISTS · ${own.size}",
+                actions = listOf("[ ↓ IMPORT ]" to onImportClick, "[ + NEW ]" to onCreateClick),
+            )
             if (own.isEmpty()) {
                 item(key = "own_empty", span = fullSpan) {
-                    Hint("No playlists yet. Tap [ + NEW ], or long-press any song to add it to one.")
+                    Hint(
+                        "No playlists yet. Tap [ + NEW ], [ ↓ IMPORT ] to bring them from Spotify, " +
+                            "or long-press any song to add it to one.",
+                    )
                 }
             }
             entries(own, viewMode)
@@ -210,8 +222,7 @@ private val fullSpan: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(
 private fun LazyGridScope.header(
     key: String,
     title: String,
-    action: String? = null,
-    onAction: () -> Unit = {},
+    actions: List<Pair<String, () -> Unit>> = emptyList(),
 ) {
     item(key = key, span = fullSpan) {
         Row(
@@ -224,7 +235,7 @@ private fun LazyGridScope.header(
                 color = CliBeatsAccent,
                 modifier = Modifier.weight(1f),
             )
-            if (action != null) {
+            actions.forEach { (action, onAction) ->
                 Text(
                     text = action,
                     style = MaterialTheme.typography.labelMedium,
@@ -253,10 +264,10 @@ private fun LazyGridScope.entries(
     }
 }
 
-/** "N playlists" and the four view buttons. */
+/** A label (e.g. "N playlists") and the four view buttons. Shared with Home. */
 @Composable
-private fun ViewModeBar(
-    total: Int,
+internal fun ViewModeBar(
+    label: String,
     selected: PlaylistViewMode,
     onSelect: (PlaylistViewMode) -> Unit,
 ) {
@@ -265,7 +276,7 @@ private fun ViewModeBar(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = if (total == 1) "1 playlist" else "$total playlists",
+            text = label,
             style = MaterialTheme.typography.labelMedium,
             color = CliBeatsTextSecondary,
             modifier = Modifier.weight(1f),
@@ -435,7 +446,7 @@ private fun NewPlaylistTile(onClick: () -> Unit) {
             Text(text = "+", style = MaterialTheme.typography.headlineLarge, color = CliBeatsAccent)
         }
         Text(
-            text = "New playlist",
+            text = "New Playlist",
             style = MaterialTheme.typography.bodySmall,
             color = CliBeatsAccent,
             modifier = Modifier.padding(top = 6.dp),

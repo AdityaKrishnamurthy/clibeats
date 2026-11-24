@@ -11,6 +11,7 @@ import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import com.clibeats.playback.AudioOutputMonitor
+import com.clibeats.presentation.component.Notices
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -46,6 +48,7 @@ class PlayerViewModel
         private val playlistRepository: PlaylistRepository? = null,
         private val libraryRepository: LibraryRepository? = null,
         private val audioOutputMonitor: AudioOutputMonitor? = null,
+        private val notices: Notices? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
@@ -103,6 +106,16 @@ class PlayerViewModel
                 .transformLatest { message ->
                     emit(message)
                     delay(MESSAGE_MS)
+                    emit(null)
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+
+        /** Short confirmation (e.g. "Added to queue"), shown above the player bar for a moment. */
+        @Suppress("OPT_IN_USAGE")
+        val notice: StateFlow<String?> =
+            (notices?.messages ?: emptyFlow())
+                .transformLatest { message ->
+                    emit(message)
+                    delay(NOTICE_MS)
                     emit(null)
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
@@ -205,6 +218,7 @@ class PlayerViewModel
             const val MINUTE_MS = 60_000L
             const val TOAST_MS = 1_500L
             const val MESSAGE_MS = 3_000L
+            const val NOTICE_MS = 1_800L
         }
     }
 

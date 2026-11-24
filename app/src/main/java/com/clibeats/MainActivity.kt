@@ -34,7 +34,6 @@ import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
 import com.clibeats.presentation.onboarding.OnboardingScreen
-import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
 import com.clibeats.presentation.settings.SettingsScreen
@@ -106,9 +105,12 @@ private fun AppContent() {
         }
     }
     BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
+    // Queue isn't a tab: it opens full screen over the tabs (mini player / Now Playing) and back closes it.
+    var showQueue by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = showQueue) { showQueue = false }
 
     // Re-tapping the tab you're on: Home / Search = switch Online <-> Local (double-tap Search = search box),
-    // Library = switch Online <-> Offline, Playlists = back to the grid.
+    // Library = next section (Playlists → Online → Local).
     var focusSearch by remember { mutableStateOf(false) }
     var toggleSearchSource by remember { mutableStateOf(false) }
     // Search tab: one tap (when already on Search) switches the source after a short wait, which a second
@@ -117,14 +119,18 @@ private fun AppContent() {
     var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
-    var showPlaylistGrid by remember { mutableStateOf(false) }
-    val onTabClick: (NavDestination) -> Unit = { destination ->
+    val onTabClick: (NavDestination) -> Unit = tabClick@{ destination ->
+        if (destination == NavDestination.Queue) {
+            // The queue button toggles: a second tap closes the queue and shows the tab underneath again.
+            showQueue = !showQueue
+            return@tabClick
+        }
+        showQueue = false
         if (destination == tabs[pagerState.currentPage]) {
             when (destination) {
                 NavDestination.Home -> toggleHomeSource = true
                 NavDestination.Search -> Unit // handled below (single vs double tap)
                 NavDestination.Library -> toggleLibraryMode = true
-                NavDestination.Playlists -> showPlaylistGrid = true
                 else -> Unit
             }
         }
@@ -157,36 +163,38 @@ private fun AppContent() {
         onDestinationSelected = onTabClick,
     ) {
         // Swipe left/right between tabs in bottom-bar order.
-        HorizontalPager(
-            state = pagerState,
-            key = { tabs[it].route },
-            modifier = Modifier.fillMaxSize(),
-        ) { page ->
-            when (tabs[page]) {
-                NavDestination.Home ->
-                    HomeScreen(
-                        toggleSourceRequested = toggleHomeSource,
-                        onToggleSourceHandled = { toggleHomeSource = false },
-                    )
-                NavDestination.Search ->
-                    SearchScreen(
-                        focusRequested = focusSearch,
-                        onFocusHandled = { focusSearch = false },
-                        toggleSourceRequested = toggleSearchSource,
-                        onToggleSourceHandled = { toggleSearchSource = false },
-                    )
-                NavDestination.Queue -> QueueScreen()
-                NavDestination.Library ->
-                    LibraryScreen(
-                        toggleModeRequested = toggleLibraryMode,
-                        onToggleModeHandled = { toggleLibraryMode = false },
-                    )
-                NavDestination.Playlists ->
-                    PlaylistScreen(
-                        showGridRequested = showPlaylistGrid,
-                        onShowGridHandled = { showPlaylistGrid = false },
-                    )
-                NavDestination.Settings -> SettingsScreen()
+        Box(modifier = Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                key = { tabs[it].route },
+                modifier = Modifier.fillMaxSize(),
+            ) { page ->
+                when (tabs[page]) {
+                    NavDestination.Home ->
+                        HomeScreen(
+                            toggleSourceRequested = toggleHomeSource,
+                            onToggleSourceHandled = { toggleHomeSource = false },
+                        )
+                    NavDestination.Search ->
+                        SearchScreen(
+                            focusRequested = focusSearch,
+                            onFocusHandled = { focusSearch = false },
+                            toggleSourceRequested = toggleSearchSource,
+                            onToggleSourceHandled = { toggleSearchSource = false },
+                        )
+                    NavDestination.Library ->
+                        LibraryScreen(
+                            toggleModeRequested = toggleLibraryMode,
+                            onToggleModeHandled = { toggleLibraryMode = false },
+                        )
+                    NavDestination.Settings -> SettingsScreen()
+                    else -> Unit
+                }
+            }
+            if (showQueue) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    QueueScreen(onClose = { showQueue = false })
+                }
             }
         }
     }

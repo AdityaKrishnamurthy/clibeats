@@ -58,6 +58,37 @@ fun SearchResponse.toTrackList(): List<Track> {
     return tracks
 }
 
+/** An album, single or EP from an albums search. Its page lists every track with its video id. */
+data class AlbumHit(
+    val browseId: String,
+    val title: String,
+    val artist: String,
+    /** The album cover; album pages don't repeat it on each track row, so tracks take it from here. */
+    val artworkUrl: String? = null,
+)
+
+/** Albums from an albums-filtered search, in result order. */
+fun SearchResponse.toAlbumHits(): List<AlbumHit> {
+    val root = contents ?: return emptyList()
+    return findAll(root, "musicResponsiveListItemRenderer").mapNotNull { item ->
+        val browseId =
+            item.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+                ?.takeIf { it.startsWith("MPRE") } ?: return@mapNotNull null
+        val columns = item.nav("flexColumns")?.safeArray() ?: return@mapNotNull null
+
+        fun column(i: Int) =
+            columns.getOrNull(i)?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")?.safeArray()
+                ?.mapNotNull { it.nav("text")?.safeString() }.orEmpty()
+        val title = column(0).joinToString("").ifBlank { return@mapNotNull null }
+        val artwork =
+            item.nav("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
+                ?.safeArray()
+                ?.mapNotNull { it.nav("url")?.safeString() }
+                ?.lastOrNull()
+        AlbumHit(browseId, title, parseSubtitle(column(1)).artist, artwork)
+    }
+}
+
 /**
  * The chart playlist to show as "trending" from a Charts page: the daily top music videos for the country
  * (real songs), else the top 100, else the trending list, else the first chart playlist. Returns its
@@ -127,9 +158,10 @@ private fun JsonElement.parseTrack(): Track? {
             ?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")
             ?.safeArray() ?: emptyList()
 
-    val artist = col1Runs.getOrNull(0)?.nav("text")?.safeString() ?: ""
-    val album = col1Runs.getOrNull(2)?.nav("text")?.safeString() ?: ""
-    val durationStr = col1Runs.lastOrNull()?.nav("text")?.safeString() ?: ""
+    val subtitle = parseSubtitle(col1Runs.mapNotNull { it.nav("text")?.safeString() })
+    val artist = subtitle.artist
+    val album = subtitle.album
+    val durationStr = subtitle.duration
     // Playlists (charts) put the duration in a fixed column instead of the artist line.
     val fixedDuration =
         this.nav("fixedColumns")?.safeArray()?.getOrNull(0)
@@ -154,8 +186,38 @@ private fun JsonElement.parseTrack(): Track? {
         // streamUrl populated separately via /player
         streamUrl = null,
         providerId = PROVIDER_ID,
+        isVideo = findAll(this, "musicVideoType").any { it.safeString()?.let(::isVideoType) == true },
     )
 }
+
+/** A music video or user upload, as opposed to the official audio track ("ATV"). */
+internal fun isVideoType(musicVideoType: String) = musicVideoType != "MUSIC_VIDEO_TYPE_ATV"
+
+/** The artist · album · duration line of a result, split into its parts. */
+internal data class Subtitle(
+    val artist: String,
+    val album: String,
+    val duration: String,
+)
+
+/**
+ * Splits a result's second line, which YouTube Music sends as text runs joined by " • ":
+ * `[artist(s)] • [album] • [duration]` for songs, `[artist] • [views] • [duration]` for videos, with a
+ * leading type label ("Song", "Video") in unfiltered searches. Several artists arrive as separate runs
+ * ("A", " & ", "B") inside the first part and are kept together, not mistaken for the album.
+ */
+internal fun parseSubtitle(runs: List<String>): Subtitle {
+    val parts = mutableListOf(StringBuilder())
+    runs.forEach { text -> if (text.trim() == "•") parts += StringBuilder() else parts.last().append(text) }
+    var fields = parts.map { it.toString().trim() }.filter { it.isNotEmpty() }
+    if (fields.size > 1 && fields.first() in RESULT_TYPE_LABELS) fields = fields.drop(1)
+    val duration = fields.lastOrNull()?.takeIf { parseDurationMs(it) > 0 }.orEmpty()
+    val middle = if (duration.isNotEmpty()) fields.drop(1).dropLast(1) else fields.drop(1)
+    val album = middle.firstOrNull { !it.endsWith(" views") && !it.endsWith(" plays") }.orEmpty()
+    return Subtitle(artist = fields.firstOrNull().orEmpty(), album = album, duration = duration)
+}
+
+private val RESULT_TYPE_LABELS = setOf("Song", "Video", "Single", "EP", "Album", "Episode", "Podcast")
 
 /**
  * Parse duration string "4:19" → 259_000L ms. Returns 0 on parse failure.

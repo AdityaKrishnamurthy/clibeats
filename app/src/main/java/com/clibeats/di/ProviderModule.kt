@@ -2,10 +2,6 @@
 
 package com.clibeats.di
 
-import com.clibeats.BuildConfig
-import com.clibeats.data.provider.AudiusMusicProvider
-import com.clibeats.data.provider.InternetArchiveMusicProvider
-import com.clibeats.data.provider.JamendoMusicProvider
 import com.clibeats.data.provider.LocalMusicProvider
 import com.clibeats.data.provider.MusicProviderRegistry
 import com.clibeats.data.provider.YouTubeMusicProvider
@@ -14,7 +10,6 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -29,26 +24,6 @@ object ProviderModule {
     @Singleton
     fun provideProviderRegistry(
         youtube: YouTubeMusicProvider,
-        internetArchive: InternetArchiveMusicProvider,
-        audius: AudiusMusicProvider,
-        jamendo: JamendoMusicProvider,
         local: LocalMusicProvider,
-    ): ProviderRegistry =
-        MusicProviderRegistry(
-            listOfNotNull(
-                youtube,
-                internetArchive,
-                audius,
-                jamendo.takeIf { BuildConfig.JAMENDO_CLIENT_ID.isNotBlank() },
-                local,
-            ),
-        )
-
-    /** Optional free Jamendo API key (developer.jamendo.com); empty when unset. */
-    @Provides
-    @Singleton
-    @Named(JAMENDO_CLIENT_ID_QUALIFIER)
-    fun provideJamendoClientId(): String = BuildConfig.JAMENDO_CLIENT_ID
-
-    const val JAMENDO_CLIENT_ID_QUALIFIER = "jamendo_client_id"
+    ): ProviderRegistry = MusicProviderRegistry(listOf(youtube, local))
 }

@@ -78,9 +78,12 @@ class ArtworkBitmapLoader(
             }
             val cachedSmaller = smaller.firstNotNullOfOrNull { fetch(it, cacheOnly = true) }
             if (cachedSmaller != null) {
-                result.set(cachedSmaller)
-                // Swap in the high-res cover once it's downloaded.
-                if (fetch(full, cacheOnly = false) != null) onBetterArtwork()
+                // The lock screen and notification keep the first picture they get for a song (Media3 caches
+                // it by URI), so a later swap often never shows. Wait briefly for the high-res cover instead.
+                val sharp = withTimeoutOrNull(HIRES_WAIT_MS) { fetch(full, cacheOnly = false) }
+                result.set(sharp ?: cachedSmaller)
+                // Slow network: show the small one now and still try to swap the high-res in when it lands.
+                if (sharp == null && fetch(full, cacheOnly = false) != null) onBetterArtwork()
                 return@launch
             }
             val downloaded =
@@ -116,5 +119,6 @@ class ArtworkBitmapLoader(
         private const val NOTIFICATION_PX = 720
         private const val LOGO_PX = 256
         private const val DOWNLOAD_TIMEOUT_MS = 8_000L
+        private const val HIRES_WAIT_MS = 4_000L
     }
 }

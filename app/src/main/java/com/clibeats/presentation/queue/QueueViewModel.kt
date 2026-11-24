@@ -28,6 +28,7 @@ class QueueViewModel
                     QueueUiState.Success(
                         tracks = queue,
                         currentTrackId = state.currentTrack?.id,
+                        currentIndex = state.currentIndex,
                     )
                 }
             }.stateIn(
@@ -45,6 +46,14 @@ class QueueViewModel
 
         fun onRemove(index: Int) {
             playbackRepository.removeFromQueue(index)
+        }
+
+        /** UNDO after a removal: the song goes back where it was. */
+        fun undoRemove(
+            index: Int,
+            track: Track,
+        ) {
+            playbackRepository.insertIntoQueue(index, track)
         }
 
         fun onClear() {

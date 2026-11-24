@@ -12,6 +12,7 @@ import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.presentation.playlist.PlaylistViewMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -65,6 +66,16 @@ class HomeViewModel
             )
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
+        /** How Home lists songs (grids, list, details); remembered across launches. Details = bigger covers. */
+        val viewMode: StateFlow<PlaylistViewMode> =
+            appPreferences.homeView
+                .map { name -> PlaylistViewMode.entries.firstOrNull { it.name == name } ?: PlaylistViewMode.DETAILS }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, PlaylistViewMode.DETAILS)
+
+        fun setViewMode(mode: PlaylistViewMode) {
+            viewModelScope.launch { appPreferences.setHomeView(mode.name) }
+        }
+
         /** Online provider to return to when switching back from Local. */
         private var lastOnlineProviderId = ProviderRegistry.DEFAULT_PROVIDER_ID
 
@@ -94,13 +105,9 @@ class HomeViewModel
                 if (appPreferences.autoQueueRelated.first()) {
                     repo.setQueue(tracks, index)
                 } else {
-                    repo.setQueue(listOf(tracks[index]), 0)
+                    repo.playTrack(tracks[index])
                 }
             }
-        }
-
-        fun addToQueue(track: Track) {
-            playbackRepository?.addToQueue(track)
         }
 
         fun clearRecentlyPlayed() {

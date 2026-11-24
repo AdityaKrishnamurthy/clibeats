@@ -4,6 +4,8 @@
 package com.clibeats.data.local.dao
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import com.clibeats.data.local.entity.SongEntity
@@ -19,6 +21,17 @@ interface SongDao {
 
     @Upsert
     suspend fun upsertAll(songs: List<SongEntity>)
+
+    /** Sets the cover of a stored song that has none (e.g. saved by an earlier import); never replaces one. */
+    @Query("UPDATE songs SET artwork_url = :artworkUrl WHERE id = :id AND (artwork_url IS NULL OR artwork_url = '')")
+    suspend fun fillMissingArtwork(
+        id: String,
+        artworkUrl: String,
+    )
+
+    /** Adds songs that aren't stored yet and leaves existing rows untouched. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertAllIfAbsent(songs: List<SongEntity>)
 
     @Query("SELECT * FROM songs WHERE id = :id")
     suspend fun getById(id: String): SongEntity?

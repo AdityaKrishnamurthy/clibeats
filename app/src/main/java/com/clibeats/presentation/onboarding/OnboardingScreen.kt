@@ -102,14 +102,14 @@ fun OnboardingScreen(
     ) {
         Text("> clibeats --setup", style = MaterialTheme.typography.titleMedium, color = CliBeatsAccent)
         Text(
-            text = "step ${step + 1}/$STEP_COUNT  " + "■".repeat(step + 1) + "□".repeat(STEP_COUNT - step - 1),
+            text = "Step ${step + 1}/$STEP_COUNT  " + "■".repeat(step + 1) + "□".repeat(STEP_COUNT - step - 1),
             style = MaterialTheme.typography.labelMedium,
             color = CliBeatsTextSecondary,
         )
 
         when (step) {
             0 ->
-                TuiBlock(title = "Choose a theme", isActive = true) {
+                TuiBlock(title = "Choose a Theme", isActive = true) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         CliBeatsThemeMode.entries.forEach { mode ->
                             Choice(
@@ -126,7 +126,7 @@ fun OnboardingScreen(
                     }
                 }
             1 ->
-                TuiBlock(title = "Where is your music?", isActive = true) {
+                TuiBlock(title = "Where Is Your Music?", isActive = true) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             "Pick the folder that holds your music files (FLAC, MP3, WAV, M4A...). " +
@@ -179,9 +179,9 @@ fun OnboardingScreen(
                     }
                 }
             else ->
-                TuiBlock(title = "Default source", isActive = true) {
+                TuiBlock(title = "Default Source", isActive = true) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Choice("ONLINE  (YouTube Music, Internet Archive, ...)", !useLocal) { useLocal = false }
+                        Choice("ONLINE  (YouTube Music)", !useLocal) { useLocal = false }
                         Choice("LOCAL  (music on this device)", useLocal) { useLocal = true }
                     }
                 }

@@ -35,7 +35,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -68,14 +70,21 @@ fun SongTableRow(
     index: Int? = null,
     isNowPlaying: Boolean = false,
     artworkContent: (@Composable () -> Unit)? = null,
+    leading: (@Composable () -> Unit)? = null,
+    // Taller row with bigger artwork (Home "Details" view).
+    large: Boolean = false,
+    // Extra TalkBack actions on the row (e.g. "Remove from queue" where removal is a swipe).
+    accessibilityActions: List<CustomAccessibilityAction> = emptyList(),
     actions: (@Composable () -> Unit)? = null,
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     onSwipeRight: (() -> Unit)? = null,
+    swipeRightLabel: String = "+ QUEUE",
     onLongPress: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
 ) {
     val semanticsDescription = "$trackTitle by $artist"
+    val rowHeight = if (large) LARGE_ROW_DP.dp else 48.dp
     val rowBackground = when {
         isNowPlaying -> CliBeatsSurface
         else -> CliBeatsBackground
@@ -113,7 +122,7 @@ fun SongTableRow(
         }
 
     Box(modifier = modifier.fillMaxWidth().then(swipeModifier)) {
-        if (dragX != 0f) SwipeHint(dragX)
+        if (dragX != 0f) SwipeHint(dragX, swipeRightLabel)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -122,12 +131,15 @@ fun SongTableRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
+                    .height(rowHeight)
                     .background(rowBackground)
-                    .semantics { contentDescription = semanticsDescription }
+                    .semantics {
+                        contentDescription = semanticsDescription
+                        if (accessibilityActions.isNotEmpty()) customActions = accessibilityActions
+                    }
                     .combinedClickable(
                         onClickLabel = "Play",
-                        onLongClickLabel = if (onLongPress != null) "Add to playlist" else null,
+                        onLongClickLabel = if (onLongPress != null) "More options" else null,
                         onLongClick = onLongPress,
                         onClick = onClick,
                     ),
@@ -138,7 +150,7 @@ fun SongTableRow(
                     Box(
                         modifier = Modifier
                             .width(2.dp)
-                            .height(48.dp)
+                            .height(rowHeight)
                             .background(CliBeatsAccent),
                     )
                 } else {
@@ -147,10 +159,12 @@ fun SongTableRow(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
+                leading?.invoke()
+
                 // ── Track index or artwork ─────────────────────────────────────
                 if (artworkContent != null) {
                     Box(
-                        modifier = Modifier.size(32.dp),
+                        modifier = Modifier.size(if (large) LARGE_ART_DP.dp else 32.dp),
                     ) {
                         artworkContent()
                     }
@@ -254,10 +268,13 @@ private const val SWIPE_MAX_FACTOR = 1.5f
 /** Revealed behind the row while dragging: "+ QUEUE" (dragging right) or "♥ FAVORITE" (dragging left). */
 @Suppress("FunctionNaming")
 @Composable
-private fun BoxScope.SwipeHint(dragX: Float) {
+private fun BoxScope.SwipeHint(
+    dragX: Float,
+    rightLabel: String,
+) {
     val right = dragX > 0f
     Text(
-        text = if (right) "+ QUEUE" else "♥ FAVORITE",
+        text = if (right) rightLabel else "♥ FAVORITE",
         style = MaterialTheme.typography.labelMedium,
         color = CliBeatsAccent,
         modifier =
@@ -266,3 +283,6 @@ private fun BoxScope.SwipeHint(dragX: Float) {
                 .padding(horizontal = 16.dp),
     )
 }
+
+private const val LARGE_ROW_DP = 64
+private const val LARGE_ART_DP = 52

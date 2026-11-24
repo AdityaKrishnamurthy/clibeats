@@ -140,6 +140,9 @@ class PlaylistViewModel
             }
         }
 
+        /** True while a playlist (or Favorites / Most Played) is open rather than the playlist list. */
+        val isPlaylistOpen: Boolean get() = _selectedPlaylistId.value != null
+
         fun selectPlaylist(playlistId: String?) {
             _selectedPlaylistId.value = playlistId
         }
@@ -150,10 +153,6 @@ class PlaylistViewModel
 
         fun openMostPlayed() {
             _selectedPlaylistId.value = MOST_PLAYED_ID
-        }
-
-        fun addToQueue(track: Track) {
-            playbackRepository.addToQueue(track)
         }
 
         fun removeSongFromPlaylist(
@@ -214,6 +213,16 @@ class PlaylistViewModel
             if (tracks.isNotEmpty()) {
                 playbackRepository.setQueue(tracks, startIndex)
             }
+        }
+
+        /** Renames one of your playlists (blank names are ignored). Its songs and cover are untouched. */
+        fun renamePlaylist(
+            playlist: Playlist,
+            name: String,
+        ) {
+            val trimmed = name.trim()
+            if (trimmed.isEmpty() || trimmed == playlist.name) return
+            viewModelScope.launch { playlistRepository.upsertPlaylist(playlist.copy(name = trimmed)) }
         }
 
         /**

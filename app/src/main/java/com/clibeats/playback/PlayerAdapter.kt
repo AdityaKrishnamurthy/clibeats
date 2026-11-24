@@ -179,8 +179,20 @@ class PlayerAdapter
             )
         }
 
+        /** Plays [track] now. Songs queued after the current one stay queued (tapping a song used to wipe them). */
         fun playTrack(track: Track) {
             startPlaybackService()
+            if (trackList.isNotEmpty()) {
+                val index = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
+                trackList.add(index, track)
+                syncQueue()
+                player.addMediaItem(index, track.toMediaItem())
+                player.seekTo(index, 0L)
+                player.prepare()
+                player.play()
+                updateState()
+                return
+            }
             unshuffledOrder = null
             trackList.clear()
             trackList.add(track)
@@ -221,10 +233,14 @@ class PlayerAdapter
 
         fun addToQueue(track: Track) {
             startPlaybackService()
-            trackList.add(track)
+            // Shuffle on: mix the new song in among the upcoming ones instead of always playing it last.
+            val first = player.currentMediaItemIndex + 1
+            val shuffleIn = shuffleOn && first in 1..trackList.size
+            val index = if (shuffleIn) (first..trackList.size).random() else trackList.size
+            trackList.add(index, track)
             syncQueue()
             val mediaItem = track.toMediaItem()
-            player.addMediaItem(mediaItem)
+            player.addMediaItem(index, mediaItem)
             if (player.playbackState == Player.STATE_IDLE || player.mediaItemCount == 1) {
                 player.prepare()
             }
@@ -468,6 +484,39 @@ class PlayerAdapter
             }
         }
 
+        /**
+         * Replaces queued songs with newer copies of themselves (same id), e.g. after a rescan fixed their
+         * tags or cover. Playback and order are untouched; only what the screens show changes.
+         */
+        fun refreshTracks(fresh: Map<String, Track>) {
+            var changed = false
+            trackList.indices.forEach { i ->
+                val old = trackList[i]
+                val new = fresh[old.id]?.copy(streamUrl = old.streamUrl) ?: return@forEach
+                if (new != old) {
+                    trackList[i] = new
+                    unshuffledOrder = unshuffledOrder?.map { if (it === old) new else it }
+                    changed = true
+                }
+            }
+            if (changed) {
+                syncQueue()
+                updateState()
+            }
+        }
+
+        /** Puts [track] at [index] without touching playback (ExoPlayer shifts the playing item if needed). */
+        fun insertAt(
+            index: Int,
+            track: Track,
+        ) {
+            val at = index.coerceIn(0, trackList.size)
+            trackList.add(at, track)
+            syncQueue()
+            player.addMediaItem(at, track.toMediaItem())
+            updateState()
+        }
+
         /** Clears everything except the song that's playing, so playback continues. */
         fun clearQueue() {
             val current = player.currentMediaItemIndex
@@ -563,6 +612,7 @@ class PlayerAdapter
             _playbackState.value =
                 PlaybackState(
                     currentTrack = currentTrack,
+                    currentIndex = if (currentTrack != null) currentIndex else -1,
                     isPlaying = player.isPlaying,
                     positionMs = player.currentPosition.coerceAtLeast(0L),
                     bufferedPositionMs = player.bufferedPosition.coerceAtLeast(0L),
