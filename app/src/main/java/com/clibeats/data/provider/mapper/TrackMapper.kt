@@ -63,6 +63,8 @@ data class AlbumHit(
     val browseId: String,
     val title: String,
     val artist: String,
+    /** The album cover; album pages don't repeat it on each track row, so tracks take it from here. */
+    val artworkUrl: String? = null,
 )
 
 /** Albums from an albums-filtered search, in result order. */
@@ -78,7 +80,12 @@ fun SearchResponse.toAlbumHits(): List<AlbumHit> {
             columns.getOrNull(i)?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")?.safeArray()
                 ?.mapNotNull { it.nav("text")?.safeString() }.orEmpty()
         val title = column(0).joinToString("").ifBlank { return@mapNotNull null }
-        AlbumHit(browseId, title, parseSubtitle(column(1)).artist)
+        val artwork =
+            item.nav("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
+                ?.safeArray()
+                ?.mapNotNull { it.nav("url")?.safeString() }
+                ?.lastOrNull()
+        AlbumHit(browseId, title, parseSubtitle(column(1)).artist, artwork)
     }
 }
 

@@ -34,13 +34,13 @@ object ExportifyFiles {
             if (headLength == ZIP_MAGIC.size && head.contentEquals(ZIP_MAGIC)) {
                 readZip(buffered)
             } else {
-                listOf(ExportifyCsv.parse(ExportifyCsv.playlistName(fileName), readText(buffered)))
+                ExportifyCsv.parse(ExportifyCsv.playlistName(fileName), readText(buffered))
             }
         val nonEmpty = playlists.filter { it.songs.isNotEmpty() }
         if (nonEmpty.isEmpty()) {
             throw NotAnExportifyFileException(
                 if (playlists.isEmpty()) {
-                    "No Exportify playlist files were found in \"$fileName\"."
+                    "No Exportify or TuneMyMusic playlist files were found in \"$fileName\"."
                 } else {
                     "The playlists in \"$fileName\" have no songs."
                 },
@@ -65,7 +65,7 @@ object ExportifyFiles {
                         base.startsWith("._") || path.startsWith("__MACOSX")
                 if (!skip) {
                     runCatching { ExportifyCsv.parse(ExportifyCsv.playlistName(base), readText(zip)) }
-                        .onSuccess { playlists += it }
+                        .onSuccess { playlists.addAll(it) }
                 }
                 zip.closeEntry()
             }

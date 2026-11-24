@@ -37,13 +37,30 @@ class ExportifyFilesTest {
                     "spotify:track:3,X,\"Say \"\"Hi\"\"\",\"A\",\"B\",2020,1000,1",
                 )
 
-        val playlist = ExportifyCsv.parse("anime", text)
+        val playlist = ExportifyCsv.parse("anime", text).single()
 
         assertThat(playlist.songs).hasSize(3)
         assertThat(playlist.songs[0]).isEqualTo(SpotifySong("星空花", listOf("MIRA"), "Hoshizora", 238_586, isrc = "JP1"))
         assertThat(playlist.songs[1].album).isEqualTo("Film Two, Vol. 1")
         assertThat(playlist.songs[1].artists).containsExactly("D. Iyer", "Vinay Prakash").inOrder()
         assertThat(playlist.songs[2].title).isEqualTo("Say \"Hi\"")
+    }
+
+    @Test
+    fun parse_tuneMyMusicFile_splitsPlaylistsAndSkipsFollowedArtists() {
+        val text =
+            "\uFEFFTrack name,Artist name,Album,Playlist name,Type,ISRC\n" +
+                "\"Song A\",\"Singer One,Chorus\",\"Album A\",\"Mix\",\"Playlist\",\"ISRC1\"\n" +
+                "\"Some Channel\",\"\",\"\",\"My Subscriptions (Artists)\",\"Artist\",\"\"\n" +
+                "\"Song B\",\"Singer Two\",\"Album B\",\"Other\",\"Playlist\",\"ISRC2\"\n" +
+                "\"A video title\",\"\",\"\",\"Liked videos\",\"Favorite\",\"\"\n"
+
+        val playlists = ExportifyCsv.parse("My Library", text)
+
+        assertThat(playlists.map { it.name }).containsExactly("Mix", "Other", "Liked videos").inOrder()
+        assertThat(playlists[0].songs.single().artists).containsExactly("Singer One", "Chorus").inOrder()
+        assertThat(playlists[0].songs.single().isrc).isEqualTo("ISRC1")
+        assertThat(playlists[2].songs.single().artists).isEmpty()
     }
 
     @Test

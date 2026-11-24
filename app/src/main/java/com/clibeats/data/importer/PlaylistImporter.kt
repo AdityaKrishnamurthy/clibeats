@@ -183,6 +183,7 @@ class PlaylistImporter
                     if (it.index == songIndex) it.copy(match = track, manual = true, searchFailed = false) else it
                 }
             songDao.insertAllIfAbsent(listOf(track.storable().toEntity()))
+            track.artworkUrl?.let { songDao.fillMissingArtwork(track.id, it) }
             // Nothing matched during the import, so no playlist was saved yet: create it now.
             val id =
                 playlist.playlistId
@@ -270,7 +271,10 @@ class PlaylistImporter
             val import = running.playlists.getOrNull(index) ?: return
             val matched = import.matched
             if (matched.isEmpty()) return
-            songDao.insertAllIfAbsent(matched.mapNotNull { it.match?.toEntity() })
+            val tracks = matched.mapNotNull { it.match }
+            songDao.insertAllIfAbsent(tracks.map { it.toEntity() })
+            // Re-importing fills covers that an earlier import couldn't get; other details stay as they are.
+            tracks.forEach { t -> t.artworkUrl?.let { songDao.fillMissingArtwork(t.id, it) } }
             val mine =
                 playlistRepository.getAllPlaylistsAsFlow().first()
                     .filter { it.isOwned && !it.id.startsWith(LOCAL_FILE_PREFIX) }

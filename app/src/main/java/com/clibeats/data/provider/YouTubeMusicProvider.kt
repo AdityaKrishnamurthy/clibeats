@@ -70,7 +70,11 @@ class YouTubeMusicProvider
         suspend fun albumTracks(album: AlbumHit): List<Track>? =
             runCatching {
                 api.browse(com.clibeats.data.provider.dto.BrowseRequest.page(album.browseId)).playlistTracks().map {
-                    it.copy(artist = it.artist.ifBlank { album.artist }, album = it.album.ifBlank { album.title })
+                    it.copy(
+                        artist = it.artist.ifBlank { album.artist },
+                        album = it.album.ifBlank { album.title },
+                        artworkUrl = it.artworkUrl ?: album.artworkUrl,
+                    )
                 }
             }.getOrNull()
 

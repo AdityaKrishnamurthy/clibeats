@@ -138,6 +138,8 @@ object TrackMatcher {
                 // A song with no audio release, uploaded as a video by the label in the asked-for language
                 // (a lyrical video on the label's language channel): same title, about the same length.
                 languageConfirmed && titleSim >= TITLE_STRONG && diff != null && diff <= LOOSE_LENGTH_MS -> true
+                // Exports that only list a video's title (no artist, no length): only the exact same title counts.
+                song.artists.isEmpty() && compact(songTitle) == compact(candidateTitle) -> true
                 else -> false
             }
         if (!passes) return null

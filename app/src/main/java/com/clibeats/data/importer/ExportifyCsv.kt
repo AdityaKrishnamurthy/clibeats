@@ -24,18 +24,26 @@ class NotAnExportifyFileException(
 ) : Exception(message)
 
 /**
- * Reads the CSV files that exportify.net produces.
+ * Reads playlist CSV exports from exportify.net and tunemymusic.com ("Export to file").
  *
- * Header row (columns we use): `Track Name`, `Artist Name(s)` (artists joined with `;`),
- * `Album Name`, `Duration (ms)`. Every other column is ignored, so newer Exportify versions with
- * extra columns still work.
+ * - Exportify: one playlist per file, named after the file. Columns used: `Track Name`, `Artist Name(s)`
+ *   (artists joined with `;`), `Album Name`, `Duration (ms)`, `ISRC`.
+ * - TuneMyMusic: one file holding several playlists, told apart by `Playlist name`. Columns used:
+ *   `Track name`, `Artist name` (artists joined with `,`), `Album`, `ISRC`, `Type`. No song length.
+ *   Rows of type `Artist` are followed channels/artists, not songs, and are skipped.
+ *
+ * Column names are matched ignoring case; other columns are ignored, so newer versions with extra columns
+ * still work.
  */
 object ExportifyCsv {
-    private const val COL_TITLE = "Track Name"
-    private const val COL_ARTISTS = "Artist Name(s)"
-    private const val COL_ALBUM = "Album Name"
-    private const val COL_DURATION = "Duration (ms)"
-    private const val COL_ISRC = "ISRC"
+    private val COL_TITLE = listOf("track name")
+    private val COL_ARTISTS = listOf("artist name(s)", "artist name", "artist")
+    private val COL_ALBUM = listOf("album name", "album")
+    private val COL_DURATION = listOf("duration (ms)")
+    private val COL_ISRC = listOf("isrc")
+    private val COL_PLAYLIST = listOf("playlist name")
+    private val COL_TYPE = listOf("type")
+    private const val TYPE_ARTIST = "artist"
 
     /** Turns `anime.csv` / `My_Top_Mix_2024.csv` into "anime" / "My Top Mix 2024". */
     fun playlistName(fileName: String): String =
@@ -47,38 +55,49 @@ object ExportifyCsv {
             .trim()
             .ifEmpty { "Imported playlist" }
 
-    /** Parses one Exportify file. Rows without a title (e.g. podcast episodes, blank lines) are skipped. */
+    /**
+     * Parses one export file into its playlists: one for an Exportify file (named [name]), one per
+     * `Playlist name` for a TuneMyMusic file, in the order they first appear. Rows without a title (podcast
+     * episodes, blank lines) are skipped.
+     */
     fun parse(
         name: String,
         text: String,
-    ): SpotifyPlaylist {
-        val rows = parseCsv(text.removePrefix(""))
-        val header = rows.firstOrNull()?.map { it.trim() }
-        val title = header?.indexOf(COL_TITLE) ?: -1
-        val artists = header?.indexOf(COL_ARTISTS) ?: -1
+    ): List<SpotifyPlaylist> {
+        val rows = parseCsv(text.removePrefix("\uFEFF"))
+        val header = rows.firstOrNull()?.map { it.trim().lowercase() }.orEmpty()
+
+        fun column(names: List<String>) = names.firstNotNullOfOrNull { n -> header.indexOf(n).takeIf { it >= 0 } } ?: -1
+        val title = column(COL_TITLE)
+        val artists = column(COL_ARTISTS)
         if (title < 0 || artists < 0) {
-            throw NotAnExportifyFileException("\"$name\" doesn't look like an Exportify playlist file.")
+            throw NotAnExportifyFileException("\"$name\" doesn't look like an Exportify or TuneMyMusic playlist file.")
         }
-        val album = header!!.indexOf(COL_ALBUM)
-        val duration = header.indexOf(COL_DURATION)
-        val isrc = header.indexOf(COL_ISRC)
-        val songs =
-            rows.drop(1).mapNotNull { row ->
-                val songTitle = row.getOrNull(title)?.trim().orEmpty()
-                if (songTitle.isEmpty()) return@mapNotNull null
+        val album = column(COL_ALBUM)
+        val duration = column(COL_DURATION)
+        val isrc = column(COL_ISRC)
+        val playlist = column(COL_PLAYLIST)
+        val type = column(COL_TYPE)
+        // Exportify joins artists with ";", TuneMyMusic with ",".
+        val separators = if (playlist >= 0) Regex("[;,]") else Regex(";")
+        val byPlaylist = LinkedHashMap<String, MutableList<SpotifySong>>()
+        rows.drop(1).forEach { row ->
+            fun cell(i: Int) = row.getOrNull(i)?.trim().orEmpty()
+            val songTitle = cell(title)
+            if (songTitle.isEmpty() || cell(type).equals(TYPE_ARTIST, ignoreCase = true)) return@forEach
+            val song =
                 SpotifySong(
                     title = songTitle,
-                    artists =
-                        row.getOrNull(artists).orEmpty()
-                            .split(';')
-                            .map { it.trim() }
-                            .filter { it.isNotEmpty() },
-                    album = row.getOrNull(album)?.trim().orEmpty(),
-                    durationMs = row.getOrNull(duration)?.trim()?.toLongOrNull() ?: 0L,
-                    isrc = row.getOrNull(isrc)?.trim().orEmpty(),
+                    artists = cell(artists).split(separators).map { it.trim() }.filter { it.isNotEmpty() },
+                    album = cell(album),
+                    durationMs = cell(duration).toLongOrNull() ?: 0L,
+                    isrc = cell(isrc),
                 )
-            }
-        return SpotifyPlaylist(name = name, songs = songs)
+            val listName = if (playlist >= 0) cell(playlist).ifEmpty { name } else name
+            byPlaylist.getOrPut(listName) { mutableListOf() } += song
+        }
+        if (byPlaylist.isEmpty()) return listOf(SpotifyPlaylist(name = name, songs = emptyList()))
+        return byPlaylist.map { (listName, songs) -> SpotifyPlaylist(name = listName, songs = songs) }
     }
 
     /**

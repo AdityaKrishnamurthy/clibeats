@@ -183,7 +183,7 @@ private fun TitleBar(onBack: () -> Unit) {
                     .padding(horizontal = 12.dp, vertical = 8.dp),
         )
         Text(
-            text = "Import from Spotify",
+            text = "Import Playlists",
             style = MaterialTheme.typography.titleMedium,
             color = CliBeatsTextPrimary,
             modifier = Modifier.semantics { heading() },
@@ -209,8 +209,8 @@ private fun InstructionsView(
         item {
             Text(
                 text =
-                    "Bring your Spotify playlists into CLIBeats. Exportify saves them as a file, " +
-                        "and CLIBeats finds each song on YouTube Music.",
+                    "Bring your playlists into CLIBeats. Export them as a file (Exportify for Spotify, " +
+                        "TuneMyMusic for other services), and CLIBeats finds each song on YouTube Music.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = CliBeatsTextSecondary,
             )
@@ -234,6 +234,16 @@ private fun InstructionsView(
             )
         }
         item { Step(3, "Choose the file here", "Pick the .csv or .zip from your Downloads.") }
+        item {
+            Text(
+                text =
+                    "Using Apple Music, YouTube Music, Deezer or another service? On tunemymusic.com, pick it as " +
+                        "the source, choose your playlists, then Export to file (CSV) and pick that file here. " +
+                        "One file can hold many playlists.",
+                style = MaterialTheme.typography.bodySmall,
+                color = CliBeatsTextSecondary,
+            )
+        }
         item {
             if (reading) {
                 Row(verticalAlignment = Alignment.CenterVertically) {

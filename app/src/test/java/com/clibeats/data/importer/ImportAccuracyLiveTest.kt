@@ -76,6 +76,7 @@ class ImportAccuracyLiveTest {
                             it.copy(
                                 artist = it.artist.ifBlank { album.artist },
                                 album = it.album.ifBlank { album.title },
+                                artworkUrl = it.artworkUrl ?: album.artworkUrl,
                             )
                         }
                     }.getOrNull()
@@ -86,26 +87,28 @@ class ImportAccuracyLiveTest {
         val out = StringBuilder()
         runBlocking(Dispatchers.IO) {
             for (name in names) {
-                val playlist = ExportifyCsv.parse(name, File(dir, name).readText())
-                val started = System.currentTimeMillis()
-                val gate = Semaphore(PARALLEL)
-                val outcomes =
-                    playlist.songs
-                        .map { song -> async { gate.withPermit { song to search.find(song, allowClosest) } } }
-                        .awaitAll()
-                val seconds = (System.currentTimeMillis() - started) / MS_PER_S
-                val found = outcomes.count { it.second.match != null }
-                out.appendLine("### $name: $found of ${outcomes.size} found in ${seconds}s")
-                outcomes.forEachIndexed { i, (song, outcome) ->
-                    val spotify = "${song.title} | ${song.artistLine} | ${song.album} | ${time(song.durationMs)}"
-                    out.appendLine("${i + 1}. SP: $spotify")
-                    val match = outcome.match
-                    if (match != null) {
-                        out.appendLine("   OK${if (outcome.closest) " (closest version)" else ""}: ${describe(match)}")
-                    } else {
-                        out.appendLine("   MISS${if (!outcome.reached) " (no connection)" else ""}; top results:")
-                        outcome.seen.distinctBy { it.id }.take(TOP_REJECTED).forEach {
-                            out.appendLine("     - ${describe(it)}")
+                for (playlist in ExportifyCsv.parse(name, File(dir, name).readText())) {
+                    val started = System.currentTimeMillis()
+                    val gate = Semaphore(PARALLEL)
+                    val outcomes =
+                        playlist.songs
+                            .map { song -> async { gate.withPermit { song to search.find(song, allowClosest) } } }
+                            .awaitAll()
+                    val seconds = (System.currentTimeMillis() - started) / MS_PER_S
+                    val found = outcomes.count { it.second.match != null }
+                    out.appendLine("### ${playlist.name}: $found of ${outcomes.size} found in ${seconds}s")
+                    outcomes.forEachIndexed { i, (song, outcome) ->
+                        val spotify = "${song.title} | ${song.artistLine} | ${song.album} | ${time(song.durationMs)}"
+                        out.appendLine("${i + 1}. SP: $spotify")
+                        val match = outcome.match
+                        if (match != null) {
+                            val label = if (outcome.closest) " (closest version)" else ""
+                            out.appendLine("   OK$label: ${describe(match)}")
+                        } else {
+                            out.appendLine("   MISS${if (!outcome.reached) " (no connection)" else ""}; top results:")
+                            outcome.seen.distinctBy { it.id }.take(TOP_REJECTED).forEach {
+                                out.appendLine("     - ${describe(it)}")
+                            }
                         }
                     }
                 }
