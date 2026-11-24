@@ -1,7 +1,20 @@
-# CLIBeats v2.5.1 — Release Notes
+# CLIBeats v2.5.2 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.1.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.2.apk` (verify with `SHA256SUMS.txt`)
 · **Size:** about 5.7 MB
+
+## Open links in CLIBeats
+
+- **YouTube Music, YouTube and Spotify links** open in CLIBeats: Settings → Apps → CLIBeats → **Open by default →
+  Add link**, then tick the sites. Or **Share** a link to CLIBeats from any app.
+- Songs play right away (a Spotify song is found on YouTube Music like an imported one). YouTube Music playlists
+  and albums play as your queue. Spotify playlists and albums are imported (up to 100 songs from a link).
+
+## Import
+
+- **Find** now lets you listen first: tap a result to play it, tap again to pause, and `[ + ]` adds it.
+
+# v2.5.1
 
 ## Playlist import fixes
 

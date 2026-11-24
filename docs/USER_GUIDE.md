@@ -34,7 +34,18 @@ Library → Playlists → `[ ↓ IMPORT ]`, then choose where your playlists are
   **Export to file** and pick CSV.
 
 Tap **Choose File**, tick the playlists and tap **Import**. Songs that couldn't be matched are listed at the end:
-**Find** picks one yourself, **Copy** copies the list as text.
+**Find** searches YouTube Music for one (tap a result to play it, `[ + ]` to add it), **Copy** copies the list as
+text.
+
+## Opening links
+
+CLIBeats can open YouTube Music, YouTube and Spotify links. To make it the default: Settings → Apps → CLIBeats →
+**Open by default → Add link**, and tick the sites (if the Spotify or YouTube app is installed, turn its own
+"Open supported links" off first). You can also **Share** a link to CLIBeats.
+
+- A song plays right away. A Spotify song is found on YouTube Music the same way as an import.
+- A YouTube Music playlist or album plays as your queue.
+- A Spotify playlist or album is imported into your playlists (up to 100 songs; use Exportify for bigger ones).
 
 ## Editing playlists
 

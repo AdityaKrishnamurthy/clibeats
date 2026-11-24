@@ -11,12 +11,17 @@ package com.clibeats.data.provider
 
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.BrowseRequest
+import com.clibeats.data.provider.dto.InnerTubeContext
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
 import com.clibeats.data.provider.mapper.AlbumHit
 import com.clibeats.data.provider.mapper.chartPlaylistBrowseId
+import com.clibeats.data.provider.mapper.pageArtist
+import com.clibeats.data.provider.mapper.pageCover
+import com.clibeats.data.provider.mapper.pageTitle
 import com.clibeats.data.provider.mapper.playlistTracks
 import com.clibeats.data.provider.mapper.toAlbumHits
+import com.clibeats.data.provider.mapper.toTrack
 import com.clibeats.data.provider.mapper.toTrackList
 import com.clibeats.data.provider.youtube.NewPipeExtractorResolver
 import com.clibeats.data.provider.youtube.PoTokenGenerator
@@ -32,6 +37,8 @@ import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.util.DiagnosticLogger
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val ALBUM_PREFIX = "MPREb_"
 
 @Singleton
 class YouTubeMusicProvider
@@ -76,6 +83,33 @@ class YouTubeMusicProvider
                         artworkUrl = it.artworkUrl ?: album.artworkUrl,
                     )
                 }
+            }.getOrNull()
+
+        /** The song behind a shared link's video id; null when YouTube Music can't be reached. */
+        suspend fun songById(videoId: String): Track? =
+            runCatching { api.player(PlayerRequest(InnerTubeContext.default(), videoId)).videoDetails?.toTrack() }
+                .getOrNull()
+
+        /**
+         * A playlist ("VL…") or album ("MPREb_…") page: its name and songs (the first page, about 100).
+         * Null when YouTube Music can't be reached.
+         */
+        suspend fun page(browseId: String): Pair<String, List<Track>>? =
+            runCatching {
+                val response = api.browse(BrowseRequest.page(browseId))
+                val title = response.pageTitle().orEmpty()
+                // Album rows leave the artist and cover out; they're in the page header.
+                val tracks = response.playlistTracks()
+                val artist = response.pageArtist().orEmpty()
+                val cover = response.pageCover()
+                title to
+                    tracks.map {
+                        it.copy(
+                            artist = it.artist.ifBlank { artist },
+                            album = it.album.ifBlank { if (browseId.startsWith(ALBUM_PREFIX)) title else "" },
+                            artworkUrl = it.artworkUrl ?: cover,
+                        )
+                    }
             }.getOrNull()
 
         private suspend fun search(

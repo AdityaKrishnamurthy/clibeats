@@ -159,8 +159,11 @@ fun ImportScreen(
             onDismiss = viewModel::dismissConflicts,
         )
     }
+    val playingId by viewModel.playingId.collectAsState()
     manual?.let { pick ->
         FindSheet(
+            playingId = playingId,
+            onPreview = viewModel::preview,
             pick = pick,
             onSearch = viewModel::search,
             onPick = viewModel::pick,
@@ -863,10 +866,13 @@ private fun MatchedRow(song: ImportedSong) {
 
 // ── Find a song by hand ─────────────────────────────────────────────────────────
 
+@Suppress("LongParameterList")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FindSheet(
     pick: ManualPick,
+    playingId: String?,
+    onPreview: (Track) -> Unit,
     onSearch: (String) -> Unit,
     onPick: (Track) -> Unit,
     onDismiss: () -> Unit,
@@ -883,6 +889,12 @@ private fun FindSheet(
                 style = MaterialTheme.typography.titleMedium,
                 color = CliBeatsTextPrimary,
                 modifier = Modifier.padding(horizontal = 16.dp),
+            )
+            Text(
+                text = "Tap a song to play it, then [ + ] to add it.",
+                style = MaterialTheme.typography.bodySmall,
+                color = CliBeatsTextSecondary,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
             OutlinedTextField(
                 value = query,
@@ -914,24 +926,25 @@ private fun FindSheet(
                 else ->
                     LazyColumn(modifier = Modifier.fillMaxWidth().height(420.dp)) {
                         items(pick.results, key = { it.id }) { track ->
+                            val playing = track.id == playingId
                             Row(
                                 modifier =
                                     Modifier
                                         .fillMaxWidth()
                                         .clickable(
                                             role = Role.Button,
-                                            onClickLabel = "Add ${track.title}",
-                                        ) { onPick(track) }
-                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                            onClickLabel = if (playing) "Pause" else "Play ${track.title}",
+                                        ) { onPreview(track) }
+                                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 TrackArtwork(artworkUrl = track.artworkUrl, size = 44)
                                 Spacer(Modifier.width(12.dp))
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = track.title,
+                                        text = if (playing) "▶ ${track.title}" else track.title,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = CliBeatsTextPrimary,
+                                        color = if (playing) CliBeatsAccent else CliBeatsTextPrimary,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
@@ -950,6 +963,16 @@ private fun FindSheet(
                                         color = CliBeatsTextSecondary,
                                     )
                                 }
+                                Text(
+                                    text = "[ + ]",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = CliBeatsAccent,
+                                    modifier =
+                                        Modifier
+                                            .clickable(role = Role.Button, onClickLabel = "Add ${track.title}") {
+                                                onPick(track)
+                                            }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                )
                             }
                         }
                     }
