@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.4.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.5.0-1DB954)](#)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -88,11 +88,13 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   (with **Save as app playlist** to make an editable copy).
 
 ### Library, playlists & favourites
-- **Library:** `[ ONLINE ]` shows only songs you've played (with its own `[ CLEAR ]`); `[ OFFLINE ]` shows your device music and its track count. Tracks / Artists / Albums.
+- **Library** has three sections: **Playlists**, **Online** (songs you've played, with its own `[ CLEAR ]`) and
+  **Local** (your device music, Tracks / Artists / Albums).
 - **Playlists:** ♥ Favorites and Most Played pinned on top (each with ✕ per song and a confirmed `[ CLEAR ALL ]`),
-  then your playlists (`[ + NEW ]`), then local playlists in their own section. Four views — small grid, large grid,
-  list and details — remembered between launches.
-- **Custom covers:** tap a playlist's cover to pick an image from your phone or paste an image URL; reset any time.
+  then your playlists (`[ ↓ IMPORT ]`, `[ + NEW ]`), then local playlists in their own section. Four views — small
+  grid, large grid, list and details — remembered between launches.
+- **Edit a playlist** with the pencil: rename it, pick a cover from your phone or an image URL, or reset the cover.
+- **Sort** a playlist's songs by title or artist, A–Z or Z–A.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
 - **Recent searches:** with the search box empty, Search lists the songs you played, queued, favourited or added to
@@ -102,6 +104,16 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
   `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
   Settings sends a copy anywhere. Android's own backup also restores the library on a new phone.
+
+### Import playlists
+- **Library → Playlists → `[ ↓ IMPORT ]`** — choose **Spotify**, **YouTube Music** or **Others** (Apple Music,
+  Amazon Music, Deezer, Tidal…) and follow the steps: export a file with
+  [Exportify](https://exportify.net) or [TuneMyMusic](https://www.tunemymusic.com), then pick it.
+- `.csv` or `.zip`, one or many playlists per file; tick the ones you want.
+- Each song is found on YouTube Music by title, artist, album, length, language and ISRC. Nothing is guessed:
+  songs it can't be sure of are listed with **Find** (pick it yourself) and **Copy** (copy the list as text).
+- Right language versions of film songs, album covers, live progress, a notification while it runs, and
+  **Replace / Keep both** for existing playlists. Optional **Use the closest version**.
 
 ### Now Playing
 - High-res cover art: the low-res thumbnail shows instantly and the full-quality cover fades in.
@@ -114,15 +126,17 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - The quality line stays readable on any cover: a lighter shade of the album colour, or light amber (never red).
 - **Audio output:** shows where the music is playing — phone speaker, wired headphones or your Bluetooth device by
   name — and follows changes as they happen. Tap it to open Android's output switcher.
-- Repeat · previous · play/pause · next · shuffle · sleep timer · queue (`[ QUEUE (n) ]`) · add to playlist · ♥.
+- Repeat · previous · play/pause · next · shuffle, then sleep timer · queue · add to playlist · ♥.
+- Dark or colourless covers use your theme colour for the highlights.
 
 ### System integration
 - **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
   a cached cover shows at once and the high-res one replaces it; missing sizes fall back to smaller ones, then the logo.
+- **Repeat** and **♥ Favorite** buttons on the notification and lock screen, with the CLIBeats logo as its icon.
 - Tapping the notification opens the app; the session survives swiping the app away.
 - **Resume card** in Quick Settings after the app is closed (Android 11+): same queue, same song, same position.
 - **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
-  Downloads with a progress bar under the top bar (`[VIEW]` / `[×]`), then INSTALL. Settings → Updates: auto-check
+  Downloads with a progress bar above the player (`[VIEW]` / `[×]`), then INSTALL. Settings → Updates: auto-check
   daily / weekly / off and CHECK NOW.
 
 ### Storage & performance
@@ -143,45 +157,60 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ## Gestures
 
-| Where | Gesture | Action |
-|---|---|---|
-| Anywhere outside a song row | Swipe left / right | Next / previous tab (Home → Search → Library → Queue → Playlists → Settings) |
-| Any song row | **Swipe right** | Add to queue (`+ QUEUE`) |
-| Any song row | **Swipe left** | Add to ♥ Favorites (`♥ FAVORITE`) |
-| Any song row | **Long-press** | Add to playlist (with inline "+ New playlist") |
-| Bottom bar · **Home** | Tap again (on Home) | Switch the source Online ↔ Local |
-| Bottom bar · **Search** | Tap again (on Search) | Switch the source Online ↔ Local |
-| Bottom bar · **Search** | **Double-tap** | Focus the search box and open the keyboard |
-| Bottom bar · **Library** | Tap again (on Library) | Switch Online ↔ Offline |
-| Bottom bar · **Playlists** | Tap again (inside a playlist) | Back to the playlist grid |
-| Mini player | Tap song / artwork | Open Now Playing |
-| Mini player | Touch / drag the seek bar | Seek, with the exact time shown while held |
-| Now Playing | **Drag down** on the artwork | Close the player |
-| Queue · ♥ Favorites · your playlists | Drag a song's ≡ handle, or **hold its cover** and drag | Reorder |
-| Previous button | Tap (more than 3 s in) · tap again | Restart the song · play the one before |
-| Next button | Tap after going back | Return to the song you went back from |
-| Now Playing | Tap the audio output (`[ ᛒ EARBUDS ]`) | Open Android's output switcher |
-| Now Playing | **Drag** across the waveform | Scrub; back near the current time snaps to it |
-| Repeat button | Tap repeatedly | Off → All → One |
-| Playlist tile | Long-press | Delete playlist (app playlists only) |
-| Back | — | Close player / playlist, then return to Home |
+**Songs** (in any list)
+
+| Gesture | Action |
+|---|---|
+| Tap | Play |
+| **Swipe right** | Add to queue |
+| **Swipe left** | Add to ♥ Favorites |
+| **Hold** | Menu: Play next · Add to queue · Add to playlist · Add to favorites |
+| Drag ≡, or hold the cover and drag | Reorder (queue, ♥ Favorites, your playlists) |
+
+**Queue**
+
+| Gesture | Action |
+|---|---|
+| **Swipe right** on a song | Remove it, with **Undo** |
+| Queue button in the mini player | Open the queue · tap again to go back |
+
+**Bottom bar**
+
+| Gesture | Action |
+|---|---|
+| Swipe left / right outside a song row | Next / previous tab |
+| Tap **Home** again | Switch Online ↔ Local |
+| Tap **Search** again · **double-tap** | Switch Online ↔ Local · open the keyboard |
+| Tap **Library** again | Leave the open playlist, then Playlists → Online → Local |
+
+**Player**
+
+| Gesture | Action |
+|---|---|
+| Tap the mini player | Open Now Playing |
+| Touch / drag the mini player's bar | Seek, with the exact time shown |
+| **Drag down** on the cover (Now Playing) | Close the player |
+| **Drag** across the waveform | Scrub; near the current time it snaps back |
+| Previous: tap · tap again | Restart the song · the song before |
+| Next after going back | Return to the song you went back from |
+| Repeat | Off → All → One |
+| Tap the audio output | Android's output switcher |
+| Back | Close the player / playlist, then return to Home |
 
 ---
 
 ## Navigation
 
 ```
- Home   Search   Library   Queue   Playlists   ⚙ Settings
+ Home   Search   Library   Settings
 ```
 
-- **Home** — source switch, recently played, trending, mini player.
-- **Search** — search the active source; play next / add to playlist / add to queue on each result.
-- **Library** — Online (played) / Offline (device) · Tracks / Artists / Albums.
-- **Queue** — the playing song, then Up Next to reorder, remove, shuffle or clear; tap to jump. Also opens from
-  `[ QUEUE ]` in Now Playing.
-- **Playlists** — Favorites and Most Played pinned, your playlists, local M3U playlists; grid / list / details views;
-  drag ≡ (or hold a cover) to reorder Favorites and your playlists.
-- **Settings** — theme & accent, local music folders, playback, provider, storage, playlist exchange & backup, about.
+- **Home** — source switch, recently played, trending (List / Details / grid views).
+- **Search** — search YouTube Music or your device; hold a result for more options.
+- **Library** — **Playlists** (Favorites, Most Played, your playlists, import, local M3U), **Online** (played songs)
+  and **Local** (device music: Tracks / Artists / Albums).
+- **Settings** — theme & accent, local music folders, playback, storage, backup, updates, about.
+- **Queue** opens full screen from the mini player's queue button (also from Now Playing).
 
 ---
 
@@ -235,15 +264,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.4.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.5.0.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.4.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.5.0` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.4.0` → versionCode `20400`); local builds default to 2.4.0.
+left untouched. The version comes from the tag (`2.5.0` → versionCode `20500`); local builds default to 2.5.0.
 
 ---
 

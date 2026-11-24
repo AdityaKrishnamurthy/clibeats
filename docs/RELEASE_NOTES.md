@@ -1,57 +1,59 @@
-# CLIBeats v2.4.0 — Release Notes
+# CLIBeats v2.5.0 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.4.0.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.0.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.7 MB (was 18 MB)
+
+## New: import your playlists
+
+- **Library → Playlists → `[ ↓ IMPORT ]`** brings playlists in from **Spotify** (Exportify file),
+  **YouTube Music** and **other services** like Apple Music, Amazon Music, Deezer or Tidal (TuneMyMusic file).
+  Step-by-step instructions for each are on the import screen.
+- A `.zip` or a file with many playlists shows a checklist; pick the ones you want.
+- Each song is found on YouTube Music by title, artist, album, length, language and its official ISRC code. It
+  never guesses: songs it can't be sure about are listed at the end, with **Find** to pick them yourself and
+  **Copy** to copy the list as text. Songs no longer playable on Spotify are found too.
+- The right language version of film songs (no dubs), covers from the song's album, live progress, a
+  notification while it runs, and "Replace / Keep both" when a playlist already exists. Optional
+  **Use the closest version** for songs YouTube Music only has in another version.
+
+## Navigation and screens
+
+- **Four tabs:** Home, Search, Library, Settings. Playlists moved into Library (Playlists · Online · Local);
+  tapping Library again steps back out of a playlist, then through the sections.
+- **No top bar**, so screens start right under the status bar (fixes the bar showing on some phones).
+- **Mini player:** a queue button with the number of songs up next; tap it again to go back where you were.
+- **Home** has the same views as playlists (List, Details, grids); Details is the default.
+- **Now Playing:** cleaner header (the cover sits higher), action icons spaced from the waveform, and dark covers
+  use your theme colour instead of an unrelated purple.
+- **Holding a song** opens a menu: Play next, Add to queue, Add to playlist, Add to favorites. Swipes show a short
+  confirmation.
+
+## Queue
+
+- Tapping a song no longer wipes the queue (this caused "0 songs next" while shuffling); added songs land among
+  the upcoming ones when shuffle is on.
+- The playing song is 1 and up next counts from 2; swipe right removes a song with **Undo**; drag the ≡ handle or
+  hold a cover to reorder.
 
 ## Playlists
 
-- **New views:** small grid, large grid, list and details. Switch with the buttons at the top; your choice is
-  remembered.
-- **Clear sections:** ♥ Favorites and Most Played are pinned at the top, then your playlists (with `[ + NEW ]`),
-  then local M3U/PLS playlists in their own section.
-- **Reordering rebuilt** for the queue, ♥ Favorites and your own playlists: drag the ≡ handle, or hold a song's cover
-  and drag. It scrolls at the edges, the other songs move out of the way smoothly, and the new order is saved when you
-  let go.
+- **Rename** a playlist from the pencil (it edits the name and the cover).
+- **Sort** songs by title or artist, A–Z or Z–A.
 
-## Playback
+## Notification and lock screen
 
-- **Next goes back where you came from:** after pressing Previous, Next returns to the song you went back from (and
-  the ones before it, in order), at any point in the song. The same in the app, notification, lock screen and
-  headphones.
-- **Shuffle really shuffles the queue:** the playing song moves to the top and the rest is mixed, so the Queue
-  screen, Next and Previous all match what you see. Turning it off restores the original order.
-- **Precise seeking in the mini player:** touch or drag the bar; a bubble shows the exact time and it lands on that
-  second.
+- **Repeat** and **♥ Favorite** buttons next to the playback controls, and the CLIBeats logo as the small icon.
+- The sharp, high-resolution cover shows reliably.
 
-## Now Playing
+## Local music
 
-- **Audio output:** see where the music is playing — phone speaker, wired headphones or your Bluetooth device by name
-  — updated as you connect, disconnect or switch. Tap it to open Android's output switcher.
-- The classic waveform is back (the live loudness waveform from v2.3.0 has been removed).
-
-## Home & Search
-
-- **Trending for your country:** Home shows YouTube Music's own chart for the country your SIM / mobile network is in,
-  e.g. *Daily Top Music Videos – India*.
-- Trending loads once each time you open the app and no longer reloads when you switch tabs; `[ ↻ REFRESH ]` next to
-  the title reloads it. If the connection isn't ready when the app opens, it waits and retries instead of showing
-  an error.
-- **Recent searches** now include songs you queued, favourited or added to a playlist from search, not only ones you
-  played.
-- The bottom bar has its six tabs again, and the mini player no longer has a queue button.
-
-## Settings
-
-- **New accent colours:** Green, Lime, Amber, Orange, Magenta, Lavender, Cyan, Teal and White, plus a **custom colour
-  picker** (hue, saturation and brightness sliders, or type a hex code). If you used a colour that was removed, you
-  keep it as your custom colour.
-- Every box spans the full width with an accent outline.
-- **Update downloads** show a progress bar under the top bar (`[VIEW]` / `[×]`), so you can keep using the app while
-  it downloads. Update checks stay once a day (or weekly / off).
+- **Rescan** re-reads every file's tags and cover, about 4× faster; a file that can't be read keeps its details.
+- Covers and names of local songs no longer disappear after queue changes or favouriting.
+- Removing a music folder asks first.
 
 ## Under the hood
 
-- Uses less battery: Wi-Fi is only kept awake while streaming, not while playing your own files.
-- YouTube streams play the best audio available without an account (Opus, about 160 kbps).
-- README: new screenshots, a star history chart and a daily-updated downloads chart.
-
-Thanks to **Omprakash Panda** for the audio output switcher and update progress bar ideas (#8).
+- **YouTube Music only** for online music (Audius, Jamendo and Internet Archive were removed).
+- Search results show every artist of a song and its real album.
+- App updates download much faster: a 3× smaller app, the download starts at once and is checked in one pass.
+- Heading capitalisation fixed across the app.
