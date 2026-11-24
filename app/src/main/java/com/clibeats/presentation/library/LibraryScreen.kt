@@ -69,6 +69,7 @@ fun LibraryScreen(
     val trackActions: TrackActionsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val mode by viewModel.mode.collectAsState()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
     // Same instance PlaylistScreen uses below (same owner), so we can see whether a playlist is open.
     val playlistViewModel: PlaylistViewModel = hiltViewModel()
     // Tapping the Library tab while already on it: inside a playlist, back to the playlist list first;
@@ -197,6 +198,7 @@ fun LibraryScreen(
                             0 ->
                                 TracksList(
                                     tracks = currentState.tracks,
+                                    downloadedIds = downloadedIds,
                                     onTrackClick = { track, index ->
                                         viewModel.onTrackClick(track, currentState.tracks, index)
                                     },
@@ -214,10 +216,11 @@ fun LibraryScreen(
     }
 }
 
-@Suppress("FunctionNaming")
+@Suppress("FunctionNaming", "LongParameterList")
 @Composable
 private fun TracksList(
     tracks: List<Track>,
+    downloadedIds: Set<String> = emptySet(),
     onTrackClick: (Track, Int) -> Unit,
     onSwipeRight: (Track) -> Unit,
     onLongPress: (Track) -> Unit,
@@ -233,6 +236,7 @@ private fun TracksList(
                 artist = track.artist,
                 duration = formatDuration(track.durationMs),
                 index = index + 1,
+                isDownloaded = track.id in downloadedIds,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(track, index) },
                 onSwipeRight = { onSwipeRight(track) },

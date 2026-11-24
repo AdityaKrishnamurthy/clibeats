@@ -9,6 +9,7 @@ import com.clibeats.domain.repository.PlaybackRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -36,6 +37,7 @@ class TrackActionsViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(dispatcher)
+        whenever(downloadManager.downloadedTrackIds).thenReturn(MutableStateFlow(emptySet()))
         whenever(downloadManager.getDownloadedTracks()).thenReturn(flowOf(emptyList()))
         viewModel = TrackActionsViewModel(library, playback, downloadManager, notices)
     }
@@ -66,6 +68,19 @@ class TrackActionsViewModelTest {
                 "♥ Added to favorites",
                 "Downloading \u201cTitle\u201d",
             ).inOrder()
+            job.cancel()
+        }
+
+    @Test
+    fun `removeDownload calls manager and posts notice`() =
+        runTest(dispatcher) {
+            val shown = mutableListOf<String>()
+            val job = backgroundScope.launch { notices.messages.toList(shown) }
+
+            viewModel.removeDownload(track)
+
+            verify(downloadManager).deleteDownload(track.id)
+            assertThat(shown).contains("Removed download")
             job.cancel()
         }
 }

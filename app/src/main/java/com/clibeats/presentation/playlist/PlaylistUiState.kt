@@ -16,9 +16,13 @@ sealed interface PlaylistUiState {
         val isFavoritesOpen: Boolean = false,
         /** True when the pinned Most Played list is open. */
         val isMostPlayedOpen: Boolean = false,
+        /** True when the pinned Downloaded list is open. */
+        val isDownloadedOpen: Boolean = false,
         val mostPlayedCount: Int = 0,
+        val downloadedCount: Int = 0,
         val favoritesCover: String? = null,
         val mostPlayedCover: String? = null,
+        val downloadedCover: String? = null,
         /** playlistId -> cover artwork URL. */
         val covers: Map<String, String?> = emptyMap(),
     ) : PlaylistUiState

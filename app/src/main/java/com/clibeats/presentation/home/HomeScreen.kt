@@ -81,6 +81,7 @@ fun HomeScreen(
         }
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
     val uiState by homeViewModel.uiState.collectAsState()
     val isRefreshing by homeViewModel.isRefreshing.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
@@ -213,6 +214,7 @@ fun HomeScreen(
                         keyPrefix = "trend",
                         tracks = state.tracks,
                         mode = viewMode,
+                        downloadedIds = downloadedIds,
                         onPlay = { index -> homeViewModel.playFromList(state.tracks, index) },
                         onQueue = trackActions::addToQueue,
                         onFavorite = trackActions::favorite,
@@ -322,6 +324,7 @@ private fun LazyListScope.homeTracks(
     keyPrefix: String,
     tracks: List<Track>,
     mode: PlaylistViewMode,
+    downloadedIds: Set<String> = emptySet(),
     onPlay: (Int) -> Unit,
     onQueue: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
@@ -338,6 +341,7 @@ private fun LazyListScope.homeTracks(
                     TrackArtwork(artworkUrl = track.artworkUrl, size = if (large) DETAILS_ART_DP else LIST_ART_DP)
                 },
                 large = large,
+                isDownloaded = track.id in downloadedIds,
                 onClick = { onPlay(index) },
                 onSwipeRight = { onQueue(track) },
                 onSwipeLeft = { onFavorite(track) },

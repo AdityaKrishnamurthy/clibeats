@@ -9,10 +9,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,14 +26,7 @@ class TrackActionsViewModel
         private val downloadManager: TrackDownloadManager,
         private val notices: Notices,
     ) : ViewModel() {
-        val downloadedTrackIds: StateFlow<Set<String>> =
-            downloadManager.getDownloadedTracks()
-                .map { entities -> entities.map { it.songId }.toSet() }
-                .stateIn(
-                    scope = viewModelScope,
-                    started = SharingStarted.WhileSubscribed(5_000L),
-                    initialValue = emptySet(),
-                )
+        val downloadedTrackIds: StateFlow<Set<String>> = downloadManager.downloadedTrackIds
 
         fun favorite(track: Track) {
             viewModelScope.launch {

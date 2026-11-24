@@ -3,6 +3,7 @@
 package com.clibeats.presentation.settings
 
 import com.clibeats.data.cache.CacheManager
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.provider.ProviderRegistry
@@ -32,6 +33,7 @@ class SettingsViewModelTest {
     private lateinit var cacheManager: CacheManager
     private lateinit var providerRegistry: ProviderRegistry
     private lateinit var playlistExchangeManager: PlaylistExchangeManager
+    private lateinit var downloadManager: TrackDownloadManager
     private lateinit var viewModel: SettingsViewModel
 
     @Before
@@ -41,6 +43,7 @@ class SettingsViewModelTest {
         cacheManager = mock()
         providerRegistry = mock()
         playlistExchangeManager = mock()
+        downloadManager = mock()
 
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("youtube_music"))
         whenever(appPreferences.cacheMaxMb).thenReturn(flowOf(512))
@@ -52,12 +55,21 @@ class SettingsViewModelTest {
         whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
         whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
         whenever(providerRegistry.providers).thenReturn(emptyList())
+        whenever(downloadManager.getDownloadedSongItems()).thenReturn(flowOf(emptyList()))
+        whenever(downloadManager.getTotalDownloadedSizeBytes()).thenReturn(flowOf(0L))
 
         val songRepository: SongRepository = mock()
         whenever(songRepository.getLocalTrackCountAsFlow()).thenReturn(flowOf(0))
 
         viewModel =
-            SettingsViewModel(appPreferences, cacheManager, providerRegistry, playlistExchangeManager, songRepository)
+            SettingsViewModel(
+                appPreferences = appPreferences,
+                cacheManager = cacheManager,
+                providerRegistry = providerRegistry,
+                playlistExchangeManager = playlistExchangeManager,
+                songRepository = songRepository,
+                downloadManager = downloadManager,
+            )
     }
 
     @After
@@ -104,5 +116,21 @@ class SettingsViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             assertThat(viewModel.exchangeMessage.value).contains("Exported")
+        }
+
+    @Test
+    fun `deleteDownload delegates to downloadManager`() =
+        runTest(testDispatcher) {
+            viewModel.deleteDownload("s1")
+            testDispatcher.scheduler.advanceUntilIdle()
+            verify(downloadManager).deleteDownload("s1")
+        }
+
+    @Test
+    fun `clearAllDownloads delegates to downloadManager`() =
+        runTest(testDispatcher) {
+            viewModel.clearAllDownloads()
+            testDispatcher.scheduler.advanceUntilIdle()
+            verify(downloadManager).deleteAllDownloads()
         }
 }

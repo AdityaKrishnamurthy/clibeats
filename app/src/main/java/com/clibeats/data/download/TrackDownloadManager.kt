@@ -4,9 +4,11 @@
 package com.clibeats.data.download
 
 import android.content.Context
+import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.DownloadedTrackEntity
+import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
 import com.clibeats.domain.model.Track
 import com.clibeats.playback.StreamResolver
@@ -17,8 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -61,6 +66,23 @@ class TrackDownloadManager
             }
 
         fun getDownloadedTracks(): Flow<List<DownloadedTrackEntity>> = downloadedTrackDao.getAllFlow()
+
+        val downloadedTrackIds: StateFlow<Set<String>> =
+            downloadedTrackDao.getAllFlow()
+                .map { list -> list.map { it.songId }.toSet() }
+                .stateIn(scope, SharingStarted.Eagerly, emptySet())
+
+        fun getDownloadedSongs(): Flow<List<Track>> =
+            songDao.getDownloadedSongsAsFlow().map { entities ->
+                entities.map { it.toDomain() }
+            }
+
+        fun getDownloadedSongItems(): Flow<List<DownloadedSongItem>> = downloadedTrackDao.getDownloadedSongItemsFlow()
+
+        fun getTotalDownloadedSizeBytes(): Flow<Long> =
+            downloadedTrackDao.getAllFlow().map { list ->
+                list.sumOf { it.sizeBytes }
+            }
 
         @Suppress("LongMethod", "CyclomaticComplexMethod")
         fun downloadTrack(track: Track) {
@@ -251,8 +273,26 @@ class TrackDownloadManager
                     val file = File(entity.filePath)
                     if (file.exists()) file.delete()
                     downloadedTrackDao.deleteById(trackId)
+                } else {
+                    downloadedTrackDao.deleteById(trackId)
                 }
-                updateStatus(trackId, DownloadStatus.Idle)
+                val hash = sha256(trackId)
+                downloadsDir.listFiles { _, name -> name.startsWith(hash) }?.forEach { it.delete() }
+                _downloads.value = _downloads.value - trackId
+            }
+        }
+
+        suspend fun deleteAllDownloads() {
+            withContext(Dispatchers.IO) {
+                val all = downloadedTrackDao.getAll()
+                for (item in all) {
+                    cancelDownload(item.songId)
+                    val file = File(item.filePath)
+                    if (file.exists()) file.delete()
+                }
+                downloadedTrackDao.deleteAll()
+                downloadsDir.listFiles()?.forEach { it.delete() }
+                _downloads.value = emptyMap()
             }
         }
 

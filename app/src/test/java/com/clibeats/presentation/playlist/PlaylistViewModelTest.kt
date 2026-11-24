@@ -1,6 +1,10 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.presentation.playlist
 
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.Playlist
+import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import com.google.common.truth.Truth.assertThat
@@ -27,6 +31,7 @@ class PlaylistViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var playlistRepository: PlaylistRepository
     private lateinit var playbackRepository: PlaybackRepository
+    private lateinit var downloadManager: TrackDownloadManager
     private lateinit var viewModel: PlaylistViewModel
 
     private val fakePlaylistsFlow = MutableStateFlow<List<Playlist>>(emptyList())
@@ -36,9 +41,16 @@ class PlaylistViewModelTest {
         Dispatchers.setMain(testDispatcher)
         playlistRepository = mock()
         playbackRepository = mock()
+        downloadManager = mock()
         whenever(playlistRepository.getAllPlaylistsAsFlow()).thenReturn(fakePlaylistsFlow)
         whenever(playlistRepository.getPlaylistCoversAsFlow()).thenReturn(flowOf(emptyMap()))
-        viewModel = PlaylistViewModel(playlistRepository, playbackRepository)
+        whenever(downloadManager.getDownloadedSongs()).thenReturn(flowOf(emptyList()))
+        viewModel =
+            PlaylistViewModel(
+                playlistRepository = playlistRepository,
+                playbackRepository = playbackRepository,
+                downloadManager = downloadManager,
+            )
     }
 
     @After
@@ -73,5 +85,38 @@ class PlaylistViewModelTest {
             viewModel.deletePlaylist("playlist_123")
             testDispatcher.scheduler.runCurrent()
             verify(playlistRepository).deletePlaylist("playlist_123")
+        }
+
+    @Test
+    fun `openDownloaded opens downloaded playlist`() =
+        runTest {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect {}
+            }
+            testDispatcher.scheduler.runCurrent()
+
+            viewModel.openDownloaded()
+            testDispatcher.scheduler.runCurrent()
+
+            assertThat(viewModel.isPlaylistOpen).isTrue()
+            val state = viewModel.uiState.value as PlaylistUiState.Success
+            assertThat(state.isDownloadedOpen).isTrue()
+        }
+
+    @Test
+    fun `removeFromDownloaded delegates to downloadManager`() =
+        runTest {
+            val track = Track("d1", "Test", "Artist", "Album", 1000L, null, null, "youtube_music")
+            viewModel.removeFromDownloaded(track)
+            testDispatcher.scheduler.runCurrent()
+            verify(downloadManager).deleteDownload("d1")
+        }
+
+    @Test
+    fun `clearAllDownloaded delegates to downloadManager`() =
+        runTest {
+            viewModel.clearAllDownloaded()
+            testDispatcher.scheduler.runCurrent()
+            verify(downloadManager).deleteAllDownloads()
         }
 }

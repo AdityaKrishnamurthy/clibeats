@@ -62,6 +62,15 @@ interface SongDao {
 
     @Query(
         """
+        SELECT s.* FROM songs s
+        INNER JOIN downloaded_tracks dt ON s.id = dt.song_id
+        ORDER BY dt.downloaded_at DESC
+        """,
+    )
+    fun getDownloadedSongsAsFlow(): Flow<List<SongEntity>>
+
+    @Query(
+        """
         SELECT * FROM songs
         WHERE provider_id = 'local'
           AND (title LIKE '%' || :query || '%' ESCAPE '\'

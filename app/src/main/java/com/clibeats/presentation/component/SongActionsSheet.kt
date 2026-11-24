@@ -113,19 +113,24 @@ fun SongActionsSheet(
                 onPicked(track)
                 onDismiss()
             }
-            val downloadedIds by actions.downloadedTrackIds.collectAsState()
-            val isDownloaded = track.id in downloadedIds
-            if (isDownloaded) {
-                SheetAction(Icons.Outlined.Delete, "Remove download") {
-                    actions.removeDownload(track)
-                    onPicked(track)
-                    onDismiss()
-                }
-            } else {
-                SheetAction(Icons.Outlined.FileDownload, "Download for offline") {
-                    actions.download(track)
-                    onPicked(track)
-                    onDismiss()
+            val isLocal =
+                track.providerId == "local" ||
+                    track.streamUrl?.startsWith("content://") == true
+            if (!isLocal) {
+                val downloadedIds by actions.downloadedTrackIds.collectAsState()
+                val isDownloaded = track.id in downloadedIds
+                if (isDownloaded) {
+                    SheetAction(Icons.Outlined.Delete, "Remove download") {
+                        actions.removeDownload(track)
+                        onPicked(track)
+                        onDismiss()
+                    }
+                } else {
+                    SheetAction(Icons.Outlined.FileDownload, "Download for offline") {
+                        actions.download(track)
+                        onPicked(track)
+                        onDismiss()
+                    }
                 }
             }
         }
