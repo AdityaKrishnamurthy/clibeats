@@ -29,7 +29,7 @@ data class ArtworkColors(
 /**
  * Picks colours from [artworkUrl] (the small cached thumbnail is enough). Keeps the previous song's
  * colours until the new ones are ready, so the screen fades between them instead of flashing the theme.
- * Returns null only when there is no artwork (the theme colours are used then).
+ * Returns null for no artwork or black-and-white artwork (the theme colours are used then).
  */
 @Composable
 fun rememberArtworkColors(
@@ -54,8 +54,7 @@ fun rememberArtworkColors(
         colors =
             bitmap?.let {
                 withContext(Dispatchers.Default) {
-                    val palette = Palette.from(it).maximumColorCount(PALETTE_COLORS).generate()
-                    colorsFrom(palette, lightTheme)
+                    colorsFrom(Palette.from(it).maximumColorCount(PALETTE_COLORS).generate(), lightTheme)
                 }
             }
     }
@@ -67,29 +66,19 @@ private fun colorsFrom(
     palette: Palette,
     lightTheme: Boolean,
 ): ArtworkColors? {
-    val deep = palette.darkMutedSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch ?: return null
-    // The accent must be a real colour covering a real part of the cover. Palette's "vibrant" pick can be a
-    // tiny patch (a blue ring on Hoshizora), and saturation calls near-black "colourful": a dark cover'
-    // #101018 is 33% saturated yet looks black, and was brightened into purple. Chroma (how far apart the
-    // strongest and weakest of red, green and blue are) measures visible colour; it is ~0 for near-black.
-    val total = palette.swatches.sumOf { it.population }.coerceAtLeast(1)
     val vivid =
-        palette.swatches
-            .filter { it.population >= total * MIN_AREA_SHARE && chromaOf(it) >= MIN_CHROMA }
-            .maxByOrNull { it.population * chromaOf(it) }
+        palette.vibrantSwatch ?: palette.lightVibrantSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch
+    val deep = palette.darkMutedSwatch ?: palette.darkVibrantSwatch ?: palette.dominantSwatch ?: vivid
+    if (vivid == null || deep == null) return null
     val hsv = FloatArray(HSV_SIZE)
-    if (vivid == null) {
-        // No colour worth borrowing (dark or black-and-white cover): soft silver, never the theme accent.
-        android.graphics.Color.colorToHSV((palette.dominantSwatch ?: deep).rgb, hsv)
-        hsv[1] = SILVER_SATURATION
-        hsv[2] = if (lightTheme) LIGHT_SILVER_VALUE else DARK_SILVER_VALUE
-    } else {
-        android.graphics.Color.colorToHSV(vivid.rgb, hsv)
-        // Bright enough to read on a dark screen, dark enough on a light one.
-        hsv[1] = hsv[1].coerceAtLeast(ACCENT_MIN_SATURATION)
-        hsv[2] =
-            if (lightTheme) hsv[2].coerceIn(LIGHT_MIN_VALUE, LIGHT_MAX_VALUE) else hsv[2].coerceAtLeast(DARK_MIN_VALUE)
-    }
+    android.graphics.Color.colorToHSV(vivid.rgb, hsv)
+    if (hsv[1] < MIN_SATURATION) return null // black-and-white cover: keep the theme accent
+    // Near-black or grey picks (a dark cover' #101018 counts as 33% saturated) would be brightened into
+    // an unrelated purple; dark covers keep the theme accent chosen in Settings instead.
+    if (chromaOf(vivid.rgb) < MIN_CHROMA) return null
+    // Bright enough to read on a dark screen, dark enough on a light one.
+    hsv[1] = hsv[1].coerceAtLeast(ACCENT_MIN_SATURATION)
+    hsv[2] = if (lightTheme) hsv[2].coerceIn(LIGHT_MIN_VALUE, LIGHT_MAX_VALUE) else hsv[2].coerceAtLeast(DARK_MIN_VALUE)
     val cover = listOfNotNull(palette.dominantSwatch, vivid, palette.lightVibrantSwatch, palette.mutedSwatch)
     return ArtworkColors(
         accent = Color(android.graphics.Color.HSVToColor(hsv)),
@@ -98,30 +87,21 @@ private fun colorsFrom(
     )
 }
 
-/** 0 (grey, black or white) to 1 (pure colour): the spread between the strongest and weakest channel. */
-private fun chromaOf(swatch: Palette.Swatch): Float {
-    val r = android.graphics.Color.red(swatch.rgb)
-    val g = android.graphics.Color.green(swatch.rgb)
-    val b = android.graphics.Color.blue(swatch.rgb)
+/** Visible colour, 0 (grey, black or white) to 1: the spread between the strongest and weakest channel. */
+private fun chromaOf(rgb: Int): Float {
+    val r = android.graphics.Color.red(rgb)
+    val g = android.graphics.Color.green(rgb)
+    val b = android.graphics.Color.blue(rgb)
     return (maxOf(r, g, b) - minOf(r, g, b)) / CHANNEL_MAX
 }
 
 private const val PALETTE_SOURCE_PX = 128
 private const val HSV_SIZE = 3
 private const val PALETTE_COLORS = 16
+private const val MIN_SATURATION = 0.18f
 private const val ACCENT_MIN_SATURATION = 0.45f
 private const val DARK_MIN_VALUE = 0.78f
 private const val LIGHT_MIN_VALUE = 0.38f
 private const val LIGHT_MAX_VALUE = 0.58f
-
-// A colour must cover at least this share of the cover to become the accent.
-private const val MIN_AREA_SHARE = 0.05f
-
-/** Visible colour needed to count: muted reds and blues pass, near-black and greys don't. */
 private const val MIN_CHROMA = 0.12f
 private const val CHANNEL_MAX = 255f
-
-// Covers without such a colour: soft silver.
-private const val SILVER_SATURATION = 0.05f
-private const val DARK_SILVER_VALUE = 0.86f
-private const val LIGHT_SILVER_VALUE = 0.40f
