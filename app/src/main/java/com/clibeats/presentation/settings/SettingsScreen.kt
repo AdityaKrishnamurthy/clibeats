@@ -31,10 +31,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -124,6 +128,29 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { folderToRemove = null }) { Text("CANCEL") }
+            },
+        )
+    }
+    // The trash button deletes every saved backup, so it asks first.
+    var confirmClearBackups by remember { mutableStateOf(false) }
+    if (confirmClearBackups) {
+        AlertDialog(
+            onDismissRequest = { confirmClearBackups = false },
+            title = { Text("Delete saved backups?") },
+            text = {
+                Text(
+                    "Deletes the backups CLIBeats saved inside the app and in Download/CLIBeats. A new one is " +
+                        "saved the next time you open the app. Your library isn't touched.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearBackups = false
+                    viewModel.clearBackups()
+                }) { Text("DELETE", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearBackups = false }) { Text("CANCEL") }
             },
         )
     }
@@ -413,17 +440,23 @@ fun SettingsScreen(
                         Text("IMPORT")
                     }
                 }
-                Button(
-                    onClick = { viewModel.shareSnapshot() },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                ) {
-                    Text("SHARE BACKUP")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = { viewModel.shareSnapshot() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(containerColor = accent),
+                    ) {
+                        Text("SHARE BACKUP")
+                    }
+                    OutlinedButton(onClick = { confirmClearBackups = true }) {
+                        Icon(Icons.Outlined.Delete, contentDescription = "Delete saved backups")
+                    }
                 }
                 Text(
                     text =
-                        "A backup is saved automatically once a day (on Android 10+ also to Download/CLIBeats, " +
-                            "so it survives an uninstall). Share it to keep an off-device copy.",
+                        "A backup is saved automatically once a day (on Android 10+ also to " +
+                            "Download/CLIBeats/Playlists, so it survives an uninstall). Share it to keep an " +
+                            "off-device copy; the trash button deletes the saved backups.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

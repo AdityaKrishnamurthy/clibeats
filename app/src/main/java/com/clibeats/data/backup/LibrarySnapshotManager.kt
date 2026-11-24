@@ -25,7 +25,7 @@ import javax.inject.Singleton
  * that forces an uninstall) no longer means losing everything. Two copies:
  *
  * - `files/backups/` inside the app: part of Android's own backup, so it comes back with a restore.
- * - `Download/CLIBeats/` on Android 10+: survives an uninstall. A new install can't read it directly
+ * - `Download/CLIBeats/Playlists/` on Android 10+: survives an uninstall. A new install can't read it directly
  *   (it doesn't own the file any more), so onboarding opens the file picker on it.
  *
  * A snapshot is written at most once a day and never for an empty library, so a wipe or a failed scan
@@ -80,7 +80,7 @@ class LibrarySnapshotManager
             }
 
         /**
-         * Copies [source] to `Download/CLIBeats/clibeats-backup.json`, replacing this install's earlier
+         * Copies [source] to `Download/CLIBeats/Playlists/clibeats-backup.json`, replacing this install's earlier
          * copy. A copy left by a previous install isn't visible to this one, so Android names the new
          * file `clibeats-backup (1).json`; both stay restorable.
          */
@@ -114,6 +114,40 @@ class LibrarySnapshotManager
             }
 
         /**
+         * Deletes the stored backups: the copies inside the app and the ones this install saved in Downloads
+         * (the current folder and the older `Download/CLIBeats/`). Copies left by an earlier install belong to
+         * it, so Android only lets a file manager delete those. Returns how many files were removed.
+         */
+        suspend fun clearBackups(): Int =
+            mutex.withLock {
+                withContext(Dispatchers.IO) {
+                    var removed = listOf(latestFile, previousFile).count { it.isFile && it.delete() }
+                    context.cacheDir.resolve(SHARED_FOLDER).deleteRecursively()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) removed += deletePublicCopies()
+                    removed
+                }
+            }
+
+        @RequiresApi(Build.VERSION_CODES.Q)
+        private fun deletePublicCopies(): Int {
+            val resolver = context.contentResolver
+            val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
+            val ids =
+                resolver.query(
+                    collection,
+                    arrayOf(MediaStore.MediaColumns._ID),
+                    "${MediaStore.MediaColumns.RELATIVE_PATH} IN (?, ?) AND " +
+                        "${MediaStore.MediaColumns.DISPLAY_NAME} LIKE ?",
+                    arrayOf(PUBLIC_RELATIVE_PATH, OLD_PUBLIC_RELATIVE_PATH, "clibeats-backup%"),
+                    null,
+                )?.use { cursor -> buildList { while (cursor.moveToNext()) add(cursor.getLong(0)) } }.orEmpty()
+            return ids.count { id ->
+                runCatching { resolver.delete(ContentUris.withAppendedId(collection, id), null, null) > 0 }
+                    .getOrDefault(false)
+            }
+        }
+
+        /**
          * Copies the latest snapshot into the cache so a `FileProvider` URI can be shared through
          * the system share sheet. Returns null when there is nothing to share yet.
          */
@@ -132,6 +166,9 @@ class LibrarySnapshotManager
             private const val SNAPSHOT_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
             /** Where the uninstall-proof copy goes, as MediaStore stores it (trailing slash included). */
-            val PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/"
+            val PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/Playlists/"
+
+            /** Where versions up to 2.5.1 put it; cleared along with the current folder. */
+            private val OLD_PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/"
         }
     }

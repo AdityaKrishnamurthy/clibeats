@@ -20,7 +20,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ## Contents
 
-- [Screenshots](#screenshots)
 - [Features](#features)
 - [Gestures](#gestures)
 - [Navigation](#navigation)
@@ -35,22 +34,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Downloads](#downloads)
 - [Developers](#developers)
 - [License](#license)
-
----
-
-## Screenshots
-
-**Home & Search** — swipe a song right to queue it or left to favourite it; recent searches when the box is empty.
-
-<img src="docs/screenshots/strip_home_search.png" width="100%" alt="Home swipe gestures and search">
-
-**Library & Playlists** — songs you've played online; playlists with Favorites and Most Played pinned on top.
-
-<img src="docs/screenshots/strip_library_playlists.png" width="66%" alt="Library and playlists">
-
-**Settings** — theme, accent colours (with a custom picker), music folders, caches, backup and updates.
-
-<img src="docs/screenshots/strip_settings.png" width="66%" alt="Settings: theme, accent, storage and updates">
 
 ---
 
@@ -102,8 +85,9 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Reorder** the queue, ♥ Favorites and your own playlists: drag a song's ≡ handle, or hold its cover and drag.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 - **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
-  `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
-  Settings sends a copy anywhere. Android's own backup also restores the library on a new phone.
+  `Download/CLIBeats/Playlists` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE
+  BACKUP** in Settings sends a copy anywhere, and the trash button deletes the saved backups. Android's own backup
+  also restores the library on a new phone.
 
 ### Import playlists
 - **Library → Playlists → `[ ↓ IMPORT ]`** — choose **Spotify**, **YouTube Music** or **Others** (Apple Music,

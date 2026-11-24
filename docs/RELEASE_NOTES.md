@@ -14,6 +14,12 @@
 
 - **Find** now lets you listen first: tap a result to play it, tap again to pause, and `[ + ]` adds it.
 
+## Backups
+
+- The daily library backup is now saved to **Download/CLIBeats/Playlists**.
+- Settings → Playlist Exchange: a **trash button** deletes the saved backups (also the older ones in
+  Download/CLIBeats that this install made).
+
 # v2.5.1
 
 ## Playlist import fixes
