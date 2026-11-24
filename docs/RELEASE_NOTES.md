@@ -5,7 +5,7 @@
 
 ## Open links in CLIBeats
 
-- **YouTube Music, YouTube and Spotify links** open in CLIBeats: Settings → Apps → CLIBeats → **Open by default →
+- **YouTube Music and Spotify links** open in CLIBeats: Settings → Apps → CLIBeats → **Open by default →
   Add link**, then tick the sites. Or **Share** a link to CLIBeats from any app.
 - Songs play right away (a Spotify song is found on YouTube Music like an imported one). YouTube Music playlists
   and albums play as your queue. Spotify playlists and albums are imported (up to 100 songs from a link).

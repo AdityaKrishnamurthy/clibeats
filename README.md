@@ -101,7 +101,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   **Replace / Keep both** for existing playlists. Optional **Use the closest version**.
 
 ### Open links in CLIBeats
-- **YouTube Music, YouTube and Spotify links** open in CLIBeats once you allow it: Settings → Apps → CLIBeats →
+- **YouTube Music and Spotify links** open in CLIBeats once you allow it: Settings → Apps → CLIBeats →
   **Open by default → Add link**, tick the sites. Or **Share** a link to CLIBeats from any app.
 - Songs play at once (a Spotify song is found on YouTube Music like an imported one); YouTube Music playlists and
   albums play as a queue; Spotify playlists and albums are imported (up to 100 songs from a link).
