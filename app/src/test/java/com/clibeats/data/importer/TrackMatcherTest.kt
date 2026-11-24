@@ -161,13 +161,16 @@ class TrackMatcherTest {
     }
 
     @Test
-    fun songWithoutAudioRelease_takesTheLabelsVideoInTheSameLanguage() {
+    fun videoThatOnlyNamesTheLanguage_isNotMatched_butTheCreditedTrackIs() {
         val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
-        val lyricalKannada =
-            yt("k", "Raajana Lyrical(Kannada) | Film Four | Star Cast", "Label Kannada", 226_000)
+        val lyricVideo = yt("v", "Raajana Lyrical(Kannada) | Film Four | Star Cast", "Label Kannada", 226_000)
+        val fanUpload = yt("f", "Raajana | Film Four | Kannada song #kannadasongs", "Some Channel", 227_000)
         val hindiDub = yt("h", "Raajan", "Vikas Shah & Mohan Das", 226_000)
+        val official = yt("o", "Raajana", "Hari Venu", 226_000).copy(album = "Film Four")
 
-        assertThat(TrackMatcher.pick(s, listOf(hindiDub, lyricalKannada))?.id).isEqualTo("k")
+        // Only videos and the dub: listed as not found, never a stand-in.
+        assertThat(TrackMatcher.pick(s, listOf(hindiDub, lyricVideo, fanUpload))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(lyricVideo, fanUpload, official))?.id).isEqualTo("o")
     }
 
     @Test
@@ -209,6 +212,54 @@ class TrackMatcherTest {
 
         assertThat(TrackMatcher.pick(s, listOf(dub))).isNull()
         assertThat(TrackMatcher.pick(s, listOf(dub, right))?.id).isEqualTo("k")
+    }
+
+    @Test
+    fun namedLanguage_sameSingerOnAnotherEdition_isNotMatched() {
+        // The singer recorded every language; the other edition's album is written differently.
+        val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
+        val otherEdition = yt("x", "Raajna", "Hari Venu", 226_000).copy(album = "F 4 - X")
+        val sameAlbum = yt("k", "Raajana", "Hari Venu", 226_000).copy(album = "Film Four")
+
+        assertThat(TrackMatcher.pick(s, listOf(otherEdition))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(otherEdition, sameAlbum))?.id).isEqualTo("k")
+    }
+
+    @Test
+    fun namedLanguage_takesOnlyAnAudioTrack_neverAVideoListedOnTheAlbum() {
+        // An album page can list another dub's lyric video under this title, album and credits.
+        val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
+        val video = yt("v", "Raajana", "Hari Venu & Mohan Das", 226_000).copy(album = "Film Four", isVideo = true)
+        val audio = video.copy(id = "a", isVideo = false)
+
+        assertThat(TrackMatcher.pick(s, listOf(video))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(video, audio))?.id).isEqualTo("a")
+    }
+
+    @Test
+    fun withoutLength_aVideoWithoutAlbumIsNotTaken_whenTheFileNamesTheAlbum() {
+        // A cover uploaded by the singer, listed with the plain title and no album.
+        val s = song("Raajana", listOf("Hari Venu"), 0, album = "Film Four")
+        val cover = yt("c", "Raajana", "Hari Venu", 144_000).copy(isVideo = true)
+        val official = yt("o", "Raajana", "Hari Venu", 213_000).copy(album = "Film Four")
+
+        assertThat(TrackMatcher.pick(s, listOf(cover))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(cover, official))?.id).isEqualTo("o")
+        // The song's own single stands for the album the file names.
+        val single = yt("s", "Raajana", "Hari Venu", 213_000).copy(album = "Raajana")
+        assertThat(TrackMatcher.pick(s, listOf(cover, single))?.id).isEqualTo("s")
+        // ...but not a re-recorded or remix edition named after it.
+        val newEdition = yt("n", "Raajana [New]", "Hari Venu", 213_000).copy(album = "Raajana [New]")
+        val remixes = yt("r", "Raajana", "Hari Venu", 213_000).copy(album = "Raajana [Remixes]")
+        assertThat(TrackMatcher.pick(s, listOf(newEdition, remixes))).isNull()
+    }
+
+    @Test
+    fun albumsTitleSong_doesNotStandInForAnotherSongOfTheAlbum() {
+        val s = song("Second Song", listOf("Band"), 0, album = "Big Album (Deluxe)")
+        val titleSong = yt("t", "Big Album", "Band", 177_000).copy(album = "Big Album (Deluxe)")
+
+        assertThat(TrackMatcher.pick(s, listOf(titleSong))).isNull()
     }
 
     @Test

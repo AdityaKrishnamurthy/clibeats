@@ -68,8 +68,8 @@ class SongSearch(
      * 3. all artists (soundtracks credit the singer second), then title + film/album, then title alone;
      * 4. the Spotify album opened on YouTube Music: some official tracks never show in song search
      *    (YouTube Music leaves some of them out of song search; their album still lists them);
-     * 5. music videos too, also with the film and language, for songs with no audio release
-     *    (some film songs exist only as the label's videos in a given language).
+     * 5. music videos too, also with the film and language: a video credited to the song's artist counts,
+     *    one that only names the language doesn't.
      */
     private fun steps(song: SpotifySong): List<suspend () -> List<Track>?> {
         val title = song.title

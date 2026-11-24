@@ -186,8 +186,12 @@ private fun JsonElement.parseTrack(): Track? {
         // streamUrl populated separately via /player
         streamUrl = null,
         providerId = PROVIDER_ID,
+        isVideo = findAll(this, "musicVideoType").any { it.safeString()?.let(::isVideoType) == true },
     )
 }
+
+/** A music video or user upload, as opposed to the official audio track ("ATV"). */
+internal fun isVideoType(musicVideoType: String) = musicVideoType != "MUSIC_VIDEO_TYPE_ATV"
 
 /** The artist · album · duration line of a result, split into its parts. */
 internal data class Subtitle(

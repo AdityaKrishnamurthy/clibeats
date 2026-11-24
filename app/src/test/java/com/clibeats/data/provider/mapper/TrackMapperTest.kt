@@ -49,6 +49,13 @@ class TrackMapperTest {
     }
 
     @Test
+    fun `only the official audio track type is not a video`() {
+        assertThat(isVideoType("MUSIC_VIDEO_TYPE_ATV")).isFalse()
+        assertThat(isVideoType("MUSIC_VIDEO_TYPE_OMV")).isTrue()
+        assertThat(isVideoType("MUSIC_VIDEO_TYPE_UGC")).isTrue()
+    }
+
+    @Test
     fun `parseSubtitle handles artist and duration only`() {
         assertThat(parseSubtitle(listOf("MIRA", " • ", "3:58"))).isEqualTo(Subtitle("MIRA", "", "3:58"))
     }

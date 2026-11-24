@@ -111,6 +111,9 @@ object TrackMatcher {
         // The channel counts for videos: a label channel named after a language uploads that version.
         val offered = languages("${candidate.title} ${candidate.album} ${candidate.artist}")
         if (!sameLanguage(song, candidate, wanted, offered)) return null
+        // A song in a named language takes only an official audio track. Videos can carry another language's
+        // audio under this title and album (an album page can list another dub's lyric video), so it's not found.
+        if (wanted.isNotEmpty() && candidate.isVideo) return null
         val languageConfirmed = wanted.isNotEmpty() && wanted.any { it in offered }
         val channelLanguages = languages("${candidate.artist} ${candidate.album}")
         // Film songs are credited differently on each service (composer vs singer), but share the film.
@@ -121,7 +124,15 @@ object TrackMatcher {
         val sameRecording = albumOk && diff != null && diff <= EXACT_LENGTH_MS
         if (versionMissing && !allowClosest && !sameRecording) return null
         // Singles often have the song's other-script name as the album (native-script title, romanized album).
-        val albumSim = if (song.album.isNotBlank()) titleSimilarity(song.album, candidate.title) else 0.0
+        // Only across scripts: in one script, a result named like the album is the album's title song.
+        val otherScript = hasNonLatinLetters(song.title) != hasNonLatinLetters(candidate.title)
+        val albumSim =
+            if (song.album.isNotBlank() && otherScript) titleSimilarity(song.album, candidate.title) else 0.0
+        // The song's own single, named exactly like it ("[New]" or "[Remixes]" editions are other releases).
+        val exactTitle = compact(songTitle)
+        val ownSingle =
+            exactTitle.isNotEmpty() && exactTitle == compact(candidateTitle) &&
+                exactTitle == compact(normalize(candidate.album))
         val bestTitle = maxOf(titleSim, albumSim)
 
         val passes =
@@ -130,8 +141,13 @@ object TrackMatcher {
                 artistOk && bestTitle >= TITLE_STRONG && diff != null && diff <= LOOSE_LENGTH_MS -> true
                 // No length to compare (e.g. TuneMyMusic exports): a near-title by a shared singer can be another
                 // language's dub, so demand the exact title and, when both sides name one, the same album.
+                // A video without an album isn't enough when the file names one: it can be a cover by the singer.
+                // The song's own single counts as its album (albums and singles carry the same recording).
                 artistOk && diff == null && titleSim >= EXACT_TITLE &&
-                    (albumOk || song.album.isBlank() || candidate.album.isBlank()) -> true
+                    (
+                        albumOk || song.album.isBlank() || ownSingle ||
+                            (candidate.album.isBlank() && !candidate.isVideo)
+                    ) -> true
                 // Same artist, title only roughly alike (a transliteration spelt another way):
                 // the length must agree too, or a similar title by the same singers (a different song) slips in.
                 artistOk && bestTitle >= TITLE_OK && diff != null && diff <= EXACT_LENGTH_MS -> true
@@ -149,9 +165,8 @@ object TrackMatcher {
                 artistOk && albumOk && titleSim >= TITLE_LOOSE && diff != null && diff <= EXACT_LENGTH_MS -> true
                 // Title, singer and film all agree: a longer or shorter edit of the same song is still that song.
                 artistOk && albumOk && bestTitle >= TITLE_STRONG -> true
-                // A song with no audio release, uploaded as a video by the label in the asked-for language
-                // (a lyrical video on the label's language channel): same title, about the same length.
-                languageConfirmed && titleSim >= TITLE_STRONG && diff != null && diff <= LOOSE_LENGTH_MS -> true
+                // No rule for a video that only names the language (a lyric video, a fan upload tagged with it):
+                // it isn't the song's recording, so the song is listed as not found instead.
                 // Exports that only list a video's title (no artist, no length): only the exact same title counts.
                 song.artists.isEmpty() && compact(songTitle) == compact(candidateTitle) -> true
                 else -> false
@@ -224,7 +239,11 @@ object TrackMatcher {
         when {
             wanted.isEmpty() && offered.isEmpty() -> true
             wanted.isNotEmpty() && offered.isNotEmpty() -> wanted.any { it in offered }
-            wanted.isNotEmpty() -> artistMatches(song.artists.take(1), candidate.artist)
+            // A result that doesn't say its language: the main singer and the same album. One singer often
+            // records every language, and the other languages' editions carry a differently written album name.
+            wanted.isNotEmpty() ->
+                artistMatches(song.artists.take(1), candidate.artist) &&
+                    (albumMatches(song, candidate) || baseAlbum(song.album).isEmpty())
             // Only YouTube names a language: accept just when the artists agree.
             else -> artistMatches(song.artists, candidate.artist)
         }
