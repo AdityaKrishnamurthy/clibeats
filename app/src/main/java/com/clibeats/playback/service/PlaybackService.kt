@@ -24,6 +24,7 @@ import androidx.media3.session.SessionResult
 import coil.ImageLoader
 import com.clibeats.R
 import com.clibeats.domain.model.RepeatMode
+import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.ArtworkBitmapLoader
 import com.google.common.collect.ImmutableList
@@ -33,8 +34,13 @@ import com.google.common.util.concurrent.SettableFuture
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -50,6 +56,7 @@ import javax.inject.Inject
  * tapping the card restores the saved queue via [MediaSession.Callback.onPlaybackResumption].
  */
 @OptIn(UnstableApi::class)
+@Suppress("TooManyFunctions") // session callbacks plus the notification buttons
 @AndroidEntryPoint
 class PlaybackService : MediaLibraryService() {
     @Inject lateinit var player: ExoPlayer
@@ -57,6 +64,11 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var playbackRepository: PlaybackRepository
 
     @Inject lateinit var imageLoader: ImageLoader
+
+    @Inject lateinit var libraryRepository: LibraryRepository
+
+    /** Whether the playing song is in Favorites; drives the heart on the notification. */
+    @Volatile private var currentLiked = false
 
     private var librarySession: MediaLibrarySession? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -78,8 +90,9 @@ class PlaybackService : MediaLibraryService() {
                 ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
-        session.setCustomLayout(repeatLayout())
+        session.setCustomLayout(customLayout())
         player.addListener(repeatListener)
+        watchFavorite()
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
         // otherwise Media3 never posts the media notification.
         addSession(session)
@@ -151,9 +164,45 @@ class PlaybackService : MediaLibraryService() {
     private val repeatListener =
         object : Player.Listener {
             override fun onRepeatModeChanged(repeatMode: Int) {
-                librarySession?.setCustomLayout(repeatLayout())
+                librarySession?.setCustomLayout(customLayout())
             }
         }
+
+    /** Follows the playing song's ♥ (changed here, in the app, or from another song) and redraws the heart. */
+    @kotlin.OptIn(ExperimentalCoroutinesApi::class)
+    private fun watchFavorite() {
+        scope.launch {
+            playbackRepository.playbackState
+                .map { it.currentTrack?.id }
+                .distinctUntilChanged()
+                .flatMapLatest { id -> if (id == null) flowOf(false) else libraryRepository.isLiked(id) }
+                .collect { liked ->
+                    currentLiked = liked
+                    librarySession?.setCustomLayout(customLayout())
+                }
+        }
+    }
+
+    /** Notification / lock-screen buttons next to play controls: repeat, then ♥ favourite. */
+    private fun customLayout(): List<CommandButton> = repeatLayout() + favoriteButton()
+
+    private fun favoriteButton(): CommandButton =
+        CommandButton.Builder()
+            .setDisplayName(if (currentLiked) "Remove from favorites" else "Add to favorites")
+            .setIconResId(
+                if (currentLiked) {
+                    androidx.media3.session.R.drawable.media3_icon_heart_filled
+                } else {
+                    androidx.media3.session.R.drawable.media3_icon_heart_unfilled
+                },
+            ).setSessionCommand(FAVORITE_COMMAND)
+            .build()
+
+    /** Same as tapping ♥ in Now Playing: adds the playing song to Favorites, or removes it. */
+    private fun toggleFavorite() {
+        val track = playbackRepository.playbackState.value.currentTrack ?: return
+        scope.launch { runCatching { libraryRepository.toggleLike(track) } }
+    }
 
     /** The repeat button on the notification / lock-screen card; its icon shows the current mode. */
     private fun repeatLayout(): List<CommandButton> {
@@ -229,10 +278,11 @@ class PlaybackService : MediaLibraryService() {
                 MediaSession.ConnectionResult.DEFAULT_SESSION_AND_LIBRARY_COMMANDS
                     .buildUpon()
                     .add(REPEAT_COMMAND)
+                    .add(FAVORITE_COMMAND)
                     .build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                 .setAvailableSessionCommands(commands)
-                .setCustomLayout(repeatLayout())
+                .setCustomLayout(customLayout())
                 .build()
         }
 
@@ -242,10 +292,11 @@ class PlaybackService : MediaLibraryService() {
             customCommand: SessionCommand,
             args: Bundle,
         ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction != REPEAT_ACTION) {
-                return super.onCustomCommand(session, controller, customCommand, args)
+            when (customCommand.customAction) {
+                REPEAT_ACTION -> cycleRepeat()
+                FAVORITE_ACTION -> toggleFavorite()
+                else -> return super.onCustomCommand(session, controller, customCommand, args)
             }
-            cycleRepeat()
             return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
         }
 
@@ -351,6 +402,8 @@ class PlaybackService : MediaLibraryService() {
         const val RECENT_ROOT = "clibeats_recent"
         const val REPEAT_ACTION = "clibeats.REPEAT"
         val REPEAT_COMMAND = SessionCommand(REPEAT_ACTION, Bundle.EMPTY)
+        const val FAVORITE_ACTION = "clibeats.FAVORITE"
+        val FAVORITE_COMMAND = SessionCommand(FAVORITE_ACTION, Bundle.EMPTY)
     }
 }
 
