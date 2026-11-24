@@ -24,6 +24,8 @@ object TrackMatcher {
     private const val LOOSE_LENGTH_MS = 8_000L
     private const val TITLE_OK = 0.6
     private const val TITLE_STRONG = 0.85
+    private const val EXACT_TITLE = 0.999
+    private const val ALBUM_SIMILAR = 0.85
     private const val ARTIST_SIMILAR = 0.8
 
     /** Only the top results are trusted on artist + length alone; lower ones are more often other songs. */
@@ -117,7 +119,11 @@ object TrackMatcher {
         val passes =
             when {
                 // Same artist and title: lengths may differ a little (edits, intros).
-                artistOk && bestTitle >= TITLE_STRONG && (diff == null || diff <= LOOSE_LENGTH_MS) -> true
+                artistOk && bestTitle >= TITLE_STRONG && diff != null && diff <= LOOSE_LENGTH_MS -> true
+                // No length to compare (e.g. TuneMyMusic exports): a near-title by a shared singer can be another
+                // language's dub, so demand the exact title and, when both sides name one, the same album.
+                artistOk && diff == null && titleSim >= EXACT_TITLE &&
+                    (albumOk || song.album.isBlank() || candidate.album.isBlank()) -> true
                 // Same artist, title only roughly alike (a transliteration spelt another way):
                 // the length must agree too, or a similar title by the same singers (a different song) slips in.
                 artistOk && bestTitle >= TITLE_OK && diff != null && diff <= EXACT_LENGTH_MS -> true
@@ -235,7 +241,20 @@ object TrackMatcher {
     ): Boolean {
         val x = normalize(baseAlbum(a))
         val y = normalize(baseAlbum(b))
-        return x.isNotEmpty() && y.isNotEmpty() && similarity(x, y) >= TITLE_STRONG
+        return x.isNotEmpty() && y.isNotEmpty() && sameAlbumText(x, y)
+    }
+
+    /**
+     * Album or film names: the same name, allowing small spelling differences. Not "one inside the other":
+     * a short name sits inside a longer one, and film sequels and language editions differ by exactly such parts.
+     */
+    private fun sameAlbumText(
+        a: String,
+        b: String,
+    ): Boolean {
+        val x = compact(a)
+        val y = compact(b)
+        return x == y || dice(x, y) >= ALBUM_SIMILAR
     }
 
     private fun languages(text: String): Set<String> {
@@ -258,7 +277,7 @@ object TrackMatcher {
         ) = listOfNotNull(baseAlbum(album), filmOf(title)).map(::normalize).filter { it.isNotEmpty() }
         val wanted = names(song.album, song.title)
         val offered = names(candidate.album, candidate.title)
-        return wanted.any { a -> offered.any { b -> similarity(a, b) >= TITLE_STRONG } }
+        return wanted.any { a -> offered.any { b -> sameAlbumText(a, b) } }
     }
 
     /** "Song (From "Film")" → "Film". */

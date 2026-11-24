@@ -201,6 +201,17 @@ class TrackMatcherTest {
     }
 
     @Test
+    fun withoutLength_nearTitleFromAnotherAlbumIsRejected() {
+        // A file without lengths: the dub shares a singer and a near-identical title, but not the album.
+        val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 0, album = "Film Four")
+        val dub = yt("h", "Raajan", "Vikas Shah & Mohan Das", 226_000).copy(album = "F 4 - X")
+        val right = yt("k", "Raajana", "Hari Venu & Mohan Das", 226_000).copy(album = "Film Four")
+
+        assertThat(TrackMatcher.pick(s, listOf(dub))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(dub, right))?.id).isEqualTo("k")
+    }
+
+    @Test
     fun noResults_noMatch() {
         assertThat(TrackMatcher.pick(song("A", listOf("B"), 1_000), emptyList())).isNull()
     }
