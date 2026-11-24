@@ -212,6 +212,23 @@ class TrackMatcherTest {
     }
 
     @Test
+    fun namedLanguage_prefersTheAlbumThatSaysSo() {
+        val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
+        // Same title, credits and length on two albums; only one says which language it is.
+        val unlabelled = yt("u", "Raajana", "Hari Venu & Mohan Das", 226_000).copy(album = "Film Four")
+        val kannada = yt("k", "Raajana", "Hari Venu", 226_000).copy(album = "Film Four - Kannada")
+
+        assertThat(TrackMatcher.pick(s, listOf(unlabelled, kannada))?.id).isEqualTo("k")
+    }
+
+    @Test
+    fun resultTitleOfOnlySymbols_doesNotCrash() {
+        val emojiOnly = yt("e", "🔥🔥", "Artist", 1_000)
+
+        assertThat(TrackMatcher.pick(song("Song", listOf("Artist"), 1_000), listOf(emojiOnly))).isNull()
+    }
+
+    @Test
     fun noResults_noMatch() {
         assertThat(TrackMatcher.pick(song("A", listOf("B"), 1_000), emptyList())).isNull()
     }

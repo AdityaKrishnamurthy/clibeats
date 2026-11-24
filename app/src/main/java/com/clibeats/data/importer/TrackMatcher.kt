@@ -41,6 +41,12 @@ object TrackMatcher {
     private const val FULL_TITLE_WEIGHT = 0.5
     private const val ALBUM_WEIGHT = 1.0
 
+    /**
+     * A result whose album or title names the asked-for language beats one that doesn't: YouTube Music can list
+     * one language's audio under an album that doesn't say which language it is.
+     */
+    private const val LANGUAGE_WEIGHT = 3.0
+
     /** Only with singer, film and length all agreeing; titles transliterated differently share about half. */
     private const val TITLE_LOOSE = 0.45
     private val FROM_FILM = Regex("""\bfrom\s*["“”']([^"“”']+)["“”']""", RegexOption.IGNORE_CASE)
@@ -152,7 +158,11 @@ object TrackMatcher {
         val lengthScore = diff?.let { 1.0 - it.toDouble() / MAX_DURATION_DIFF_MS } ?: 0.0
         val fullTitle = similarity(songTitle, candidateTitle)
         return maxOf(titleSim, albumSim) * TITLE_WEIGHT + (if (artistOk) ARTIST_WEIGHT else 0.0) +
-            (if (albumOk) ALBUM_WEIGHT else 0.0) + lengthScore * LENGTH_WEIGHT + fullTitle * FULL_TITLE_WEIGHT -
+            (if (albumOk) ALBUM_WEIGHT else 0.0) + lengthScore * LENGTH_WEIGHT + fullTitle * FULL_TITLE_WEIGHT +
+            (if (languageConfirmed) LANGUAGE_WEIGHT else 0.0) +
+            // The language in the channel or album name (a label's language channel) beats it only in a title,
+            // which fan uploads add as a hashtag.
+            (if (languageConfirmed && wanted.any { it in languages("${candidate.artist} ${candidate.album}") }) 1.0 else 0.0) -
             rank * RANK_PENALTY
     }
 
@@ -163,7 +173,8 @@ object TrackMatcher {
     ): Double {
         val left = listOf(normalize(a), normalize(stripExtras(a))).filter { it.isNotEmpty() }.distinct()
         val right = listOf(normalize(b), normalize(stripExtras(b))).filter { it.isNotEmpty() }.distinct()
-        return left.maxOfOrNull { l -> right.maxOf { r -> similarity(l, r) } } ?: 0.0
+        // Either side can be empty after removing symbols (a title made only of emoji): no similarity, no crash.
+        return left.maxOfOrNull { l -> right.maxOfOrNull { r -> similarity(l, r) } ?: 0.0 } ?: 0.0
     }
 
     /**
@@ -218,7 +229,7 @@ object TrackMatcher {
 
     /**
      * True when [track] is surely the asked-for version: no language was named, or the result names the same
-     * language, or its title is exactly the Spotify title. Otherwise it may be another language's dub.
+     * language. Otherwise it may be another language's dub, so the search keeps looking.
      */
     fun isCertainVersion(
         song: SpotifySong,
@@ -227,8 +238,8 @@ object TrackMatcher {
         val wanted = languages("${song.title} ${song.album}")
         if (wanted.isEmpty()) return true
         val offered = languages("${track.title} ${track.album} ${track.artist}")
-        val sameTitle = compact(normalize(stripExtras(song.title))) == compact(normalize(stripExtras(track.title)))
-        return wanted.any { it in offered } || sameTitle
+        // An exact title isn't enough: YouTube Music can list one language's audio under the other's title.
+        return wanted.any { it in offered }
     }
 
     /** The language named in the Spotify title or album (e.g. "[KANNADA]"), to search for that version. */

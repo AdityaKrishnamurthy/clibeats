@@ -106,6 +106,8 @@ class SongSearch(
             listOfNotNull(
                 TrackMatcher.languageOf(song)?.let { "$album $it" },
                 "$album ${song.artists.firstOrNull().orEmpty()}".trim(),
+                // The name alone too: with an artist added, a film's other albums (sequels, dubs) can crowd it out.
+                album,
             ).distinct()
         var reached = false
         val hits = mutableListOf<AlbumHit>()
