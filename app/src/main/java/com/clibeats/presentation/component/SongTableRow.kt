@@ -69,6 +69,7 @@ fun SongTableRow(
     duration: String,
     index: Int? = null,
     isNowPlaying: Boolean = false,
+    isDownloaded: Boolean = false,
     artworkContent: (@Composable () -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     // Taller row with bigger artwork (Home "Details" view).
@@ -185,13 +186,23 @@ fun SongTableRow(
                 Column(
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text(
-                        text = trackTitle,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = if (isNowPlaying) CliBeatsAccent else CliBeatsTextPrimary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isDownloaded) {
+                            Text(
+                                text = "[↓] ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = CliBeatsAccent,
+                            )
+                        }
+                        Text(
+                            text = trackTitle,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = if (isNowPlaying) CliBeatsAccent else CliBeatsTextPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
                     Text(
                         text = artist,
                         style = MaterialTheme.typography.labelMedium,

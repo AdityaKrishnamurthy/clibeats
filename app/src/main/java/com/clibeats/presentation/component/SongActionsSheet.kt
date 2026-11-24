@@ -16,7 +16,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -25,6 +27,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,6 +112,21 @@ fun SongActionsSheet(
                 actions.favorite(track)
                 onPicked(track)
                 onDismiss()
+            }
+            val downloadedIds by actions.downloadedTrackIds.collectAsState()
+            val isDownloaded = track.id in downloadedIds
+            if (isDownloaded) {
+                SheetAction(Icons.Outlined.Delete, "Remove download") {
+                    actions.removeDownload(track)
+                    onPicked(track)
+                    onDismiss()
+                }
+            } else {
+                SheetAction(Icons.Outlined.FileDownload, "Download for offline") {
+                    actions.download(track)
+                    onPicked(track)
+                    onDismiss()
+                }
             }
         }
     }

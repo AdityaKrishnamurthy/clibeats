@@ -1,11 +1,18 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.presentation.component
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -19,8 +26,18 @@ class TrackActionsViewModel
     constructor(
         private val libraryRepository: LibraryRepository,
         private val playbackRepository: PlaybackRepository,
+        private val downloadManager: TrackDownloadManager,
         private val notices: Notices,
     ) : ViewModel() {
+        val downloadedTrackIds: StateFlow<Set<String>> =
+            downloadManager.getDownloadedTracks()
+                .map { entities -> entities.map { it.songId }.toSet() }
+                .stateIn(
+                    scope = viewModelScope,
+                    started = SharingStarted.WhileSubscribed(5_000L),
+                    initialValue = emptySet(),
+                )
+
         fun favorite(track: Track) {
             viewModelScope.launch {
                 runCatching { libraryRepository.addToFavorites(track) }
@@ -36,5 +53,17 @@ class TrackActionsViewModel
         fun playNext(track: Track) {
             playbackRepository.playNext(track)
             notices.show("Playing next")
+        }
+
+        fun download(track: Track) {
+            downloadManager.downloadTrack(track)
+            notices.show("Downloading \u201c${track.title}\u201d")
+        }
+
+        fun removeDownload(track: Track) {
+            viewModelScope.launch {
+                downloadManager.deleteDownload(track.id)
+                notices.show("Removed download")
+            }
         }
     }
