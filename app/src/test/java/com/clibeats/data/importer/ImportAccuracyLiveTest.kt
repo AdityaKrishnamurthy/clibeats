@@ -3,13 +3,17 @@
 package com.clibeats.data.importer
 
 import com.clibeats.data.provider.api.InnerTubeHeaderInterceptor
+import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.SearchRequest
+import com.clibeats.data.provider.mapper.playlistTracks
+import com.clibeats.data.provider.mapper.toAlbumHits
 import com.clibeats.data.provider.mapper.toTrackList
 import com.clibeats.di.NetworkModule
 import com.clibeats.domain.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -30,6 +34,7 @@ import java.util.Locale
  * The report lists every song with what it matched (or the top results it rejected), for review by a person:
  * only a listener can tell a wrong match from a right one.
  */
+@Suppress("LongMethod") // a single end-to-end check, kept in one readable function
 class ImportAccuracyLiveTest {
     @Test
     fun importPlaylists_reportMatches() {
@@ -45,13 +50,38 @@ class ImportAccuracyLiveTest {
                 NetworkModule.provideInnerTubeOkHttpClient(InnerTubeHeaderInterceptor()),
                 NetworkModule.provideJson(),
             )
+        // Same steps as the app (PlaylistImporter), without the provider's playback dependencies.
         val search =
-            SongSearch { query, songsOnly ->
-                runCatching {
-                    api.search(SearchRequest.forQuery(query, filterSongs = songsOnly)).toTrackList().take(RESULTS)
-                }
-                    .getOrNull()
-            }
+            SongSearch(
+                search = { query, songsOnly ->
+                    // Retries like the app's searchWithRetry, so a rate-limited request isn't scored as a miss.
+                    var result: List<Track>? = null
+                    for (attempt in 1..ATTEMPTS) {
+                        result =
+                            runCatching {
+                                val request = SearchRequest.forQuery(query, filterSongs = songsOnly)
+                                api.search(request).toTrackList().take(RESULTS)
+                            }.getOrNull()
+                        if (result != null) break
+                        delay(RETRY_MS * attempt)
+                    }
+                    result
+                },
+                searchAlbums = { query ->
+                    runCatching { api.search(SearchRequest.forAlbums(query)).toAlbumHits() }.getOrNull()
+                },
+                albumTracks = { album ->
+                    runCatching {
+                        api.browse(BrowseRequest.page(album.browseId)).playlistTracks().map {
+                            it.copy(
+                                artist = it.artist.ifBlank { album.artist },
+                                album = it.album.ifBlank { album.title },
+                            )
+                        }
+                    }.getOrNull()
+                },
+            )
+        val allowClosest = System.getenv("CLIBEATS_IMPORT_CLOSEST") == "1"
 
         val out = StringBuilder()
         runBlocking(Dispatchers.IO) {
@@ -60,7 +90,9 @@ class ImportAccuracyLiveTest {
                 val started = System.currentTimeMillis()
                 val gate = Semaphore(PARALLEL)
                 val outcomes =
-                    playlist.songs.map { song -> async { gate.withPermit { song to search.find(song) } } }.awaitAll()
+                    playlist.songs
+                        .map { song -> async { gate.withPermit { song to search.find(song, allowClosest) } } }
+                        .awaitAll()
                 val seconds = (System.currentTimeMillis() - started) / MS_PER_S
                 val found = outcomes.count { it.second.match != null }
                 out.appendLine("### $name: $found of ${outcomes.size} found in ${seconds}s")
@@ -69,7 +101,7 @@ class ImportAccuracyLiveTest {
                     out.appendLine("${i + 1}. SP: $spotify")
                     val match = outcome.match
                     if (match != null) {
-                        out.appendLine("   OK: ${describe(match)}")
+                        out.appendLine("   OK${if (outcome.closest) " (closest version)" else ""}: ${describe(match)}")
                     } else {
                         out.appendLine("   MISS${if (!outcome.reached) " (no connection)" else ""}; top results:")
                         outcome.seen.distinctBy { it.id }.take(TOP_REJECTED).forEach {
@@ -89,6 +121,8 @@ class ImportAccuracyLiveTest {
     private companion object {
         const val PARALLEL = 3
         const val RESULTS = 10
+        const val ATTEMPTS = 3
+        const val RETRY_MS = 2_000L
         const val TOP_REJECTED = 6
         const val MS_PER_S = 1000
     }

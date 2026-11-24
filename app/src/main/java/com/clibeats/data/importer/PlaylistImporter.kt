@@ -51,6 +51,8 @@ data class ImportedSong(
     val searchFailed: Boolean = false,
     /** Picked by the user from the "Couldn't match" list. */
     val manual: Boolean = false,
+    /** Another version of the song (the exact one isn't on YouTube Music), allowed by "closest version". */
+    val closest: Boolean = false,
 )
 
 data class PlaylistImport(
@@ -103,7 +105,15 @@ class PlaylistImporter
         private val _state = MutableStateFlow<ImportState>(ImportState.Idle)
         val state: StateFlow<ImportState> = _state.asStateFlow()
         private var job: Job? = null
-        private val songSearch = SongSearch { query, songsOnly -> searchWithRetry(query, songsOnly) }
+        private val songSearch =
+            SongSearch(
+                search = { query, songsOnly -> searchWithRetry(query, songsOnly) },
+                searchAlbums = { query -> youtube.searchAlbums(query) },
+                albumTracks = { album -> youtube.albumTracks(album) },
+            )
+
+        /** "Use the closest version" was ticked for the running import. */
+        @Volatile private var allowClosest = false
 
         /** Names of the user's own playlists, to warn before an import would duplicate one. */
         suspend fun existingNames(): Set<String> =
@@ -119,8 +129,10 @@ class PlaylistImporter
         fun start(
             playlists: List<SpotifyPlaylist>,
             replaceExisting: Boolean,
+            allowClosest: Boolean = false,
         ) {
             if (_state.value is ImportState.Running || playlists.isEmpty()) return
+            this.allowClosest = allowClosest
             _state.value = ImportState.Running(playlists.map { PlaylistImport(it.name, it.songs.size) }, current = 0)
             job =
                 scope.launch {
@@ -218,8 +230,14 @@ class PlaylistImporter
             index: Int,
             song: SpotifySong,
         ): ImportedSong {
-            val outcome = songSearch.find(song)
-            return ImportedSong(index, song, outcome.match?.storable(), searchFailed = !outcome.reached)
+            val outcome = songSearch.find(song, allowClosest)
+            return ImportedSong(
+                index,
+                song,
+                outcome.match?.storable(),
+                searchFailed = !outcome.reached,
+                closest = outcome.closest,
+            )
         }
 
         /** Search results, or null if YouTube Music couldn't be reached after a few tries. */

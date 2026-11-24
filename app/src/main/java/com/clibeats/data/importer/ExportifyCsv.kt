@@ -6,6 +6,8 @@ data class SpotifySong(
     val artists: List<String>,
     val album: String,
     val durationMs: Long,
+    /** The recording's ISRC code; YouTube Music finds many official tracks by it. May be empty. */
+    val isrc: String = "",
 ) {
     val artistLine: String get() = artists.joinToString(", ")
 }
@@ -33,6 +35,7 @@ object ExportifyCsv {
     private const val COL_ARTISTS = "Artist Name(s)"
     private const val COL_ALBUM = "Album Name"
     private const val COL_DURATION = "Duration (ms)"
+    private const val COL_ISRC = "ISRC"
 
     /** Turns `anime.csv` / `My_Top_Mix_2024.csv` into "anime" / "My Top Mix 2024". */
     fun playlistName(fileName: String): String =
@@ -58,6 +61,7 @@ object ExportifyCsv {
         }
         val album = header!!.indexOf(COL_ALBUM)
         val duration = header.indexOf(COL_DURATION)
+        val isrc = header.indexOf(COL_ISRC)
         val songs =
             rows.drop(1).mapNotNull { row ->
                 val songTitle = row.getOrNull(title)?.trim().orEmpty()
@@ -71,6 +75,7 @@ object ExportifyCsv {
                             .filter { it.isNotEmpty() },
                     album = row.getOrNull(album)?.trim().orEmpty(),
                     durationMs = row.getOrNull(duration)?.trim()?.toLongOrNull() ?: 0L,
+                    isrc = row.getOrNull(isrc)?.trim().orEmpty(),
                 )
             }
         return SpotifyPlaylist(name = name, songs = songs)

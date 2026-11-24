@@ -17,7 +17,7 @@ object TrackMatcher {
     /** Results further off than this are a different recording (live, extended, a loop video...). */
     const val MAX_DURATION_DIFF_MS = 15_000L
 
-    /** Close enough in length to trust a match whose title is written differently (星空花 vs Hoshizora). */
+    /** Close enough in length to trust a match whose title is written differently (native script vs romanized). */
     private const val EXACT_LENGTH_MS = 3_000L
 
     /** Length tolerance when title and artist both agree (edits, different intros). */
@@ -60,14 +60,20 @@ object TrackMatcher {
     /** Only rejected when the result has it and the Spotify title doesn't (Spotify often omits "Version"). */
     private val EXTRA_VERSION_WORDS = listOf("cover", "piano version", "first take", "version", "ver")
 
-    /** The best matching result from [candidates] (in search order), or null when none is trustworthy. */
+    /**
+     * The best matching result from [candidates] (in search order), or null when none is trustworthy.
+     * [allowClosest]: a song YouTube Music only has in another version ("Song (Remix)" when only "Song"
+     * exists) may take that version. Off unless the user asks for it on the import screen.
+     */
     fun pick(
         song: SpotifySong,
         candidates: List<Track>,
+        allowClosest: Boolean = false,
     ): Track? =
         candidates
-            .mapIndexedNotNull { rank, candidate -> score(song, candidate, rank)?.let { candidate to it } }
-            .maxByOrNull { it.second }
+            .mapIndexedNotNull { rank, candidate ->
+                score(song, candidate, rank, allowClosest)?.let { candidate to it }
+            }.maxByOrNull { it.second }
             ?.first
 
     /** A score (higher is better) when [candidate] passes the rules, else null. */
@@ -76,10 +82,14 @@ object TrackMatcher {
         song: SpotifySong,
         candidate: Track,
         rank: Int,
+        allowClosest: Boolean = false,
     ): Double? {
         val songTitle = normalize(song.title)
         val candidateTitle = normalize(candidate.title)
-        if (RECORDING_WORDS.any { hasWord(candidateTitle, it) != hasWord(songTitle, it) }) return null
+        // A different recording never stands in for the original (no karaoke for the song)...
+        if (RECORDING_WORDS.any { hasWord(candidateTitle, it) && !hasWord(songTitle, it) }) return null
+        // ...and the asked-for version (remix, live) needs that version: checked below, once the album is known.
+        val versionMissing = RECORDING_WORDS.any { hasWord(songTitle, it) && !hasWord(candidateTitle, it) }
         if (EXTRA_VERSION_WORDS.any { hasWord(candidateTitle, it) && !hasWord(songTitle, it) }) return null
 
         val diff =
@@ -88,10 +98,19 @@ object TrackMatcher {
 
         val titleSim = titleSimilarity(song.title, candidate.title)
         val artistOk = artistMatches(song.artists, candidate.artist)
-        if (!sameLanguage(song, candidate)) return null
+        val wanted = languages("${song.title} ${song.album}")
+        // The channel counts for videos: a label channel named after a language uploads that version.
+        val offered = languages("${candidate.title} ${candidate.album} ${candidate.artist}")
+        if (!sameLanguage(song, candidate, wanted, offered)) return null
+        val languageConfirmed = wanted.isNotEmpty() && wanted.any { it in offered }
         // Film songs are credited differently on each service (composer vs singer), but share the film.
         val albumOk = albumMatches(song, candidate)
-        // Singles often have the song's other-script name as the album (星空花 · album "Hoshizora").
+        // Services label the same recording differently: a title marked "(Remix)" on Spotify can be the plain
+        // title on YouTube Music, on the same album at the same length. Same album and
+        // length = same recording; otherwise a remix never takes the original unless closest was allowed.
+        val sameRecording = albumOk && diff != null && diff <= EXACT_LENGTH_MS
+        if (versionMissing && !allowClosest && !sameRecording) return null
+        // Singles often have the song's other-script name as the album (native-script title, romanized album).
         val albumSim = if (song.album.isNotBlank()) titleSimilarity(song.album, candidate.title) else 0.0
         val bestTitle = maxOf(titleSim, albumSim)
 
@@ -99,23 +118,26 @@ object TrackMatcher {
             when {
                 // Same artist and title: lengths may differ a little (edits, intros).
                 artistOk && bestTitle >= TITLE_STRONG && (diff == null || diff <= LOOSE_LENGTH_MS) -> true
-                // Same artist, title only roughly alike (transliterations like a title / a title):
-                // the length must agree too, or "Raajana" takes "Rajan", another song by the same singers.
+                // Same artist, title only roughly alike (a transliteration spelt another way):
+                // the length must agree too, or a similar title by the same singers (a different song) slips in.
                 artistOk && bestTitle >= TITLE_OK && diff != null && diff <= EXACT_LENGTH_MS -> true
-                // Title in another script (星空花 vs Hoshizora): same artist, same length, near the top of the results.
+                // Title in another script (native vs romanized): same artist, same length, near the top of the results.
                 // Only when the scripts really differ; two unrelated English-letter titles are two songs.
                 artistOk && diff != null && diff <= EXACT_LENGTH_MS && rank < CROSS_SCRIPT_MAX_RANK &&
                     hasNonLatinLetters(song.title) != hasNonLatinLetters(candidate.title) -> true
-                // Artist name in another script (山田太郎 vs Taro Yamada): same title, same length. Only when a
-                // script differs; two different Latin names are two different artists ("Lights" by Arden vs Corvo).
+                // Artist name in another script (native vs romanized): same title, same length. Only when a
+                // script differs; two different Latin names are two different artists, even with the same title.
                 titleSim >= TITLE_STRONG && diff != null && diff <= EXACT_LENGTH_MS &&
                     (song.artists.any(::hasNonLatinLetters) || hasNonLatinLetters(candidate.artist)) -> true
                 // Different credits, same song: same title, same length and the same album (film soundtracks).
                 titleSim >= TITLE_STRONG && diff != null && diff <= EXACT_LENGTH_MS && albumOk -> true
-                // Same singer, same film, same length, title spelt another way (a title / a title).
+                // Same singer, same film, same length, title transliterated another way.
                 artistOk && albumOk && titleSim >= TITLE_LOOSE && diff != null && diff <= EXACT_LENGTH_MS -> true
                 // Title, singer and film all agree: a longer or shorter edit of the same song is still that song.
                 artistOk && albumOk && bestTitle >= TITLE_STRONG -> true
+                // A song with no audio release, uploaded as a video by the label in the asked-for language
+                // (a lyrical video on the label's language channel): same title, about the same length.
+                languageConfirmed && titleSim >= TITLE_STRONG && diff != null && diff <= LOOSE_LENGTH_MS -> true
                 else -> false
             }
         if (!passes) return null
@@ -139,7 +161,7 @@ object TrackMatcher {
     /**
      * True when any Spotify artist is one of the YouTube credits. YouTube joins several artists in one line
      * ("Singer, Chorus", "A & B"), so each name is compared on its own, allowing small spelling
-     * differences (a name / a name).
+     * differences (one letter more or less in a transliterated name).
      */
     internal fun artistMatches(
         spotifyArtists: List<String>,
@@ -148,7 +170,9 @@ object TrackMatcher {
         val credits = youtubeArtist.split(ARTIST_SEPARATORS).map { compact(normalize(it)) }.filter { it.isNotEmpty() }
         val whole = compact(normalize(youtubeArtist))
         if (whole.isEmpty()) return false
-        return spotifyArtists.any { artist ->
+        // Spotify credits duos as one artist too ("A with B" on Spotify, "A & B" on YouTube).
+        val names = spotifyArtists.flatMap { listOf(it) + it.split(ARTIST_SEPARATORS) }
+        return names.any { artist ->
             val a = compact(normalize(artist))
             a.isNotEmpty() && (sameName(a, whole) || credits.any { sameName(a, it) })
         }
@@ -165,24 +189,51 @@ object TrackMatcher {
     }
 
     /**
-     * Indian film songs come in dubbed versions with the same title and length ("Raajana" in Kannada,
-     * "Raajan" in Hindi). When either side names a language (album "Film Four [KANNADA]"), the other
+     * Indian film songs come in dubbed versions with near-identical titles and the same length, one per
+     * language. When either side names a language (an album ending in "[KANNADA]"), the other
      * must not name a different one; and when only Spotify names it, the main singer must match, since the
      * singer is what changes between dubs.
      */
     private fun sameLanguage(
         song: SpotifySong,
         candidate: Track,
-    ): Boolean {
-        val wanted = languages("${song.title} ${song.album}")
-        val offered = languages("${candidate.title} ${candidate.album}")
-        return when {
+        wanted: Set<String>,
+        offered: Set<String>,
+    ): Boolean =
+        when {
             wanted.isEmpty() && offered.isEmpty() -> true
             wanted.isNotEmpty() && offered.isNotEmpty() -> wanted.any { it in offered }
             wanted.isNotEmpty() -> artistMatches(song.artists.take(1), candidate.artist)
             // Only YouTube names a language: accept just when the artists agree.
             else -> artistMatches(song.artists, candidate.artist)
         }
+
+    /**
+     * True when [track] is surely the asked-for version: no language was named, or the result names the same
+     * language, or its title is exactly the Spotify title. Otherwise it may be another language's dub.
+     */
+    fun isCertainVersion(
+        song: SpotifySong,
+        track: Track,
+    ): Boolean {
+        val wanted = languages("${song.title} ${song.album}")
+        if (wanted.isEmpty()) return true
+        val offered = languages("${track.title} ${track.album} ${track.artist}")
+        val sameTitle = compact(normalize(stripExtras(song.title))) == compact(normalize(stripExtras(track.title)))
+        return wanted.any { it in offered } || sameTitle
+    }
+
+    /** The language named in the Spotify title or album (e.g. "[KANNADA]"), to search for that version. */
+    fun languageOf(song: SpotifySong): String? = languages("${song.title} ${song.album}").firstOrNull()
+
+    /** Same album once "(Original Motion Picture Soundtrack)"-style suffixes are dropped. */
+    fun sameAlbumName(
+        a: String,
+        b: String,
+    ): Boolean {
+        val x = normalize(baseAlbum(a))
+        val y = normalize(baseAlbum(b))
+        return x.isNotEmpty() && y.isNotEmpty() && similarity(x, y) >= TITLE_STRONG
     }
 
     private fun languages(text: String): Set<String> {
@@ -239,7 +290,7 @@ object TrackMatcher {
         if (x.isEmpty() || y.isEmpty()) return 0.0
         if (x == y) return 1.0
         val shorter = minOf(x.length, y.length)
-        // One title inside the other ("Nadi Tara" in "Nadi Tara (From Film Two)").
+        // One title inside the other ("Song" in "Song (From Film)").
         if (shorter >= 2 && (x.contains(y) || y.contains(x))) return 0.9
         return dice(x, y)
     }

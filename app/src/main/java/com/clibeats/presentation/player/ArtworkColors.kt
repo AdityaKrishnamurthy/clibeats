@@ -73,7 +73,7 @@ private fun colorsFrom(
     val hsv = FloatArray(HSV_SIZE)
     android.graphics.Color.colorToHSV(vivid.rgb, hsv)
     if (hsv[1] < MIN_SATURATION) return null // black-and-white cover: keep the theme accent
-    // Near-black or grey picks (a dark cover' #101018 counts as 33% saturated) would be brightened into
+    // Near-black or grey picks (a very dark blue-black can count as 33% saturated) would be brightened into
     // an unrelated purple; dark covers keep the theme accent chosen in Settings instead.
     if (chromaOf(vivid.rgb) < MIN_CHROMA) return null
     // Bright enough to read on a dark screen, dark enough on a light one.

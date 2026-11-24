@@ -58,6 +58,30 @@ fun SearchResponse.toTrackList(): List<Track> {
     return tracks
 }
 
+/** An album, single or EP from an albums search. Its page lists every track with its video id. */
+data class AlbumHit(
+    val browseId: String,
+    val title: String,
+    val artist: String,
+)
+
+/** Albums from an albums-filtered search, in result order. */
+fun SearchResponse.toAlbumHits(): List<AlbumHit> {
+    val root = contents ?: return emptyList()
+    return findAll(root, "musicResponsiveListItemRenderer").mapNotNull { item ->
+        val browseId =
+            item.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+                ?.takeIf { it.startsWith("MPRE") } ?: return@mapNotNull null
+        val columns = item.nav("flexColumns")?.safeArray() ?: return@mapNotNull null
+
+        fun column(i: Int) =
+            columns.getOrNull(i)?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")?.safeArray()
+                ?.mapNotNull { it.nav("text")?.safeString() }.orEmpty()
+        val title = column(0).joinToString("").ifBlank { return@mapNotNull null }
+        AlbumHit(browseId, title, parseSubtitle(column(1)).artist)
+    }
+}
+
 /**
  * The chart playlist to show as "trending" from a Charts page: the daily top music videos for the country
  * (real songs), else the top 100, else the trending list, else the first chart playlist. Returns its

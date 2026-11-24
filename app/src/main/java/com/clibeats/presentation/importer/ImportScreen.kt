@@ -134,6 +134,7 @@ fun ImportScreen(
                         setup = setup,
                         onToggle = viewModel::toggle,
                         onSelectAll = viewModel::selectAll,
+                        onAllowClosest = viewModel::setAllowClosest,
                         onImport = viewModel::onImportClick,
                     )
                 } else {
@@ -320,6 +321,7 @@ private fun ChooseView(
     setup: ImportSetup,
     onToggle: (Int) -> Unit,
     onSelectAll: (Boolean) -> Unit,
+    onAllowClosest: (Boolean) -> Unit,
     onImport: () -> Unit,
 ) {
     val found = setup.found.orEmpty()
@@ -374,6 +376,34 @@ private fun ChooseView(
                         modifier = Modifier.padding(end = 8.dp),
                     )
                 }
+            }
+        }
+        HorizontalDivider(thickness = 1.dp, color = CliBeatsDivider)
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(role = Role.Checkbox) { onAllowClosest(!setup.allowClosest) }
+                    .padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Checkbox(
+                checked = setup.allowClosest,
+                onCheckedChange = null,
+                colors = CheckboxDefaults.colors(checkedColor = CliBeatsAccent),
+                modifier = Modifier.padding(12.dp),
+            )
+            Column {
+                Text(
+                    text = "Use the closest version",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = CliBeatsTextPrimary,
+                )
+                Text(
+                    text = "When YouTube Music doesn't have the exact one (e.g. a remix), add the original instead.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CliBeatsTextSecondary,
+                )
             }
         }
         Column(modifier = Modifier.padding(16.dp)) {
@@ -651,7 +681,7 @@ private fun LazyListScope.section(
     }
 }
 
-/** "the song — the artist" per line: plain text, ready to paste into a search box or a note. */
+/** "Title — Artist" per line: plain text, ready to paste into a search box or a note. */
 private fun songList(songs: List<ImportedSong>): String =
     songs.sortedBy { it.index }.joinToString("\n") { s ->
         if (s.song.artistLine.isEmpty()) s.song.title else "${s.song.title} — ${s.song.artistLine}"
@@ -742,7 +772,10 @@ private fun MatchedRow(song: ImportedSong) {
             val renamed = !track.title.equals(song.song.title, ignoreCase = true)
             val spotify = if (renamed) " · Spotify: ${song.song.title}" else ""
             Text(
-                text = "${track.artist}$spotify${if (song.manual) " · picked by you" else ""}",
+                text =
+                    track.artist + spotify +
+                        (if (song.manual) " · picked by you" else "") +
+                        (if (song.closest) " · closest version" else ""),
                 style = MaterialTheme.typography.labelSmall,
                 color = CliBeatsTextSecondary,
                 maxLines = 1,

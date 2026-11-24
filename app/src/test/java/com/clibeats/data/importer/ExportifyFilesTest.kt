@@ -40,7 +40,7 @@ class ExportifyFilesTest {
         val playlist = ExportifyCsv.parse("anime", text)
 
         assertThat(playlist.songs).hasSize(3)
-        assertThat(playlist.songs[0]).isEqualTo(SpotifySong("星空花", listOf("MIRA"), "Hoshizora", 238_586))
+        assertThat(playlist.songs[0]).isEqualTo(SpotifySong("星空花", listOf("MIRA"), "Hoshizora", 238_586, isrc = "JP1"))
         assertThat(playlist.songs[1].album).isEqualTo("Film Two, Vol. 1")
         assertThat(playlist.songs[1].artists).containsExactly("D. Iyer", "Vinay Prakash").inOrder()
         assertThat(playlist.songs[2].title).isEqualTo("Say \"Hi\"")

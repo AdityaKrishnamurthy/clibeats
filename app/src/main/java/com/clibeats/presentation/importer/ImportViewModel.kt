@@ -33,6 +33,8 @@ data class ImportSetup(
     val selected: Set<Int> = emptySet(),
     /** Names that already exist among your playlists; non-empty shows the Replace / Keep both question. */
     val conflicts: List<String> = emptyList(),
+    /** "Use the closest version when the exact one isn't on YouTube Music" (off by default). */
+    val allowClosest: Boolean = false,
 )
 
 /** The "Find" sheet for a song that didn't match. */
@@ -90,6 +92,8 @@ class ImportViewModel
                 s.copy(selected = if (index in s.selected) s.selected - index else s.selected + index)
             }
 
+        fun setAllowClosest(allow: Boolean) = _setup.update { it.copy(allowClosest = allow) }
+
         fun selectAll(all: Boolean) {
             _setup.update { s -> s.copy(selected = if (all) s.found.orEmpty().indices.toSet() else emptySet()) }
         }
@@ -114,7 +118,7 @@ class ImportViewModel
         }
 
         fun start(replaceExisting: Boolean) {
-            importer.start(chosen(), replaceExisting)
+            importer.start(chosen(), replaceExisting, allowClosest = _setup.value.allowClosest)
             _setup.value = ImportSetup()
         }
 

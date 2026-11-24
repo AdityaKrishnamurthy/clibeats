@@ -13,8 +13,10 @@ import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
+import com.clibeats.data.provider.mapper.AlbumHit
 import com.clibeats.data.provider.mapper.chartPlaylistBrowseId
 import com.clibeats.data.provider.mapper.playlistTracks
+import com.clibeats.data.provider.mapper.toAlbumHits
 import com.clibeats.data.provider.mapper.toTrackList
 import com.clibeats.data.provider.youtube.NewPipeExtractorResolver
 import com.clibeats.data.provider.youtube.PoTokenGenerator
@@ -49,13 +51,28 @@ class YouTubeMusicProvider
         ): ProviderResult<List<Track>> = search(query, limit, songsOnly = true)
 
         /**
-         * Search without the Songs filter, so music videos and uploads come back too. The playlist import
+         * Music videos for [query] (the Videos filter, which includes each video's length). The playlist import
          * uses it for songs that only exist on YouTube as a video (no audio-only release in this region).
          */
         suspend fun searchIncludingVideos(
             query: String,
             limit: Int,
         ): ProviderResult<List<Track>> = search(query, limit, songsOnly = false)
+
+        /** Albums, singles and EPs for [query]; null when YouTube Music can't be reached. */
+        suspend fun searchAlbums(query: String): List<AlbumHit>? =
+            runCatching { api.search(SearchRequest.forAlbums(query)).toAlbumHits() }.getOrNull()
+
+        /**
+         * Every track on [album] (album pages leave the artist out of each row, so it's filled from the album).
+         * Some official tracks are only reachable this way: YouTube Music leaves them out of song search.
+         */
+        suspend fun albumTracks(album: AlbumHit): List<Track>? =
+            runCatching {
+                api.browse(com.clibeats.data.provider.dto.BrowseRequest.page(album.browseId)).playlistTracks().map {
+                    it.copy(artist = it.artist.ifBlank { album.artist }, album = it.album.ifBlank { album.title })
+                }
+            }.getOrNull()
 
         private suspend fun search(
             query: String,

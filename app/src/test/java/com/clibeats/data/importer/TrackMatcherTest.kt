@@ -153,6 +153,54 @@ class TrackMatcherTest {
     }
 
     @Test
+    fun spotifyDuoName_matchesYouTubesSplitCredits() {
+        val s = song("一生懸命", listOf("MIKA with SunBand"), 236_626)
+
+        assertThat(TrackMatcher.pick(s, listOf(yt("g", "一生懸命 - Isshokenmei", "MIKA & SunBand", 237_000)))?.id)
+            .isEqualTo("g")
+    }
+
+    @Test
+    fun songWithoutAudioRelease_takesTheLabelsVideoInTheSameLanguage() {
+        val s = song("Raajana", listOf("Hari Venu", "Mohan Das"), 225_037, album = "Film Four [KANNADA]")
+        val lyricalKannada =
+            yt("k", "Raajana Lyrical(Kannada) | Film Four | Star Cast", "Label Kannada", 226_000)
+        val hindiDub = yt("h", "Raajan", "Vikas Shah & Mohan Das", 226_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(hindiDub, lyricalKannada))?.id).isEqualTo("k")
+    }
+
+    @Test
+    fun closestVersion_onlyWhenAllowed() {
+        val s = song("Nadiya Hoovu (Remix)", listOf("K. Mohan"), 256_932)
+        val original = yt("o", "Nadiya Hoovu", "K. Mohan", 257_000)
+
+        assertThat(TrackMatcher.pick(s, listOf(original))).isNull()
+        assertThat(TrackMatcher.pick(s, listOf(original), allowClosest = true)?.id).isEqualTo("o")
+        // Never the other way round: a remix doesn't stand in for the original.
+        val plain = song("Nadiya Hoovu", listOf("K. Mohan"), 256_932)
+        val remix = yt("r", "Nadiya Hoovu (Remix)", "K. Mohan", 257_000)
+        assertThat(TrackMatcher.pick(plain, listOf(remix), allowClosest = true)).isNull()
+    }
+
+    @Test
+    fun remixLabelOnlyOnSpotify_matchesTheSameAlbumTrackAtTheSameLength() {
+        val s =
+            song(
+                "Nadiya Hoovu (Remix)",
+                listOf("K. Mohan"),
+                256_932,
+                album = "Film One (Original Motion Picture Soundtrack)",
+            )
+        val sameTrack = yt("a", "Nadiya Hoovu", "S. Prakash", 257_000).copy(album = "Film One")
+        val otherAlbum =
+            yt("b", "Nadiya Hovu", "S. Prakash", 257_000).copy(album = "Film Three")
+
+        assertThat(TrackMatcher.pick(s, listOf(otherAlbum, sameTrack))?.id).isEqualTo("a")
+        assertThat(TrackMatcher.pick(s, listOf(otherAlbum))).isNull()
+    }
+
+    @Test
     fun noResults_noMatch() {
         assertThat(TrackMatcher.pick(song("A", listOf("B"), 1_000), emptyList())).isNull()
     }
