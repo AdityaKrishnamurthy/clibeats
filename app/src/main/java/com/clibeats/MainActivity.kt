@@ -1,9 +1,11 @@
-@file:Suppress("ktlint:standard:function-naming")
+@file:Suppress("ktlint:standard:function-naming", "ForbiddenImport")
 
 package com.clibeats
 
+import android.content.Intent
 import android.os.Bundle
 import android.os.SystemClock
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -28,11 +30,16 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.clibeats.data.link.IncomingLinks
+import com.clibeats.data.link.MusicLink
 import com.clibeats.presentation.home.HomeScreen
+import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
+import com.clibeats.presentation.link.LinkViewModel
 import com.clibeats.presentation.onboarding.OnboardingScreen
 import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
@@ -46,12 +53,17 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 import kotlin.math.abs
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject lateinit var incomingLinks: IncomingLinks
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Only a fresh start: after rotation the link was already handled.
+        if (savedInstanceState == null) handleLink(intent)
         enableEdgeToEdge()
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
@@ -79,6 +91,27 @@ class MainActivity : ComponentActivity() {
                     true -> AppContent()
                 }
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
+    }
+
+    /** A YouTube Music, YouTube or Spotify link opened with CLIBeats, or shared to it. */
+    private fun handleLink(intent: Intent?) {
+        val text =
+            when (intent?.action) {
+                Intent.ACTION_VIEW -> intent.dataString
+                Intent.ACTION_SEND -> intent.getStringExtra(Intent.EXTRA_TEXT)
+                else -> null
+            } ?: return
+        val link = if (intent?.action == Intent.ACTION_VIEW) MusicLink.parse(text) else MusicLink.findIn(text)
+        if (link != null) {
+            incomingLinks.offer(link)
+        } else {
+            Toast.makeText(this, "CLIBeats opens songs, playlists and albums.", Toast.LENGTH_LONG).show()
         }
     }
 }
@@ -153,6 +186,18 @@ private fun AppContent() {
         navigate(destination)
     }
 
+    // Opened links: messages as toasts; a Spotify playlist or album opens the import over the tabs.
+    val linkViewModel: LinkViewModel = hiltViewModel()
+    val showLinkImport by linkViewModel.showImport.collectAsState()
+    val context = LocalContext.current
+    LaunchedEffect(Unit) {
+        linkViewModel.messages.collect { message ->
+            val length = if (message.length > SHORT_MESSAGE) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
+            Toast.makeText(context, message, length).show()
+        }
+    }
+    BackHandler(enabled = showLinkImport) { linkViewModel.closeImport() }
+
     // In-app updater: check GitHub on launch (at most once per chosen interval) and show the pop-up.
     val updateViewModel: UpdateViewModel = hiltViewModel()
     LaunchedEffect(Unit) { updateViewModel.onAppStart() }
@@ -196,8 +241,14 @@ private fun AppContent() {
                     QueueScreen(onClose = { showQueue = false })
                 }
             }
+            if (showLinkImport) {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    ImportScreen(onClose = linkViewModel::closeImport)
+                }
+            }
         }
     }
 }
 
 private const val DOUBLE_TAP_MS = 300L
+private const val SHORT_MESSAGE = 40

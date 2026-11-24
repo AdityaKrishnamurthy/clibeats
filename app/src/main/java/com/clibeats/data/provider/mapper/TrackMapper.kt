@@ -3,6 +3,7 @@
     "ReturnCount",
     "LoopWithTooManyJumpStatements",
     "MagicNumber",
+    "TooManyFunctions",
 )
 
 package com.clibeats.data.provider.mapper
@@ -10,6 +11,7 @@ package com.clibeats.data.provider.mapper
 import com.clibeats.data.provider.dto.BrowseResponse
 import com.clibeats.data.provider.dto.PlayerResponse
 import com.clibeats.data.provider.dto.SearchResponse
+import com.clibeats.data.provider.dto.VideoDetails
 import com.clibeats.domain.model.Track
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -105,6 +107,46 @@ fun BrowseResponse.chartPlaylistBrowseId(): String? {
     return preferences.firstNotNullOfOrNull { wanted ->
         playlists.firstOrNull { (title, _) -> title.lowercase().startsWith(wanted) }?.second
     } ?: playlists.firstOrNull()?.second
+}
+
+/** The name of a playlist or album page ("Top 100 Songs Global"); null when the page has no header. */
+fun BrowseResponse.pageTitle(): String? {
+    val root = contents ?: return null
+    return (findAll(root, "musicResponsiveHeaderRenderer") + findAll(root, "musicDetailHeaderRenderer"))
+        .firstNotNullOfOrNull { it.nav("title", "runs")?.safeArray()?.firstOrNull()?.nav("text")?.safeString() }
+}
+
+/** An album page's artist ("strapline" under the title); null on other pages. */
+fun BrowseResponse.pageArtist(): String? {
+    val root = contents ?: return null
+    return findAll(root, "straplineTextOne")
+        .firstNotNullOfOrNull { it.nav("runs")?.safeArray()?.firstOrNull()?.nav("text")?.safeString() }
+}
+
+/** The page header's cover, largest size. */
+fun BrowseResponse.pageCover(): String? {
+    val root = contents ?: return null
+    val header =
+        (findAll(root, "musicResponsiveHeaderRenderer") + findAll(root, "musicDetailHeaderRenderer")).firstOrNull()
+            ?: return null
+    return findAll(header, "thumbnails").firstOrNull()?.safeArray()?.mapNotNull { it.nav("url")?.safeString() }
+        ?.lastOrNull()
+}
+
+/** The song behind a video id, from the player's details (a shared link has nothing else). */
+fun VideoDetails.toTrack(): Track? {
+    val id = videoId ?: return null
+    return Track(
+        id = id,
+        title = title ?: return null,
+        artist = author.orEmpty().removeSuffix(" - Topic"),
+        album = "",
+        durationMs = (lengthSeconds?.toLongOrNull() ?: 0L) * MS_PER_SECOND,
+        artworkUrl =
+            thumbnail?.nav("thumbnails")?.safeArray()?.mapNotNull { it.nav("url")?.safeString() }?.lastOrNull(),
+        streamUrl = null,
+        providerId = PROVIDER_ID,
+    )
 }
 
 /** Songs of a playlist page (e.g. a chart), in order; items without a video id are skipped. */

@@ -13,12 +13,16 @@ import com.clibeats.data.importer.NotAnExportifyFileException
 import com.clibeats.data.importer.PlaylistImporter
 import com.clibeats.data.importer.SpotifyPlaylist
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,6 +57,7 @@ class ImportViewModel
     constructor(
         @ApplicationContext private val context: Context,
         private val importer: PlaylistImporter,
+        private val playback: PlaybackRepository,
     ) : ViewModel() {
         val importState: StateFlow<ImportState> = importer.state
 
@@ -146,6 +151,17 @@ class ImportViewModel
             }
         }
 
+        /** The id of the song playing right now, while it plays; the Find sheet marks that result. */
+        val playingId: StateFlow<String?> =
+            playback.playbackState
+                .map { if (it.isPlaying) it.currentTrack?.id else null }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+        /** Plays a result in the Find sheet to check it's the right song; tapped again, pauses it. */
+        fun preview(track: Track) {
+            if (playingId.value == track.id) playback.pause() else playback.playTrack(track)
+        }
+
         fun pick(track: Track) {
             val pick = _manual.value ?: return
             _manual.value = null
@@ -167,4 +183,8 @@ class ImportViewModel
                     if (c.moveToFirst()) c.getString(0) else null
                 }
             }.getOrNull() ?: uri.lastPathSegment?.substringAfterLast('/') ?: "playlist.csv"
+
+        private companion object {
+            const val STOP_TIMEOUT_MS = 5_000L
+        }
     }

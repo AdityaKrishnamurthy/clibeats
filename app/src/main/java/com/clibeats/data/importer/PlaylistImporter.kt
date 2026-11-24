@@ -115,6 +115,9 @@ class PlaylistImporter
         /** "Use the closest version" was ticked for the running import. */
         @Volatile private var allowClosest = false
 
+        /** One song found on YouTube Music the way the import finds it (a shared Spotify song link). */
+        suspend fun findSong(song: SpotifySong): Track? = songSearch.find(song).match?.storable()
+
         /** Names of the user's own playlists, to warn before an import would duplicate one. */
         suspend fun existingNames(): Set<String> =
             playlistRepository.getAllPlaylistsAsFlow().first()

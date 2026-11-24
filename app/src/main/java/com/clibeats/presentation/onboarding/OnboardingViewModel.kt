@@ -49,7 +49,7 @@ class OnboardingViewModel
             restoreFrom(Uri.fromFile(file))
         }
 
-        /** Restores a backup file the user picked (e.g. Download/CLIBeats/clibeats-backup.json). */
+        /** Restores a backup file the user picked (e.g. Download/CLIBeats/Playlists/clibeats-backup.json). */
         fun restoreFrom(source: Uri) {
             val exchange = playlistExchangeManager ?: return
             viewModelScope.launch {

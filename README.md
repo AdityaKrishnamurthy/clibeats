@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.5.1-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.5.2-1DB954)](#)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -20,7 +20,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ## Contents
 
-- [Screenshots](#screenshots)
 - [Features](#features)
 - [Gestures](#gestures)
 - [Navigation](#navigation)
@@ -35,22 +34,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - [Downloads](#downloads)
 - [Developers](#developers)
 - [License](#license)
-
----
-
-## Screenshots
-
-**Home & Search** — swipe a song right to queue it or left to favourite it; recent searches when the box is empty.
-
-<img src="docs/screenshots/strip_home_search.png" width="100%" alt="Home swipe gestures and search">
-
-**Library & Playlists** — songs you've played online; playlists with Favorites and Most Played pinned on top.
-
-<img src="docs/screenshots/strip_library_playlists.png" width="66%" alt="Library and playlists">
-
-**Settings** — theme, accent colours (with a custom picker), music folders, caches, backup and updates.
-
-<img src="docs/screenshots/strip_settings.png" width="66%" alt="Settings: theme, accent, storage and updates">
 
 ---
 
@@ -102,8 +85,9 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Reorder** the queue, ♥ Favorites and your own playlists: drag a song's ≡ handle, or hold its cover and drag.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 - **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
-  `Download/CLIBeats` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE BACKUP** in
-  Settings sends a copy anywhere. Android's own backup also restores the library on a new phone.
+  `Download/CLIBeats/Playlists` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE
+  BACKUP** in Settings sends a copy anywhere, and the trash button deletes the saved backups. Android's own backup
+  also restores the library on a new phone.
 
 ### Import playlists
 - **Library → Playlists → `[ ↓ IMPORT ]`** — choose **Spotify**, **YouTube Music** or **Others** (Apple Music,
@@ -111,9 +95,16 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   [Exportify](https://exportify.net) or [TuneMyMusic](https://www.tunemymusic.com), then pick it.
 - `.csv` or `.zip`, one or many playlists per file; tick the ones you want.
 - Each song is found on YouTube Music by title, artist, album, length, language and ISRC. Nothing is guessed:
-  songs it can't be sure of are listed with **Find** (pick it yourself) and **Copy** (copy the list as text).
+  songs it can't be sure of are listed with **Find** and **Copy** (copy the list as text). In **Find**, tap a
+  result to play it and check it's the right one, then `[ + ]` to add it.
 - Right language versions of film songs, album covers, live progress, a notification while it runs, and
   **Replace / Keep both** for existing playlists. Optional **Use the closest version**.
+
+### Open links in CLIBeats
+- **YouTube Music and Spotify links** open in CLIBeats once you allow it: Settings → Apps → CLIBeats →
+  **Open by default → Add link**, tick the sites. Or **Share** a link to CLIBeats from any app.
+- Songs play at once (a Spotify song is found on YouTube Music like an imported one); YouTube Music playlists and
+  albums play as a queue; Spotify playlists and albums are imported (up to 100 songs from a link).
 
 ### Now Playing
 - High-res cover art: the low-res thumbnail shows instantly and the full-quality cover fades in.
@@ -264,15 +255,15 @@ Screenshot tests: `.\gradlew.bat verifyPaparazziDebug` (needs `ANDROID_HOME` set
 
 Download the latest APK from [Releases](https://github.com/Omprakash-p06/clibeats/releases): each release has
 `CLIBeats-vX.Y.Z.apk` and a `SHA256SUMS.txt` to verify it (`sha256sum -c SHA256SUMS.txt`, or
-`Get-FileHash CLIBeats-v2.5.1.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
+`Get-FileHash CLIBeats-v2.5.2.apk` on Windows). From v2.1.0 the app updates itself (Settings → Updates).
 Every release is signed with the CLIBeats key, certificate SHA-256
 `bef6949089c552944cc9691d543326d42537a20eef163bb3961b30dbd146b26a`.
 
-Pushing a tag like `v2.5.1` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
+Pushing a tag like `v2.5.2` runs `.github/workflows/release.yml`: tests, a signed release APK and a GitHub
 Release with [release notes](docs/RELEASE_NOTES.md). Signing uses the repository secrets `KEYSTORE_BASE64`,
 `KEYSTORE_PASSWORD`, `KEY_ALIAS` and `KEY_PASSWORD`; the workflow stops if they're missing, so a
 debug-signed APK (which couldn't update existing installs) is never published. A release published by hand is
-left untouched. The version comes from the tag (`2.5.1` → versionCode `20501`); local builds default to 2.5.1.
+left untouched. The version comes from the tag (`2.5.2` → versionCode `20502`); local builds default to 2.5.2.
 
 ---
 
