@@ -266,7 +266,11 @@ class TrackDownloadManagerTest {
                         .message("Partial Content")
                         .header("Content-Type", "audio/webm")
                         .header("Content-Range", "bytes $from-$end/${content.size}")
-                        .body(content.copyOfRange(from.toInt(), end.toInt() + 1).toResponseBody("audio/webm".toMediaType()))
+                        .body(
+                            content
+                                .copyOfRange(from.toInt(), end.toInt() + 1)
+                                .toResponseBody("audio/webm".toMediaType()),
+                        )
                         .build(),
                 )
                 call

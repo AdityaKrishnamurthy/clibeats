@@ -21,6 +21,7 @@ import javax.inject.Singleton
 object DownloadModule {
     @Provides
     @Singleton
+    @Suppress("LongParameterList")
     fun provideTrackDownloadManager(
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,

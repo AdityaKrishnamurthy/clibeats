@@ -58,6 +58,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.coroutineContext
 
+@Suppress("LargeClass") // download, cache copy, removal and the downloads list share one state
 @Singleton
 class TrackDownloadManager
     @Inject
@@ -273,6 +274,7 @@ class TrackDownloadManager
          * Copies [track] out of the streaming cache into [target] when the cache holds the whole song (it was
          * played to the end). Returns its container, or null when it isn't fully cached.
          */
+        @Suppress("NestedBlockDepth", "ReturnCount")
         private suspend fun copyFromSongCache(
             track: Track,
             target: File,
@@ -389,6 +391,7 @@ class TrackDownloadManager
         }
 
         /** One byte range, retried a few times on a dropped connection; rewrites the range from its start. */
+        @Suppress("NestedBlockDepth")
         private suspend fun downloadRange(
             url: String,
             channel: FileChannel,
@@ -489,6 +492,7 @@ class TrackDownloadManager
         }
 
         /** Streams [input] into [target] and returns total bytes written. */
+        @Suppress("NestedBlockDepth")
         private suspend fun writeBody(
             input: InputStream,
             target: File,
@@ -546,6 +550,7 @@ class TrackDownloadManager
                 private val DEFAULT = DownloadFormat("m4a", "audio/mp4")
 
                 /** The container from a file's first bytes (the streaming cache keeps no content type). */
+                @Suppress("MagicNumber") // file signatures
                 fun sniff(
                     head: ByteArray,
                     size: Int,

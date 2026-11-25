@@ -84,6 +84,7 @@ private const val MB_PER_GB = 1024
 private const val BYTES_PER_GB = BYTES_PER_MB * MB_PER_GB
 
 /** Sizes in settings are MB or GB only: "0 MB", "3.4 MB", "512 MB", "1.25 GB". */
+@Suppress("ReturnCount")
 internal fun formatSize(bytes: Long): String {
     if (bytes <= 0L) return "0 MB"
     if (bytes >= BYTES_PER_GB) {
@@ -99,7 +100,14 @@ internal fun formatSize(bytes: Long): String {
 internal fun formatMb(mb: Int): String =
     if (mb >= MB_PER_GB && mb % MB_PER_GB == 0) "${mb / MB_PER_GB} GB" else formatSize(mb * BYTES_PER_MB)
 
+/** "DOWNLOADS  45.2 MB · 12 songs". */
+private fun downloadsLabel(
+    bytes: Long,
+    songs: Int,
+): String = "DOWNLOADS  ${formatSize(bytes)} · $songs ${if (songs == 1) "song" else "songs"}"
+
 private fun trimZeros(number: String): String = if ('.' in number) number.trimEnd('0').trimEnd('.') else number
+
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
@@ -451,8 +459,9 @@ fun SettingsScreen(
         TuiBlock(title = "Storage and Cache", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
-                    text = "TOTAL USED  " +
-                        formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes),
+                    text =
+                        "TOTAL USED  " +
+                            formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes),
                     style = MaterialTheme.typography.labelMedium,
                     color = accent,
                 )
@@ -479,7 +488,7 @@ fun SettingsScreen(
                 ) {
                     val songs = downloadedItems.size
                     Text(
-                        text = "DOWNLOADS  ${formatSize(downloadedBytes)} · $songs ${if (songs == 1) "song" else "songs"}",
+                        text = downloadsLabel(downloadedBytes, songs),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),

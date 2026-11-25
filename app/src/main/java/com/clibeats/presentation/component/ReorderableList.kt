@@ -69,7 +69,7 @@ class ReorderRowScope internal constructor(
  * animates the others out of the way. The order changes on screen while dragging; [onReorder] is called
  * once when the finger lifts with where the row came from, where it went, and the whole new list.
  */
-@Suppress("LongMethod")
+@Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 fun <T> ReorderableList(
     items: List<T>,

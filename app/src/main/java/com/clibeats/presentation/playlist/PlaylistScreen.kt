@@ -343,6 +343,7 @@ fun PlaylistScreen(
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 private fun PlaylistDetailView(
     title: String,

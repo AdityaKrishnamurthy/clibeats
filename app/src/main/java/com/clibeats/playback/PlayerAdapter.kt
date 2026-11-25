@@ -294,8 +294,9 @@ class PlayerAdapter
             autoplayIds.remove(track.id)
             val first = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
             // Songs you queue play before the autoplay suggestions (after the ones you queued earlier).
-            val radioStart = (first until trackList.size).firstOrNull { trackList[it].id in autoplayIds }
-                ?: trackList.size
+            val radioStart =
+                (first until trackList.size).firstOrNull { trackList[it].id in autoplayIds }
+                    ?: trackList.size
             // Shuffle on: mix the new song in among your upcoming songs instead of always playing it last.
             val shuffleIn = shuffleOn && first in 1..radioStart
             val index = if (shuffleIn) (first..radioStart).random() else radioStart
