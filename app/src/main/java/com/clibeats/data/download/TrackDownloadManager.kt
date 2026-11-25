@@ -1,9 +1,15 @@
 // ForbiddenImport: data-layer self-imports are legitimate
 @file:Suppress("ForbiddenImport", "TooGenericExceptionCaught", "LongParameterList", "TooManyFunctions")
+@file:androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 
 package com.clibeats.data.download
 
 import android.content.Context
+import androidx.media3.common.C
+import androidx.media3.datasource.DataSpec
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.ContentMetadata
+import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.data.local.dao.SongDao
@@ -12,32 +18,45 @@ import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.local.mapper.toEntity
 import com.clibeats.domain.model.Track
 import com.clibeats.playback.StreamResolver
+import com.clibeats.playback.TrackUriResolver
 import com.clibeats.util.DiagnosticLogger
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.io.OutputStream
+import java.io.RandomAccessFile
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.coroutines.coroutineContext
 
 @Singleton
 class TrackDownloadManager
@@ -48,8 +67,10 @@ class TrackDownloadManager
         private val streamResolver: dagger.Lazy<StreamResolver>,
         private val downloadedTrackDao: DownloadedTrackDao,
         private val songDao: SongDao,
+        /** The streaming cache: a song already played in full is copied from it, with no network. */
+        private val mediaCaches: dagger.Lazy<MediaCaches>? = null,
     ) {
-        private val scope = CoroutineScope(Dispatchers.IO)
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val _downloads = MutableStateFlow<Map<String, DownloadStatus>>(emptyMap())
         val downloads: StateFlow<Map<String, DownloadStatus>> = _downloads.asStateFlow()
 
@@ -78,17 +99,49 @@ class TrackDownloadManager
                 .map { list -> list.map { it.songId }.toSet() }
                 .stateIn(scope, SharingStarted.Eagerly, emptySet())
 
+        /** Ids of downloads whose file is on disk; a record whose file is gone is dropped on the way. */
+        private val presentIds: Flow<Set<String>> =
+            downloadedTrackDao.getAllFlow()
+                .map { list ->
+                    val (present, missing) = list.partition { File(it.filePath).exists() }
+                    missing.forEach { runCatching { downloadedTrackDao.deleteById(it.songId) } }
+                    present.map { it.songId }.toSet()
+                }.flowOn(Dispatchers.IO)
+
         fun getDownloadedSongs(): Flow<List<Track>> =
-            songDao.getDownloadedSongsAsFlow().map { entities ->
-                entities.map { it.toDomain() }
+            combine(songDao.getDownloadedSongsAsFlow(), presentIds) { entities, ids ->
+                entities.filter { it.id in ids }.map { it.toDomain() }
             }
 
-        fun getDownloadedSongItems(): Flow<List<DownloadedSongItem>> = downloadedTrackDao.getDownloadedSongItemsFlow()
+        fun getDownloadedSongItems(): Flow<List<DownloadedSongItem>> =
+            combine(downloadedTrackDao.getDownloadedSongItemsFlow(), presentIds) { items, ids ->
+                items.filter { it.songId in ids }
+            }
 
+        /** Space the downloads really take: the files on disk (a missing file counts as nothing). */
         fun getTotalDownloadedSizeBytes(): Flow<Long> =
-            downloadedTrackDao.getAllFlow().map { list ->
-                list.sumOf { it.sizeBytes }
+            downloadedTrackDao.getAllFlow()
+                .map { list -> list.sumOf { File(it.filePath).takeIf(File::exists)?.length() ?: 0L } }
+                .flowOn(Dispatchers.IO)
+
+        init {
+            scope.launch { removeLeftovers() }
+        }
+
+        /**
+         * Files in the downloads folder that no download points to (an interrupted download, or one removed
+         * while the app was closing) take space but never show anywhere: delete them.
+         */
+        private suspend fun removeLeftovers() {
+            runCatching {
+                val kept = downloadedTrackDao.getAll().map { File(it.filePath).absolutePath }.toSet()
+                // Only old files: one written in the last minute may be a download finishing right now.
+                val cutoff = System.currentTimeMillis() - LEFTOVER_AGE_MS
+                downloadsDir.listFiles()?.forEach { file ->
+                    if (file.absolutePath !in kept && file.lastModified() < cutoff) file.delete()
+                }
             }
+        }
 
         @Suppress("LongMethod", "CyclomaticComplexMethod", "ThrowsCount")
         fun downloadTrack(track: Track) {
@@ -111,6 +164,13 @@ class TrackDownloadManager
                             return@launch
                         }
 
+                        // Played to the end before? The whole song is in the streaming cache: copy it.
+                        val cached = runCatching { copyFromSongCache(track, partFile) }.getOrNull()
+                        if (cached != null) {
+                            finish(track, hash, partFile, cached)
+                            return@launch
+                        }
+
                         var streamUrl: String =
                             resolveStreamUrl(track, forceRefresh = false) ?: run {
                                 updateStatus(track.id, DownloadStatus.Failed("No stream URL available"))
@@ -121,33 +181,7 @@ class TrackDownloadManager
                         for (attempt in 1..MAX_ATTEMPTS) {
                             try {
                                 val format = fetch(track.id, streamUrl, partFile)
-                                // Name the file after the container the provider actually served.
-                                val finalFile = File(downloadsDir, "$hash.${format.extension}")
-                                if (finalFile.exists()) finalFile.delete()
-
-                                if (!partFile.renameTo(finalFile)) {
-                                    partFile.delete()
-                                    throw IOException("Failed to finalize download file")
-                                }
-
-                                // Keep the file and the record in step: an orphan file would never show in Downloads.
-                                try {
-                                    songDao.upsert(track.toEntity())
-                                    downloadedTrackDao.insert(
-                                        DownloadedTrackEntity(
-                                            songId = track.id,
-                                            filePath = finalFile.absolutePath,
-                                            sizeBytes = finalFile.length(),
-                                            downloadedAt = System.currentTimeMillis(),
-                                            mimeType = format.mimeType,
-                                        ),
-                                    )
-                                } catch (e: Exception) {
-                                    finalFile.delete()
-                                    throw e
-                                }
-
-                                updateStatus(track.id, DownloadStatus.Completed(finalFile))
+                                finish(track, hash, partFile, format)
                                 return@launch
                             } catch (e: CancellationException) {
                                 throw e
@@ -197,6 +231,83 @@ class TrackDownloadManager
             activeJobs[track.id] = job
         }
 
+        /** Renames the part file after its container, records it, and reports the download done. */
+        private suspend fun finish(
+            track: Track,
+            hash: String,
+            partFile: File,
+            format: DownloadFormat,
+        ) {
+            val finalFile = File(downloadsDir, "$hash.${format.extension}")
+            if (finalFile.exists()) finalFile.delete()
+            if (!partFile.renameTo(finalFile)) {
+                partFile.delete()
+                throw IOException("Failed to finalize download file")
+            }
+            // Keep the file and the record in step: an orphan file would never show in Downloads.
+            try {
+                songDao.upsert(track.toEntity())
+                downloadedTrackDao.insert(
+                    DownloadedTrackEntity(
+                        songId = track.id,
+                        filePath = finalFile.absolutePath,
+                        sizeBytes = finalFile.length(),
+                        downloadedAt = System.currentTimeMillis(),
+                        mimeType = format.mimeType,
+                    ),
+                )
+            } catch (e: Exception) {
+                finalFile.delete()
+                throw e
+            }
+            updateStatus(track.id, DownloadStatus.Completed(finalFile))
+        }
+
+        /**
+         * Copies [track] out of the streaming cache into [target] when the cache holds the whole song (it was
+         * played to the end). Returns its container, or null when it isn't fully cached.
+         */
+        private suspend fun copyFromSongCache(
+            track: Track,
+            target: File,
+        ): DownloadFormat? {
+            val cache = mediaCaches?.get()?.songCache ?: return null
+            val key = TrackUriResolver.placeholderUri(track).toString()
+            val length = ContentMetadata.getContentLength(cache.getContentMetadata(key))
+            if (length <= 0 || !cache.isCached(key, 0, length)) return null
+            val progress = Progress(track.id).apply { total = length }
+            val source = CacheDataSource(cache, null)
+            val head = ByteArray(SNIFF_BYTES)
+            var headSize = 0
+            try {
+                source.open(DataSpec.Builder().setUri(key).setKey(key).build())
+                val buffer = ByteArray(BUFFER_SIZE)
+                var written = 0L
+                FileOutputStream(target).use { out ->
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val read = source.read(buffer, 0, buffer.size)
+                        if (read == C.RESULT_END_OF_INPUT) break
+                        if (headSize < SNIFF_BYTES) {
+                            val n = minOf(read, SNIFF_BYTES - headSize)
+                            System.arraycopy(buffer, 0, head, headSize, n)
+                            headSize += n
+                        }
+                        out.write(buffer, 0, read)
+                        written += read
+                        progress.add(read.toLong())
+                    }
+                }
+                if (written != length) {
+                    target.delete()
+                    return null
+                }
+            } finally {
+                runCatching { source.close() }
+            }
+            return DownloadFormat.sniff(head, headSize)
+        }
+
         /** A still-valid URL from the track, else a freshly resolved one. */
         private suspend fun resolveStreamUrl(
             track: Track,
@@ -212,24 +323,150 @@ class TrackDownloadManager
                 ?.takeIf { it.isNotBlank() }
         }
 
-        /** Downloads [url] into [target] and returns the container; throws so the caller retries. */
-        private fun fetch(
+        /**
+         * Downloads [url] into [target] and returns the container; throws so the caller retries.
+         *
+         * Why ranged and parallel: YouTube's servers send one long request at roughly playback speed, so a
+         * single GET of a 4-minute song took minutes. Short byte ranges are served at full speed, so the file
+         * is fetched as [CHUNK_BYTES] pieces, [PARALLEL_CHUNKS] at a time, each written at its own offset.
+         * A server that ignores the range (answers 200 with the whole file) is read in one go, as before.
+         */
+        private suspend fun fetch(
             songId: String,
             url: String,
             target: File,
         ): DownloadFormat {
-            val request = Request.Builder().url(url).build()
-            // Close the response on every path: an abandoned body keeps its socket out of the pool.
-            okHttpClient.newCall(request).execute().use { response ->
+            val progress = Progress(songId)
+            openRange(url, 0, CHUNK_BYTES - 1).use { response ->
                 val body = response.body
                 if (!response.isSuccessful || body == null) throw IOException("HTTP ${response.code}")
+                val format = DownloadFormat.from(response.header("Content-Type"), url)
+                val total = if (response.code == HTTP_PARTIAL) totalFromContentRange(response) else -1L
 
-                val expectedBytes = body.contentLength()
-                val writtenBytes = writeBody(songId, body.byteStream(), expectedBytes, target)
-                if (expectedBytes >= 0 && writtenBytes != expectedBytes) {
-                    throw IOException("Download incomplete ($writtenBytes/$expectedBytes bytes)")
+                if (response.code != HTTP_PARTIAL || total <= 0L) {
+                    // Whole file in one response (no range support, or unknown length).
+                    val expectedBytes = body.contentLength()
+                    progress.total = expectedBytes
+                    val written = writeBody(body.byteStream(), target, progress)
+                    if (expectedBytes >= 0 && written != expectedBytes) {
+                        throw IOException("Download incomplete ($written/$expectedBytes bytes)")
+                    }
+                    return format
                 }
-                return DownloadFormat.from(response.header("Content-Type"), url)
+
+                progress.total = total
+                RandomAccessFile(target, "rw").use { raf ->
+                    raf.setLength(total)
+                    val channel = raf.channel
+                    // First piece: already open, write it at 0.
+                    val firstLen = minOf(CHUNK_BYTES, total)
+                    writeRange(body.byteStream(), channel, 0, firstLen, progress)
+
+                    val ranges =
+                        (firstLen until total step CHUNK_BYTES).map { from ->
+                            from to minOf(from + CHUNK_BYTES, total) - 1
+                        }
+                    val next = AtomicInteger(0)
+                    coroutineScope {
+                        repeat(minOf(PARALLEL_CHUNKS, ranges.size)) {
+                            launch(Dispatchers.IO) {
+                                while (true) {
+                                    val (from, to) = ranges.getOrNull(next.getAndIncrement()) ?: break
+                                    downloadRange(url, channel, from, to, progress)
+                                }
+                            }
+                        }
+                    }
+                }
+                return format
+            }
+        }
+
+        /** One byte range, retried a few times on a dropped connection; rewrites the range from its start. */
+        private suspend fun downloadRange(
+            url: String,
+            channel: FileChannel,
+            from: Long,
+            to: Long,
+            progress: Progress,
+        ) {
+            var attempt = 0
+            while (true) {
+                coroutineContext.ensureActive()
+                val counted = AtomicLong(0)
+                try {
+                    openRange(url, from, to).use { response ->
+                        val body = response.body
+                        if (response.code != HTTP_PARTIAL || body == null) throw IOException("HTTP ${response.code}")
+                        writeRange(body.byteStream(), channel, from, to - from + 1, progress, counted)
+                    }
+                    return
+                } catch (e: IOException) {
+                    // The range is written again from its start: take its bytes back out of the progress.
+                    progress.add(-counted.get())
+                    if (++attempt >= RANGE_ATTEMPTS) throw e
+                }
+            }
+        }
+
+        private fun openRange(
+            url: String,
+            from: Long,
+            to: Long,
+        ): Response {
+            val request = Request.Builder().url(url).header("Range", "bytes=$from-$to").build()
+            return okHttpClient.newCall(request).execute()
+        }
+
+        /** `Content-Range: bytes 0-1048575/4031337` -> 4031337, or -1 when missing. */
+        private fun totalFromContentRange(response: Response): Long =
+            response.header("Content-Range")?.substringAfterLast('/')?.trim()?.toLongOrNull() ?: -1L
+
+        /** Writes exactly [length] bytes of [input] at [offset]; throws if the stream ends early. */
+        private suspend fun writeRange(
+            input: InputStream,
+            channel: FileChannel,
+            offset: Long,
+            length: Long,
+            progress: Progress,
+            counted: AtomicLong = AtomicLong(0),
+        ) {
+            val buffer = ByteArray(BUFFER_SIZE)
+            var written = 0L
+            input.use { stream ->
+                while (written < length) {
+                    coroutineContext.ensureActive()
+                    val want = minOf(buffer.size.toLong(), length - written).toInt()
+                    val read = stream.read(buffer, 0, want)
+                    if (read == -1) break
+                    val chunk = ByteBuffer.wrap(buffer, 0, read)
+                    var position = offset + written
+                    while (chunk.hasRemaining()) position += channel.write(chunk, position)
+                    written += read
+                    counted.addAndGet(read.toLong())
+                    progress.add(read.toLong())
+                }
+            }
+            if (written != length) throw IOException("Download incomplete ($written/$length bytes)")
+        }
+
+        /** Bytes received so far across all pieces; publishes whole-percent steps only. */
+        private inner class Progress(
+            private val songId: String,
+        ) {
+            @Volatile var total: Long = -1L
+            private val received = AtomicLong(0)
+            private val lastPercent = AtomicInteger(-1)
+
+            fun add(bytes: Long) {
+                val now = received.addAndGet(bytes)
+                val size = total
+                if (size <= 0) return
+                val percent = ((now * PERCENT) / size).toInt().coerceIn(0, PERCENT)
+                val previous = lastPercent.get()
+                if (percent > previous && lastPercent.compareAndSet(previous, percent)) {
+                    updateStatus(songId, DownloadStatus.Downloading(percent))
+                }
             }
         }
 
@@ -246,43 +483,26 @@ class TrackDownloadManager
         }
 
         /** Streams [input] into [target] and returns total bytes written. */
-        private fun writeBody(
-            songId: String,
+        private suspend fun writeBody(
             input: InputStream,
-            contentLength: Long,
             target: File,
-        ): Long =
-            input.use { inputStream ->
-                FileOutputStream(target).use { outputStream ->
-                    copyWithProgress(songId, inputStream, outputStream, contentLength)
-                }
-            }
-
-        private fun copyWithProgress(
-            songId: String,
-            inputStream: InputStream,
-            outputStream: OutputStream,
-            contentLength: Long,
+            progress: Progress,
         ): Long {
             val buffer = ByteArray(BUFFER_SIZE)
-            var totalBytesRead = 0L
-            var lastProgress = -1
-
-            while (true) {
-                val bytesRead = inputStream.read(buffer)
-                if (bytesRead == -1) break
-                outputStream.write(buffer, 0, bytesRead)
-                totalBytesRead += bytesRead
-
-                if (contentLength > 0) {
-                    val progress = ((totalBytesRead * PERCENT) / contentLength).toInt().coerceIn(0, PERCENT)
-                    if (progress != lastProgress) {
-                        lastProgress = progress
-                        updateStatus(songId, DownloadStatus.Downloading(progress))
+            var total = 0L
+            input.use { stream ->
+                FileOutputStream(target).use { out ->
+                    while (true) {
+                        coroutineContext.ensureActive()
+                        val read = stream.read(buffer)
+                        if (read == -1) break
+                        out.write(buffer, 0, read)
+                        total += read
+                        progress.add(read.toLong())
                     }
                 }
             }
-            return totalBytesRead
+            return total
         }
 
         /**
@@ -319,6 +539,25 @@ class TrackDownloadManager
 
                 private val DEFAULT = DownloadFormat("m4a", "audio/mp4")
 
+                /** The container from a file's first bytes (the streaming cache keeps no content type). */
+                fun sniff(
+                    head: ByteArray,
+                    size: Int,
+                ): DownloadFormat {
+                    fun at(
+                        offset: Int,
+                        vararg bytes: Int,
+                    ) = size >= offset + bytes.size && bytes.indices.all { head[offset + it] == bytes[it].toByte() }
+                    return when {
+                        at(0, 0x1A, 0x45, 0xDF, 0xA3) -> MIME_FORMATS.getValue("audio/webm")
+                        at(4, 'f'.code, 't'.code, 'y'.code, 'p'.code) -> DEFAULT
+                        at(0, 'O'.code, 'g'.code, 'g'.code, 'S'.code) -> MIME_FORMATS.getValue("audio/ogg")
+                        at(0, 'f'.code, 'L'.code, 'a'.code, 'C'.code) -> MIME_FORMATS.getValue("audio/flac")
+                        at(0, 'I'.code, 'D'.code, '3'.code) || at(0, 0xFF, 0xFB) -> MIME_FORMATS.getValue("audio/mpeg")
+                        else -> DEFAULT
+                    }
+                }
+
                 fun from(
                     contentType: String?,
                     url: String,
@@ -339,17 +578,16 @@ class TrackDownloadManager
             updateStatus(trackId, DownloadStatus.Idle)
         }
 
+        /**
+         * Removes one download: its record first (the song leaves Downloaded at once), then its files.
+         * Runs to the end even if the screen that asked is closed meanwhile.
+         */
         suspend fun deleteDownload(trackId: String) {
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.IO + NonCancellable) {
                 cancelDownload(trackId)
                 val entity = downloadedTrackDao.getById(trackId)
-                if (entity != null) {
-                    val file = File(entity.filePath)
-                    if (file.exists()) file.delete()
-                    downloadedTrackDao.deleteById(trackId)
-                } else {
-                    downloadedTrackDao.deleteById(trackId)
-                }
+                downloadedTrackDao.deleteById(trackId)
+                entity?.let { File(it.filePath).delete() }
                 val hash = sha256(trackId)
                 downloadsDir.listFiles { _, name -> name.startsWith(hash) }?.forEach { it.delete() }
                 trackTitles.remove(trackId)
@@ -358,14 +596,13 @@ class TrackDownloadManager
             }
         }
 
+        /**
+         * Removes every download: running ones are stopped, all records go (Downloaded empties at once), then
+         * every file in the downloads folder. Runs to the end even if the screen that asked is closed.
+         */
         suspend fun deleteAllDownloads() {
-            withContext(Dispatchers.IO) {
-                val all = downloadedTrackDao.getAll()
-                for (item in all) {
-                    cancelDownload(item.songId)
-                    val file = File(item.filePath)
-                    if (file.exists()) file.delete()
-                }
+            withContext(Dispatchers.IO + NonCancellable) {
+                activeJobs.keys.toList().forEach(::cancelDownload)
                 downloadedTrackDao.deleteAll()
                 downloadsDir.listFiles()?.forEach { it.delete() }
                 trackTitles.clear()
@@ -393,9 +630,19 @@ class TrackDownloadManager
         }
 
         private companion object {
-            const val BUFFER_SIZE = 8192
+            const val BUFFER_SIZE = 64 * 1024
             const val PERCENT = 100
             const val MAX_ATTEMPTS = 2
+            const val HTTP_PARTIAL = 206
+
+            /** 1 MB pieces: small enough that YouTube serves each one at full speed. */
+            const val CHUNK_BYTES = 1L * 1024 * 1024
+
+            /** Pieces fetched at the same time (a typical song is 3 to 8 pieces). */
+            const val PARALLEL_CHUNKS = 4
+            const val RANGE_ATTEMPTS = 3
+            const val SNIFF_BYTES = 12
+            const val LEFTOVER_AGE_MS = 60_000L
         }
     }
 

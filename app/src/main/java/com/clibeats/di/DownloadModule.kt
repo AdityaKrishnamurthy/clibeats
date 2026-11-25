@@ -3,6 +3,7 @@
 package com.clibeats.di
 
 import android.content.Context
+import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.data.local.dao.SongDao
@@ -26,6 +27,7 @@ object DownloadModule {
         streamResolver: dagger.Lazy<StreamResolver>,
         downloadedTrackDao: DownloadedTrackDao,
         songDao: SongDao,
+        mediaCaches: dagger.Lazy<MediaCaches>,
     ): TrackDownloadManager =
         TrackDownloadManager(
             context = context,
@@ -33,5 +35,6 @@ object DownloadModule {
             streamResolver = streamResolver,
             downloadedTrackDao = downloadedTrackDao,
             songDao = songDao,
+            mediaCaches = mediaCaches,
         )
 }
