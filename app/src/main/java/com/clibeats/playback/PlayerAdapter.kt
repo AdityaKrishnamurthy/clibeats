@@ -96,6 +96,25 @@ class PlayerAdapter
          */
         private val autoplayIds = mutableSetOf<String>()
 
+        /** The radio songs, for the Queue screen's "from radio" divider. */
+        private val _radioTrackIds = MutableStateFlow<Set<String>>(emptySet())
+        val radioTrackIds: StateFlow<Set<String>> = _radioTrackIds.asStateFlow()
+
+        /** Bumped whenever a new queue starts (or it is cleared): autoplay then starts a new radio. */
+        @Volatile var queueGeneration = 0
+            private set
+
+        private fun publishRadio() {
+            _radioTrackIds.value = autoplayIds.toSet()
+        }
+
+        /** A new queue: forget the old radio. */
+        private fun startNewQueue() {
+            autoplayIds.clear()
+            publishRadio()
+            queueGeneration++
+        }
+
         /** Song id -> downloaded file path, kept in step with the downloads table. */
         private val downloadedFiles = ConcurrentHashMap<String, String>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -251,7 +270,7 @@ class PlayerAdapter
             }
             unshuffledOrder = null
             trackList.clear()
-            autoplayIds.clear()
+            startNewQueue()
             trackList.add(track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -279,7 +298,7 @@ class PlayerAdapter
                 start = startIndex
             }
             trackList.clear()
-            autoplayIds.clear()
+            startNewQueue()
             trackList.addAll(ordered)
             syncQueue()
             val mediaItems = ordered.map { it.toMediaItem() }
@@ -291,7 +310,7 @@ class PlayerAdapter
 
         fun addToQueue(track: Track) {
             startPlaybackService()
-            autoplayIds.remove(track.id)
+            if (autoplayIds.remove(track.id)) publishRadio()
             val first = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
             // Songs you queue play before the autoplay suggestions (after the ones you queued earlier).
             val radioStart =
@@ -312,8 +331,31 @@ class PlayerAdapter
 
         /** Autoplay's related songs: queued at the end and remembered as the radio (see [addToQueue]). */
         fun addAutoplayTracks(tracks: List<Track>) {
+            if (tracks.isEmpty()) return
+            // The last song already finished (e.g. offline at the end of a playlist): carry on with the radio.
+            val endedAt = player.mediaItemCount.takeIf { player.playbackState == Player.STATE_ENDED }
             autoplayIds += tracks.map { it.id }
+            publishRadio()
             addAllToQueue(tracks)
+            if (endedAt != null && player.playWhenReady) {
+                player.seekTo(endedAt, 0L)
+                player.prepare()
+                player.play()
+            }
+        }
+
+        /** "Refresh radio": drops the radio songs still to come; autoplay then starts over from the current song. */
+        fun removeUpcomingRadio() {
+            val current = player.currentMediaItemIndex
+            for (i in trackList.indices.reversed()) {
+                if (i > current && trackList[i].id in autoplayIds && i < player.mediaItemCount) {
+                    trackList.removeAt(i)
+                    player.removeMediaItem(i)
+                }
+            }
+            startNewQueue()
+            syncQueue()
+            updateState()
         }
 
         fun addAllToQueue(tracks: List<Track>) {
@@ -355,7 +397,7 @@ class PlayerAdapter
         ) {
             if (tracks.isEmpty()) return
             trackList.clear()
-            autoplayIds.clear()
+            startNewQueue()
             trackList.addAll(tracks)
             syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
@@ -605,14 +647,14 @@ class PlayerAdapter
             val current = player.currentMediaItemIndex
             if (current !in trackList.indices) {
                 trackList.clear()
-                autoplayIds.clear()
+                startNewQueue()
                 player.clearMediaItems()
             } else {
                 if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
                 if (current > 0) player.removeMediaItems(0, current)
                 val keep = trackList[current]
                 trackList.clear()
-                autoplayIds.clear()
+                startNewQueue()
                 trackList.add(keep)
             }
             syncQueue()

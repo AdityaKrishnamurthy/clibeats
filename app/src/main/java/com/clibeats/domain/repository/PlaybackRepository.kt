@@ -6,6 +6,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface PlaybackRepository {
@@ -76,4 +77,11 @@ interface PlaybackRepository {
     fun setRepeatMode(mode: RepeatMode)
 
     fun toggleShuffle()
+
+    /** Songs autoplay's radio added to the queue (for the Queue screen's "from radio" divider). */
+    val radioTrackIds: StateFlow<Set<String>>
+        get() = MutableStateFlow(emptySet())
+
+    /** Drops the radio songs still to come and starts a new radio from the song playing now. */
+    fun refreshRadio() = Unit
 }

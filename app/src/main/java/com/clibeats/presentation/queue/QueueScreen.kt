@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -238,6 +241,22 @@ private fun SplitQueueView(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val autoplayOn by viewModel.autoplayEnabled.collectAsState()
+                    if (autoplayOn) {
+                        Text(
+                            text = "[ ↻ RADIO ]",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = CliBeatsAccent,
+                            modifier =
+                                Modifier
+                                    .semantics { contentDescription = "Restart the radio from the song playing now" }
+                                    .clickable {
+                                        shuffleCount++
+                                        viewModel.onRefreshRadio()
+                                    }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Text(
                         text = "[ SHUFFLE ]",
                         style = MaterialTheme.typography.labelSmall,
@@ -292,6 +311,24 @@ private fun SplitQueueView(
     }
 }
 
+/** `── from radio ──` above the songs autoplay added. */
+@Suppress("FunctionNaming")
+@Composable
+private fun RadioDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = CliBeatsTextSecondary.copy(alpha = 0.4f))
+        Text(
+            text = "  ∞ FROM RADIO  ",
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = CliBeatsTextSecondary.copy(alpha = 0.4f))
+    }
+}
+
 /**
  * Up Next. Drag a song's ≡ handle, or hold its cover and drag, to move it; the playing song (shown above)
  * stays put. The move is sent to the player once, when the finger lifts, so playback isn't disturbed.
@@ -305,6 +342,9 @@ private fun ReorderableUpcomingList(
     onRemove: (Int, Track) -> Unit,
     scrollToTopRequest: Int,
 ) {
+    val radioIds by viewModel.radioTrackIds.collectAsState()
+    // The first radio song gets a "from radio" line above it: your queued songs above, suggestions below.
+    val firstRadio = upcoming.indexOfFirst { it.id in radioIds }
     ReorderableList(
         items = upcoming,
         itemId = { it.id },
@@ -312,41 +352,44 @@ private fun ReorderableUpcomingList(
         scrollToTopRequest = scrollToTopRequest,
     ) { track, index ->
         val queueIndex = index + startIndex
-        SongTableRow(
-            trackTitle = track.title,
-            artist = track.artist,
-            duration = formatDuration(track.durationMs),
-            index = index + 2,
-            artworkContent = {
-                TrackArtwork(
-                    artworkUrl = track.artworkUrl,
-                    size = 32,
-                    modifier = Modifier.artworkHandle { viewModel.onTrackClick(track, queueIndex) },
-                )
-            },
-            onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
-            onSwipeRight = { onRemove(queueIndex, track) },
-            swipeRightLabel = "✕ REMOVE",
-            // Position counted from now (playing = 1), in front of the cover.
-            leading = {
-                Text(
-                    text = "${index + 2}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    modifier = Modifier.width(24.dp).padding(end = 6.dp),
-                )
-            },
-            actions = { DragHandle() },
-            // Swipe can't be done with TalkBack: offer removal as a spoken action instead.
-            accessibilityActions =
-                listOf(
-                    CustomAccessibilityAction("Remove from queue") {
-                        onRemove(queueIndex, track)
-                        true
-                    },
-                ),
-        )
+        Column {
+            if (index == firstRadio) RadioDivider()
+            SongTableRow(
+                trackTitle = track.title,
+                artist = track.artist,
+                duration = formatDuration(track.durationMs),
+                index = index + 2,
+                artworkContent = {
+                    TrackArtwork(
+                        artworkUrl = track.artworkUrl,
+                        size = 32,
+                        modifier = Modifier.artworkHandle { viewModel.onTrackClick(track, queueIndex) },
+                    )
+                },
+                onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
+                onSwipeRight = { onRemove(queueIndex, track) },
+                swipeRightLabel = "✕ REMOVE",
+                // Position counted from now (playing = 1), in front of the cover.
+                leading = {
+                    Text(
+                        text = "${index + 2}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CliBeatsTextSecondary,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.width(24.dp).padding(end = 6.dp),
+                    )
+                },
+                actions = { DragHandle() },
+                // Swipe can't be done with TalkBack: offer removal as a spoken action instead.
+                accessibilityActions =
+                    listOf(
+                        CustomAccessibilityAction("Remove from queue") {
+                            onRemove(queueIndex, track)
+                            true
+                        },
+                    ),
+            )
+        }
     }
 }

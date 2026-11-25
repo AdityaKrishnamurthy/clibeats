@@ -22,11 +22,19 @@
 
 ## Autoplay and queue
 
+- **Radio that stays on track.** Autoplay now keeps to the radio of the song you started with, page after
+  page, like the YouTube Music app, instead of starting over from each new song (which let it wander into
+  other languages). Songs in the same language as your song come first; songs in other languages only play
+  when there are none left. A song's language comes from its script (Kannada, Japanese, ...) or a language
+  in its title, and for titles in English letters, from YouTube Music's own suggestions.
+- **Queue:** a `∞ FROM RADIO` line shows where your songs end and the suggestions begin, and `[ ↻ RADIO ]`
+  starts a fresh radio from the song playing now.
 - **A new song starts its own radio.** Play a song from Search, Home or Library and the suggestions follow
   that song (a Kannada song after a Japanese radio gets Kannada suggestions).
 - **Songs you add play next.** While a suggestion plays, **Add to queue** puts your song right after it,
   ahead of the other suggestions.
-- **Offline at the end of a playlist:** autoplay waits for the connection and then adds suggestions.
+- **Offline at the end of a playlist:** autoplay waits for the connection, adds suggestions and carries on
+  playing, even if the last song already finished.
 
 ## Smaller fixes
 

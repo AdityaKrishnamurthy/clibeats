@@ -29,6 +29,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
@@ -92,7 +93,7 @@ class RadioAutoplayTest {
             val relatedTrack = testTrack("3")
 
             queueFlow.value = listOf(track1, track2)
-            whenever(musicProvider.relatedTracks("1", 15))
+            whenever(musicProvider.relatedTracks(eq("1"), any()))
                 .thenReturn(ProviderResult.Success(listOf(relatedTrack)))
             whenever(historyRepository.getRecentlyPlayedTracks(25))
                 .thenReturn(flowOf(emptyList()))

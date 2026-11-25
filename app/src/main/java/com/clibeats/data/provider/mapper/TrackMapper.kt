@@ -157,6 +157,11 @@ fun BrowseResponse.playlistTracks(): List<Track> {
         .distinctBy { it.id }
 }
 
+/** Token for the next page of a radio (`nextRadioContinuationData`), or null on the last page. */
+fun JsonElement.radioContinuation(): String? =
+    findAll(this, "nextRadioContinuationData").firstNotNullOfOrNull { it.nav("continuation")?.safeString() }
+        ?: findAll(this, "nextContinuationData").firstNotNullOfOrNull { it.nav("continuation")?.safeString() }
+
 /**
  * Parse InnerTube next (radio) response into a list of Track domain objects.
  * Looks for playlistPanelVideoRenderer items.

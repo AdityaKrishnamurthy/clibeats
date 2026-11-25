@@ -80,6 +80,14 @@ class QueueViewModel
             playbackRepository.clearQueue()
         }
 
+        /** Songs autoplay's radio added (shown below a "from radio" divider). */
+        val radioTrackIds: StateFlow<Set<String>> = playbackRepository.radioTrackIds
+
+        /** [ RADIO ]: drop the radio songs to come and start a new radio from the song playing now. */
+        fun onRefreshRadio() {
+            playbackRepository.refreshRadio()
+        }
+
         fun onShuffle() {
             playbackRepository.toggleShuffle()
         }
