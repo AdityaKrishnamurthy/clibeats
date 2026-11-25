@@ -9,6 +9,8 @@ import com.clibeats.data.backup.LibrarySnapshotManager
 import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.cache.MediaCaches
+import com.clibeats.data.download.TrackDownloadManager
+import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -44,8 +47,29 @@ class SettingsViewModel
         private val localMusicScanner: LocalMusicScanner? = null,
         private val mediaCaches: MediaCaches? = null,
         private val playbackRepository: PlaybackRepository? = null,
+        private val downloadManager: TrackDownloadManager? = null,
     ) : ViewModel() {
         val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
+
+        val downloadedSongItems: StateFlow<List<DownloadedSongItem>> =
+            (downloadManager?.getDownloadedSongItems() ?: flowOf(emptyList()))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        val downloadedBytes: StateFlow<Long> =
+            (downloadManager?.getTotalDownloadedSizeBytes() ?: flowOf(0L))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
+
+        fun deleteDownload(songId: String) {
+            viewModelScope.launch {
+                downloadManager?.deleteDownload(songId)
+            }
+        }
+
+        fun clearAllDownloads() {
+            viewModelScope.launch {
+                downloadManager?.deleteAllDownloads()
+            }
+        }
 
         val artworkCacheMb: StateFlow<Int> =
             appPreferences.artworkCacheMb.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 128)

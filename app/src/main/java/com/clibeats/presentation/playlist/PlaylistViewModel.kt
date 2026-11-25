@@ -4,6 +4,7 @@ package com.clibeats.presentation.playlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
@@ -36,11 +37,15 @@ class PlaylistViewModel
         private val libraryRepository: LibraryRepository? = null,
         private val historyRepository: HistoryRepository? = null,
         private val appPreferences: AppPreferences? = null,
+        private val downloadManager: TrackDownloadManager? = null,
     ) : ViewModel() {
         private val _selectedPlaylistId = MutableStateFlow<String?>(null)
 
         private val favorites: Flow<List<Track>> =
             libraryRepository?.getLikedSongs() ?: flowOf(emptyList())
+
+        private val downloadedSongs: Flow<List<Track>> =
+            downloadManager?.getDownloadedSongs() ?: flowOf(emptyList())
 
         // Most Played has its own clear / per-song reset times; the listening history itself is kept.
         @OptIn(ExperimentalCoroutinesApi::class)
@@ -55,31 +60,54 @@ class PlaylistViewModel
                         }
             }
 
+        private data class InputsPart(
+            val playlists: List<Playlist>,
+            val selectedId: String?,
+            val favorites: List<Track>,
+            val mostPlayed: List<Track>,
+            val downloaded: List<Track>,
+        )
+
         private data class Inputs(
             val playlists: List<Playlist>,
             val selectedId: String?,
             val favorites: List<Track>,
             val mostPlayed: List<Track>,
+            val downloaded: List<Track>,
             val covers: Map<String, String?>,
         )
 
         // Selection is part of the combine so opening a playlist updates immediately.
         val uiState: StateFlow<PlaylistUiState> =
             combine(
-                playlistRepository.getAllPlaylistsAsFlow(),
-                _selectedPlaylistId,
-                favorites,
-                mostPlayed,
+                combine(
+                    playlistRepository.getAllPlaylistsAsFlow(),
+                    _selectedPlaylistId,
+                    favorites,
+                    mostPlayed,
+                    downloadedSongs,
+                    ::InputsPart,
+                ),
                 playlistRepository.getPlaylistCoversAsFlow(),
-                ::Inputs,
-            ).flatMapLatest { input ->
+            ) { part, covers ->
+                Inputs(
+                    playlists = part.playlists,
+                    selectedId = part.selectedId,
+                    favorites = part.favorites,
+                    mostPlayed = part.mostPlayed,
+                    downloaded = part.downloaded,
+                    covers = covers,
+                )
+            }.flatMapLatest { input ->
                 val base =
                     PlaylistUiState.Success(
                         playlists = input.playlists,
                         favoritesCount = input.favorites.size,
                         mostPlayedCount = input.mostPlayed.size,
+                        downloadedCount = input.downloaded.size,
                         favoritesCover = input.favorites.firstNotNullOfOrNull { it.artworkUrl },
                         mostPlayedCover = input.mostPlayed.firstNotNullOfOrNull { it.artworkUrl },
+                        downloadedCover = input.downloaded.firstNotNullOfOrNull { it.artworkUrl },
                         covers = input.covers,
                     )
                 when (input.selectedId) {
@@ -87,6 +115,8 @@ class PlaylistViewModel
                     FAVORITES_ID -> flowOf(base.copy(selectedPlaylistTracks = input.favorites, isFavoritesOpen = true))
                     MOST_PLAYED_ID ->
                         flowOf(base.copy(selectedPlaylistTracks = input.mostPlayed, isMostPlayedOpen = true))
+                    DOWNLOADED_ID ->
+                        flowOf(base.copy(selectedPlaylistTracks = input.downloaded, isDownloadedOpen = true))
                     else ->
                         playlistRepository.getSongsForPlaylistAsFlow(input.selectedId).map { songs ->
                             base.copy(
@@ -248,9 +278,26 @@ class PlaylistViewModel
             }
         }
 
+        fun openDownloaded() {
+            _selectedPlaylistId.value = DOWNLOADED_ID
+        }
+
+        fun removeFromDownloaded(track: Track) {
+            viewModelScope.launch {
+                downloadManager?.deleteDownload(track.id)
+            }
+        }
+
+        fun clearAllDownloaded() {
+            viewModelScope.launch {
+                downloadManager?.deleteAllDownloads()
+            }
+        }
+
         private companion object {
             const val FAVORITES_ID = "__favorites__"
             const val MOST_PLAYED_ID = "__most_played__"
+            const val DOWNLOADED_ID = "__downloaded__"
             const val MOST_PLAYED_LIMIT = 50
         }
     }

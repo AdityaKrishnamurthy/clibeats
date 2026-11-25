@@ -1,7 +1,11 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.presentation.player
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.download.DownloadStatus
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.Playlist
@@ -49,6 +53,7 @@ class PlayerViewModel
         private val libraryRepository: LibraryRepository? = null,
         private val audioOutputMonitor: AudioOutputMonitor? = null,
         private val notices: Notices? = null,
+        private val downloadManager: TrackDownloadManager? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
@@ -117,6 +122,45 @@ class PlayerViewModel
                     emit(message)
                     delay(NOTICE_MS)
                     emit(null)
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
+
+        /** Live progress, completion, and failure state for offline track downloads. */
+        @Suppress("OPT_IN_USAGE")
+        val downloadBanner: StateFlow<DownloadBanner?> =
+            (downloadManager?.activeDownload ?: emptyFlow())
+                .transformLatest { active ->
+                    if (active == null) {
+                        emit(null)
+                        return@transformLatest
+                    }
+                    when (val status = active.status) {
+                        is DownloadStatus.Downloading -> {
+                            val pct = status.progressPercent
+                            val suffix = if (pct > 0) " \u00b7 $pct%" else ""
+                            emit(
+                                DownloadBanner(
+                                    text = "Downloading \u201c${active.title}\u201d$suffix",
+                                    progressPercent = pct,
+                                ),
+                            )
+                        }
+                        is DownloadStatus.Completed -> {
+                            emit(DownloadBanner(text = "Downloaded \u201c${active.title}\u201d"))
+                            delay(NOTICE_MS)
+                            emit(null)
+                        }
+                        is DownloadStatus.Failed -> {
+                            emit(
+                                DownloadBanner(
+                                    text = "Download failed: \u201c${active.title}\u201d (${status.message})",
+                                    isError = true,
+                                ),
+                            )
+                            delay(MESSAGE_MS)
+                            emit(null)
+                        }
+                        DownloadStatus.Idle -> emit(null)
+                    }
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 
         fun playTrack(track: Track) {
@@ -227,4 +271,10 @@ enum class HintTarget { REPEAT, SHUFFLE }
 data class ButtonHint(
     val target: HintTarget,
     val text: String,
+)
+
+data class DownloadBanner(
+    val text: String,
+    val progressPercent: Int? = null,
+    val isError: Boolean = false,
 )

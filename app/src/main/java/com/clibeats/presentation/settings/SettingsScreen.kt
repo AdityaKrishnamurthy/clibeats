@@ -26,8 +26,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -60,6 +63,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -68,6 +72,8 @@ import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
+import com.clibeats.presentation.theme.CliBeatsTextPrimary
+import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.update.UpdateSection
@@ -98,7 +104,6 @@ fun SettingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val exchangeMessage by viewModel.exchangeMessage.collectAsState()
-    val autoQueueRelated by viewModel.autoQueueRelated.collectAsState()
     val localFolders by viewModel.localMusicFolders.collectAsState()
     val scanStatus by viewModel.scanStatus.collectAsState()
     // [ x ] removes a whole music folder, so it asks first (an accidental tap used to drop the folder at once).
@@ -151,6 +156,90 @@ fun SettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmClearBackups = false }) { Text("CANCEL") }
+            },
+        )
+    }
+    var confirmClearDownloads by remember { mutableStateOf(false) }
+    if (confirmClearDownloads) {
+        AlertDialog(
+            onDismissRequest = { confirmClearDownloads = false },
+            title = { Text("Delete all downloaded songs?") },
+            text = {
+                Text(
+                    "Deletes all songs stored offline by CLIBeats. Downloaded files will be removed from your device.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClearDownloads = false
+                    viewModel.clearAllDownloads()
+                }) { Text("DELETE ALL", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearDownloads = false }) { Text("CANCEL") }
+            },
+        )
+    }
+    var showManageDownloads by remember { mutableStateOf(false) }
+    if (showManageDownloads) {
+        val downloadedItems by viewModel.downloadedSongItems.collectAsState()
+        AlertDialog(
+            onDismissRequest = { showManageDownloads = false },
+            title = { Text("> storage --downloads (${downloadedItems.size})") },
+            text = {
+                if (downloadedItems.isEmpty()) {
+                    Text("No downloaded songs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 320.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(downloadedItems, key = { it.songId }) { item ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = CliBeatsTextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = "${item.artist} · ${item.sizeBytes / BYTES_PER_MB} MB",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = CliBeatsTextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Text(
+                                    text = "[ REMOVE ]",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier =
+                                        Modifier
+                                            .clickable { viewModel.deleteDownload(item.songId) }
+                                            .padding(4.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                if (downloadedItems.isNotEmpty()) {
+                    TextButton(onClick = {
+                        showManageDownloads = false
+                        confirmClearDownloads = true
+                    }) { Text("CLEAR ALL", color = MaterialTheme.colorScheme.error) }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showManageDownloads = false }) { Text("CLOSE") }
             },
         )
     }
@@ -308,36 +397,6 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Playback ───────────────────────────────────────────────
-        TuiBlock(title = "Playback", isActive = true) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.setAutoQueueRelated(!autoQueueRelated) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "AUTO-QUEUE RELATED SONGS",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accent,
-                    )
-                    Text(
-                        text = "When off, tapping a song plays only that song (no suggestions queued after it)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text(
-                    text = if (autoQueueRelated) "[ ON ]" else "[ OFF ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (autoQueueRelated) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-
         // ── Section: Active Music Provider ──────────────────────────────────
         TuiBlock(title = "Active Provider", isActive = true) {
             Column {
@@ -366,9 +425,11 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Storage (two independent caches) ───────────────────────
+        // ── Section: Storage (caches + offline downloads) ───────────────────
         val cacheUsage by viewModel.cacheUsage.collectAsState()
         val artworkCacheMb by viewModel.artworkCacheMb.collectAsState()
+        val downloadedBytes by viewModel.downloadedBytes.collectAsState()
+        val downloadedItems by viewModel.downloadedSongItems.collectAsState()
         TuiBlock(title = "Storage", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 CacheRow(
@@ -388,6 +449,37 @@ fun SettingsScreen(
                     onSelect = viewModel::setSongCacheMb,
                     onClear = viewModel::clearSongCache,
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "DOWNLOADS  ${downloadedBytes / BYTES_PER_MB} MB (${downloadedItems.size} songs)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "[ MANAGE ]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = accent,
+                        modifier =
+                            Modifier
+                                .clickable(role = Role.Button) { showManageDownloads = true }
+                                .padding(horizontal = 6.dp, vertical = 8.dp),
+                    )
+                    if (downloadedItems.isNotEmpty()) {
+                        Text(
+                            text = "[ CLEAR ]",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier =
+                                Modifier
+                                    .clickable(role = Role.Button) { confirmClearDownloads = true }
+                                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                        )
+                    }
+                }
             }
         }
 

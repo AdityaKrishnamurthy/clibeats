@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
@@ -48,11 +50,13 @@ import com.clibeats.presentation.component.ARTWORK_FULL_PX
 import com.clibeats.presentation.component.PlayerBar
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.presentation.player.DownloadBanner
 import com.clibeats.presentation.player.NowPlayingScreen
 import com.clibeats.presentation.player.PlayerViewModel
-import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDestructive
+import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
+import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.update.UpdateStatusBar
 
 /**
@@ -146,8 +150,16 @@ private fun PlayerBarHost(
     val playerMessage by playerViewModel.playerMessage.collectAsState()
     val queueSize = playerViewModel.queue.collectAsState().value.size
     val notice by playerViewModel.notice.collectAsState()
-    // Errors (a song that couldn't play) win over confirmations like "Added to queue".
-    PlayerMessageLine(playerMessage ?: notice, isError = playerMessage != null)
+    val downloadBanner by playerViewModel.downloadBanner.collectAsState()
+    // Errors (a song that couldn't play) win; live download progress supersedes plain "Downloading ..." notices.
+    val banner =
+        when {
+            playerMessage != null -> DownloadBanner(text = playerMessage!!, isError = true)
+            notice != null && (downloadBanner == null || !notice!!.startsWith("Downloading ")) ->
+                DownloadBanner(text = notice!!)
+            else -> downloadBanner
+        }
+    PlayerMessageLine(banner)
     // Prefetch the high-res cover as soon as a track starts, so Now Playing opens with it ready.
     val context = LocalContext.current
     val artworkUrl = playbackState.currentTrack?.artworkUrl
@@ -185,35 +197,55 @@ private fun PlayerBarHost(
     )
 }
 
-/** One-line notice above the player bar, e.g. a song that couldn't be played and was skipped. */
+/** One-line notice above the player bar, e.g. playback errors, queue confirmations, or download progress. */
 @Suppress("FunctionNaming")
 @Composable
-private fun PlayerMessageLine(
-    message: String?,
-    isError: Boolean,
-) {
-    // Keep the last text while fading out so the line doesn't empty mid-animation.
-    val last = remember { arrayOf("" to true) }
-    message?.let { last[0] = it to isError }
-    val (text, error) = last[0]
-    val color = if (error) CliBeatsDestructive else CliBeatsAccent
-    AnimatedVisibility(visible = message != null, enter = fadeIn(), exit = fadeOut()) {
-        Text(
-            text = if (error) "! $text" else "> $text",
-            style = MaterialTheme.typography.labelMedium,
-            color = color,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+private fun PlayerMessageLine(banner: DownloadBanner?) {
+    // Keep the last banner while fading out so the line doesn't empty mid-animation.
+    val last = remember { arrayOf(DownloadBanner(text = "", isError = true)) }
+    banner?.let { last[0] = it }
+    val active = last[0]
+    val accent = LocalAccentColor.current
+    val color = if (active.isError) CliBeatsDestructive else accent
+    AnimatedVisibility(visible = banner != null, enter = fadeIn(), exit = fadeOut()) {
+        Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .semantics { liveRegion = LiveRegionMode.Polite }
                     .background(CliBeatsSurface)
-                    .border(1.dp, color)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-        )
+                    .border(1.dp, color),
+        ) {
+            Text(
+                text = if (active.isError) "! ${active.text}" else "> ${active.text}",
+                style = MaterialTheme.typography.labelMedium,
+                color = color,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+            val pct = active.progressPercent
+            if (pct != null) {
+                if (pct > 0) {
+                    LinearProgressIndicator(
+                        progress = { pct / PROGRESS_SCALE },
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = accent,
+                        trackColor = CliBeatsDivider,
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth().height(2.dp),
+                        color = accent,
+                        trackColor = CliBeatsDivider,
+                    )
+                }
+            }
+        }
     }
 }
+
+private const val PROGRESS_SCALE = 100f
 
 private fun NavigationSuiteScope.buildNavItems(
     selectedDestination: NavDestination,

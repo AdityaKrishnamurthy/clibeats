@@ -297,7 +297,9 @@ class PlaybackRepositoryImpl
             val candidates = related.filter { it.id !in existingIds && it.id !in recentHistory }
             if (candidates.isNotEmpty()) {
                 withContext(Dispatchers.Main) {
-                    playerAdapter.addAllToQueue(candidates)
+                    if (playerAdapter.playbackState.value.currentTrack?.id == current.id) {
+                        playerAdapter.addAllToQueue(candidates)
+                    }
                 }
             }
         }

@@ -25,9 +25,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
-import androidx.compose.material.icons.outlined.PlaylistPlay
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -90,6 +90,7 @@ fun SearchScreen(
         }
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
@@ -150,6 +151,7 @@ fun SearchScreen(
                 } else {
                     RecentSearchesList(
                         tracks = recentSearches,
+                        downloadedIds = downloadedIds,
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
                         onClear = viewModel::clearRecentSearches,
                         onAddToQueue = { track ->
@@ -175,6 +177,7 @@ fun SearchScreen(
                     } else {
                         SearchResultsList(
                             tracks = currentState.tracks,
+                            downloadedIds = downloadedIds,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = { track ->
                                 trackActions.addToQueue(track)
@@ -211,6 +214,7 @@ fun SearchScreen(
 @Composable
 private fun RecentSearchesList(
     tracks: List<Track>,
+    downloadedIds: Set<String> = emptySet(),
     onTrackClick: (Int) -> Unit,
     onClear: () -> Unit,
     onAddToQueue: (Track) -> Unit,
@@ -239,6 +243,7 @@ private fun RecentSearchesList(
                 trackTitle = track.title,
                 artist = track.artist,
                 duration = formatDuration(track.durationMs),
+                isDownloaded = track.id in downloadedIds,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
@@ -326,6 +331,7 @@ private fun SearchNoResultsState() {
 @Composable
 private fun SearchResultsList(
     tracks: List<Track>,
+    downloadedIds: Set<String> = emptySet(),
     onTrackClick: (Int) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
@@ -346,6 +352,7 @@ private fun SearchResultsList(
                 },
                 duration = formatDuration(track.durationMs),
                 index = index + 1,
+                isDownloaded = track.id in downloadedIds,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
@@ -358,7 +365,7 @@ private fun SearchResultsList(
                             modifier = Modifier.size(28.dp),
                         ) {
                             Icon(
-                                imageVector = Icons.Outlined.PlaylistPlay,
+                                imageVector = Icons.AutoMirrored.Outlined.PlaylistPlay,
                                 contentDescription = "Play next",
                                 tint = CliBeatsTextSecondary,
                                 modifier = Modifier.size(18.dp),

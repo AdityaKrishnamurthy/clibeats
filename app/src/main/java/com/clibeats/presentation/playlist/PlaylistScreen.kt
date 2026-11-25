@@ -105,6 +105,7 @@ fun PlaylistScreen(
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
     var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
     // Import from Spotify opens over the playlist list; saveable so rotating doesn't drop you out of it.
     var showImport by rememberSaveable { mutableStateOf(false) }
     if (showImport) {
@@ -158,6 +159,7 @@ fun PlaylistScreen(
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.FAVORITES },
+                            downloadedIds = downloadedIds,
                         )
                     }
                     s.isMostPlayedOpen -> {
@@ -176,6 +178,28 @@ fun PlaylistScreen(
                             onLongPress = { addToPlaylistTrack = it },
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.MOST_PLAYED },
+                            downloadedIds = downloadedIds,
+                        )
+                    }
+                    s.isDownloadedOpen -> {
+                        BackHandler { viewModel.selectPlaylist(null) }
+                        PlaylistDetailView(
+                            title = "Downloaded",
+                            subtitle = "${tracks.size} tracks · offline",
+                            tracks = tracks,
+                            emptyText =
+                                "No downloaded songs yet. " +
+                                    "Long-press any song and select 'Download for offline'.",
+                            onBackClick = { viewModel.selectPlaylist(null) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
+                            onRemoveClick = viewModel::removeFromDownloaded,
+                            removeLabel = "Remove download",
+                            onSwipeRight = trackActions::addToQueue,
+                            onSwipeLeft = trackActions::favorite,
+                            onLongPress = { addToPlaylistTrack = it },
+                            headerAction =
+                                clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.DOWNLOADED },
+                            downloadedIds = downloadedIds,
                         )
                     }
                     selected != null -> {
@@ -223,6 +247,7 @@ fun PlaylistScreen(
                                 } else {
                                     null
                                 },
+                            downloadedIds = downloadedIds,
                         )
                     }
                     else ->
@@ -233,6 +258,7 @@ fun PlaylistScreen(
                             onViewModeChange = viewModel::setViewMode,
                             onFavoritesClick = viewModel::openFavorites,
                             onMostPlayedClick = viewModel::openMostPlayed,
+                            onDownloadedClick = viewModel::openDownloaded,
                             onCreateClick = { showCreateDialog = true },
                             onImportClick = { showImport = true },
                             onPlaylistClick = { viewModel.selectPlaylist(it.id) },
@@ -276,20 +302,36 @@ fun PlaylistScreen(
         AlertDialog(
             onDismissRequest = { pendingClear = null },
             modifier = Modifier.border(1.dp, CliBeatsAccent),
-            title = { Text(if (target == ClearTarget.FAVORITES) "> clear --favorites" else "> clear --most-played") },
+            title = {
+                Text(
+                    when (target) {
+                        ClearTarget.FAVORITES -> "> clear --favorites"
+                        ClearTarget.MOST_PLAYED -> "> clear --most-played"
+                        ClearTarget.DOWNLOADED -> "> clear --downloaded"
+                    },
+                )
+            },
             text = {
                 Text(
-                    if (target == ClearTarget.FAVORITES) {
-                        "Remove every song from ♥ Favorites?"
-                    } else {
-                        "Reset Most Played? It starts counting again from now. Your listening history is kept."
+                    when (target) {
+                        ClearTarget.FAVORITES -> "Remove every song from ♥ Favorites?"
+                        ClearTarget.MOST_PLAYED ->
+                            "Reset Most Played? It starts counting again from now. " +
+                                "Your listening history is kept."
+                        ClearTarget.DOWNLOADED ->
+                            "Delete all downloaded songs from offline storage? " +
+                                "Files will be removed from your device."
                     },
                 )
             },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        if (target == ClearTarget.FAVORITES) viewModel.clearFavorites() else viewModel.clearMostPlayed()
+                        when (target) {
+                            ClearTarget.FAVORITES -> viewModel.clearFavorites()
+                            ClearTarget.MOST_PLAYED -> viewModel.clearMostPlayed()
+                            ClearTarget.DOWNLOADED -> viewModel.clearAllDownloaded()
+                        }
                         pendingClear = null
                     },
                 ) { Text("Clear all", color = MaterialTheme.colorScheme.error) }
@@ -337,6 +379,7 @@ private fun PlaylistDetailView(
     onChangeCoverClick: (() -> Unit)? = null,
     /** Non-null: rows get a ≡ handle to drag them into a new order (long-press stays "add to playlist"). */
     onReorder: ((List<Track>) -> Unit)? = null,
+    downloadedIds: Set<String> = emptySet(),
 ) {
     // A list you can reorder is re-saved in the picked order (and can still be dragged after). Fixed lists
     // (Most Played, M3U files) are only sorted on screen, until you leave them.
@@ -429,6 +472,7 @@ private fun PlaylistDetailView(
                     artist = track.artist,
                     duration = formatDuration(track.durationMs),
                     index = index + 1,
+                    isDownloaded = track.id in downloadedIds,
                     // Hold the cover (or drag ≡) to move the song; a quick tap on the cover still plays it.
                     artworkContent = {
                         TrackArtwork(
@@ -465,6 +509,7 @@ private fun PlaylistDetailView(
                         artist = track.artist,
                         duration = formatDuration(track.durationMs),
                         index = index + 1,
+                        isDownloaded = track.id in downloadedIds,
                         artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                         onClick = { onTrackClick(shown, index) },
                         onSwipeRight = { onSwipeRight(track) },
@@ -611,7 +656,7 @@ private fun ChangeCoverDialog(
     )
 }
 
-private enum class ClearTarget { FAVORITES, MOST_PLAYED }
+private enum class ClearTarget { FAVORITES, MOST_PLAYED, DOWNLOADED }
 
 /** Orders offered by the sort button in a playlist. */
 internal enum class SongSort(

@@ -108,7 +108,8 @@ class HomeViewModel
                 if (appPreferences.autoQueueRelated.first()) {
                     repo.setQueue(tracks, index)
                 } else {
-                    repo.playTrack(tracks[index])
+                    // Replace queue with just this song so autoplay re-seeds from the new context.
+                    repo.setQueue(listOf(tracks[index]), 0)
                 }
             }
         }

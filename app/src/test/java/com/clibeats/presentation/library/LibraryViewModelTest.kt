@@ -17,6 +17,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -73,5 +74,17 @@ class LibraryViewModelTest {
             assertThat(success.artists[0].name).isEqualTo("Artist A")
             assertThat(success.artists[0].trackCount).isEqualTo(2)
             assertThat(success.albums).hasSize(2)
+        }
+
+    @Test
+    fun `onTrackClick replaces queue with single track when autoQueueRelated is false`() =
+        runTest {
+            val t1 = Track("1", "Song 1", "Artist A", "Album X", 180000L, null, null, "local")
+            val t2 = Track("2", "Song 2", "Artist A", "Album Y", 200000L, null, null, "local")
+
+            viewModel.onTrackClick(t2, listOf(t1, t2), 1)
+            testDispatcher.scheduler.runCurrent()
+
+            verify(playbackRepository).setQueue(listOf(t2), 0)
         }
 }

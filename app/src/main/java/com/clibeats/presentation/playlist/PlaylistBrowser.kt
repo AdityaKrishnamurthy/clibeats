@@ -114,6 +114,7 @@ internal fun PlaylistBrowser(
     onViewModeChange: (PlaylistViewMode) -> Unit,
     onFavoritesClick: () -> Unit,
     onMostPlayedClick: () -> Unit,
+    onDownloadedClick: () -> Unit = {},
     onCreateClick: () -> Unit,
     onImportClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
@@ -142,6 +143,16 @@ internal fun PlaylistBrowser(
                 glyph = "▲",
                 pinned = true,
                 onClick = onMostPlayedClick,
+            ),
+            PlaylistEntry(
+                key = "downloaded",
+                title = "Downloaded",
+                count = state.downloadedCount,
+                description = "In-app downloaded songs",
+                coverUrl = state.downloadedCover,
+                glyph = "↓",
+                pinned = true,
+                onClick = onDownloadedClick,
             ),
         )
     val own =

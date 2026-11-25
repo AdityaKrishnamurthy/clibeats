@@ -1,5 +1,10 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.presentation.player
 
+import com.clibeats.data.download.ActiveDownload
+import com.clibeats.data.download.DownloadStatus
+import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.repository.PlaybackRepository
@@ -7,9 +12,13 @@ import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Before
@@ -100,4 +109,29 @@ class PlayerViewModelTest {
         verify(repository).setPauseAtEndOfTrack(false)
         assertThat(viewModel.sleepTimer.value).isEqualTo(SleepTimer.Off)
     }
+
+    @Test
+    fun downloadBanner_tracksProgressAndSurfacesFailures() =
+        runTest {
+            val active = MutableStateFlow<ActiveDownload?>(null)
+            val downloadManager: TrackDownloadManager = mock()
+            whenever(downloadManager.activeDownload).thenReturn(active)
+            val vm = PlayerViewModel(repository, downloadManager = downloadManager)
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                vm.downloadBanner.collect()
+            }
+
+            active.value = ActiveDownload("t1", "Song A", DownloadStatus.Downloading(45))
+            assertThat(vm.downloadBanner.value).isEqualTo(
+                DownloadBanner(text = "Downloading \u201cSong A\u201d \u00b7 45%", progressPercent = 45),
+            )
+
+            active.value = ActiveDownload("t1", "Song A", DownloadStatus.Failed("HTTP 403"))
+            assertThat(vm.downloadBanner.value).isEqualTo(
+                DownloadBanner(text = "Download failed: \u201cSong A\u201d (HTTP 403)", isError = true),
+            )
+
+            advanceTimeBy(3_100L)
+            assertThat(vm.downloadBanner.value).isNull()
+        }
 }
