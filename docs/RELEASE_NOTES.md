@@ -1,7 +1,7 @@
 # CLIBeats v2.5.5 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.5.apk` (verify with `SHA256SUMS.txt`)
-· **Size:** about 5.8 MB
+· **Size:** about 5.6 MB
 
 ## Downloads
 
@@ -12,6 +12,9 @@
 - **Removing downloads works properly.** Removing a song, or **Clear all**, empties the Downloaded playlist at
   once, stops downloads still running, and a queued song that loses its download streams instead. Leftover
   files from interrupted downloads are cleaned up.
+- **Downloaded shows only what's really on your phone,** and its size in Settings is measured from the files.
+- **Downloading a song doesn't change it anywhere else:** playlists, Favorites, backups and playlist export
+  keep it exactly as before.
 
 ## Settings
 
