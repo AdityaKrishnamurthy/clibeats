@@ -85,8 +85,14 @@ class HomeFeedRepository
         suspend fun feed(
             moodParams: String? = null,
             languages: Set<HomeLanguage> = emptySet(),
+            /** Refresh: also re-read the Spotify charts (otherwise kept for the app run). */
+            refresh: Boolean = false,
         ): HomeFeed? =
             withContext(Dispatchers.IO) {
+                if (refresh) {
+                    spotifyLists.clear()
+                    matchedCharts.clear()
+                }
                 coroutineScope {
                     // The extra rows load alongside the feed.
                     val extras = if (moodParams == null) async { extraRows(languages) } else null
@@ -203,13 +209,19 @@ class HomeFeedRepository
                 val youtube = countries.map { country -> async { country to youTubeCharts(country, languages) } }
                 val byCountry = youtube.awaitAll().toMap()
 
-                // Your country's Trending 20 becomes a row of songs at the top (not a card).
-                val trendingCard = byCountry[home].orEmpty().firstOrNull { it.title.startsWith(TRENDING, true) }
+                // Your country's daily top songs become a row at the top (not a card). This is the list the
+                // old Trending used: real hits, unlike "Trending 20", which is mostly devotional and regional
+                // video uploads.
+                val homeCards = byCountry[home].orEmpty()
+                val trendingCard =
+                    TOP_ROW_CHARTS.firstNotNullOfOrNull { name ->
+                        homeCards.firstOrNull { it.title.startsWith(name, ignoreCase = true) }
+                    }
                 val trending =
                     trendingCard?.let { card ->
                         val songs = runCatching { youTube.page(card.browseId) }.getOrNull()?.second.orEmpty()
-                        val place = UserLocale.countryName.ifBlank { card.title.removePrefix(TRENDING).trim() }
-                        val items = songs.take(ROW_SONGS).map(HomeItem::Song)
+                        val place = UserLocale.countryName.ifBlank { UserLocale.gl }
+                        val items = songs.take(TOP_ROW_SONGS).map(HomeItem::Song)
                         items.takeIf { it.isNotEmpty() }?.let { HomeShelf("Trending in $place", TRENDING_STRAP, it) }
                     }
                 val youTubeCards =
@@ -299,11 +311,17 @@ class HomeFeedRepository
             private const val CHARTS_TITLE = "Charts & Top 50"
             private const val WEEKLY_CHART = "Top Weekly Videos"
             private const val TRENDING = "Trending 20"
+            private const val DAILY_TOP = "Daily Top Music Videos"
+            private const val TOP_100 = "Top 100 Music Videos"
+
+            /** Charts for the "Trending in <country>" row, best first. */
+            private val TOP_ROW_CHARTS = listOf(DAILY_TOP, TOP_100, TRENDING)
             private const val TRENDING_STRAP = "WHAT EVERYONE'S PLAYING"
             private const val CHARTS_STRAP = "WHAT'S HOT RIGHT NOW"
-            private val GENERAL_CHARTS = listOf(TRENDING, "Top 100 Music Videos")
+            private val GENERAL_CHARTS = listOf(DAILY_TOP, TOP_100, TRENDING)
             private const val MAX_LANGUAGE_ROWS = 6
             private const val ROW_SONGS = 20
+            private const val TOP_ROW_SONGS = 24
             private const val MATCH_PARALLEL = 4
         }
     }

@@ -262,7 +262,7 @@ class HomeViewModel
             feedJob =
                 viewModelScope.launch {
                     if (keepShown) _isRefreshing.value = true else _feed.value = FeedState.Loading
-                    var result = repo.feed(params, picked)
+                    var result = repo.feed(params, picked, refresh = force)
                     if (result == null && !networkMonitor.isOnline.value) {
                         // Just started and not connected yet: wait for the network, then try once more.
                         withTimeoutOrNull(NETWORK_WAIT_MS) { networkMonitor.isOnline.first { it } }

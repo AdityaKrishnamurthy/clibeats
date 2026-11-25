@@ -193,7 +193,7 @@ class HomeViewModelTest {
                     moods = listOf(HomeMood("Relax", "relax")),
                     shelves = listOf(HomeShelf("Quick picks", "", listOf(HomeItem.Song(fakeTrack())))),
                 )
-            whenever(feedRepository.feed(null, emptySet())).thenReturn(feed)
+            whenever(feedRepository.feed(null, emptySet(), false)).thenReturn(feed)
             val networkMonitor: NetworkMonitor = mock()
             whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
 
@@ -211,11 +211,39 @@ class HomeViewModelTest {
         }
 
     @Test
+    fun `refresh reloads the home feed, including the Spotify charts`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val feedRepository: HomeFeedRepository = mock()
+            val first = HomeFeed(emptyList(), listOf(HomeShelf("Old", "", listOf(HomeItem.Song(fakeTrack())))))
+            val fresh = HomeFeed(emptyList(), listOf(HomeShelf("New", "", listOf(HomeItem.Song(fakeTrack())))))
+            whenever(feedRepository.feed(null, emptySet(), false)).thenReturn(first)
+            whenever(feedRepository.feed(null, emptySet(), true)).thenReturn(fresh)
+            val networkMonitor: NetworkMonitor = mock()
+            whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+            val vm =
+                HomeViewModel(
+                    providerRegistry = providerRegistry,
+                    appPreferences = appPreferences,
+                    networkMonitor = networkMonitor,
+                    homeFeedRepository = feedRepository,
+                )
+            advanceUntilIdle()
+            assertThat(vm.feed.value).isEqualTo(FeedState.Loaded(first))
+
+            vm.refreshTrending()
+            advanceUntilIdle()
+
+            assertThat(vm.feed.value).isEqualTo(FeedState.Loaded(fresh))
+            assertThat(vm.isRefreshing.value).isFalse()
+        }
+
+    @Test
     fun `with no feed at all, Home falls back to Trending`() =
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
             val feedRepository: HomeFeedRepository = mock()
-            whenever(feedRepository.feed(null, emptySet())).thenReturn(null)
+            whenever(feedRepository.feed(null, emptySet(), false)).thenReturn(null)
             whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(listOf(fakeTrack())))
             val networkMonitor: NetworkMonitor = mock()
             whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
