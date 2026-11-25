@@ -60,6 +60,7 @@ import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.LocalAccentColor
 
 /**
  * Home dashboard in the spotify-tui style.
@@ -83,6 +84,7 @@ fun HomeScreen(
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
     val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
+    val playingId by trackActions.playingTrackId.collectAsState()
     val uiState by homeViewModel.uiState.collectAsState()
     val isRefreshing by homeViewModel.isRefreshing.collectAsState()
     val providerName by homeViewModel.activeProviderName.collectAsState()
@@ -167,6 +169,8 @@ fun HomeScreen(
                 keyPrefix = "recent",
                 tracks = recentlyPlayed,
                 mode = viewMode,
+                downloadedIds = downloadedIds,
+                playingTrackId = playingId,
                 onPlay = { index -> homeViewModel.playFromList(recentlyPlayed, index) },
                 onQueue = trackActions::addToQueue,
                 onFavorite = trackActions::favorite,
@@ -226,6 +230,7 @@ fun HomeScreen(
                         tracks = state.tracks,
                         mode = viewMode,
                         downloadedIds = downloadedIds,
+                        playingTrackId = playingId,
                         onPlay = { index -> homeViewModel.playFromList(state.tracks, index) },
                         onQueue = trackActions::addToQueue,
                         onFavorite = trackActions::favorite,
@@ -336,6 +341,7 @@ private fun LazyListScope.homeTracks(
     tracks: List<Track>,
     mode: PlaylistViewMode,
     downloadedIds: Set<String> = emptySet(),
+    playingTrackId: String? = null,
     onPlay: (Int) -> Unit,
     onQueue: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
@@ -353,6 +359,7 @@ private fun LazyListScope.homeTracks(
                 },
                 large = large,
                 isDownloaded = track.id in downloadedIds,
+                isNowPlaying = track.id == playingTrackId,
                 onClick = { onPlay(index) },
                 onSwipeRight = { onQueue(track) },
                 onSwipeLeft = { onFavorite(track) },
@@ -370,6 +377,7 @@ private fun LazyListScope.homeTracks(
             rows[row].forEach { (index, track) ->
                 SongTile(
                     track = track,
+                    playing = track.id == playingTrackId,
                     onClick = { onPlay(index) },
                     onLongClick = { onLongPress(track) },
                     modifier = Modifier.weight(1f),
@@ -386,6 +394,7 @@ private fun LazyListScope.homeTracks(
 @Composable
 private fun SongTile(
     track: Track,
+    playing: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -402,13 +411,19 @@ private fun SongTile(
                 ),
     ) {
         val side = maxWidth.value.toInt()
+        val accent = LocalAccentColor.current
         Column {
-            TrackArtwork(artworkUrl = track.artworkUrl, size = side)
+            // The song playing now: framed in the accent colour, title in accent with a ▶.
+            TrackArtwork(
+                artworkUrl = track.artworkUrl,
+                size = side,
+                modifier = if (playing) Modifier.border(2.dp, accent) else Modifier,
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = track.title,
+                text = if (playing) "▶ ${track.title}" else track.title,
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onBackground,
+                color = if (playing) accent else MaterialTheme.colorScheme.onBackground,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )

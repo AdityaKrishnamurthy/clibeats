@@ -171,7 +171,7 @@ class HomeViewModelTest {
             vm.playFromList(listOf(t1, t2), 1)
             testDispatcher.scheduler.advanceUntilIdle()
 
-            verify(playbackRepository).setQueue(listOf(t2), 0)
+            verify(playbackRepository).playFrom(listOf(t2), 0, "Home")
         }
 
     private fun fakeTrack(): Track =

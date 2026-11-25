@@ -126,6 +126,11 @@ fun SongActionsSheet(
                 val downloadStatus = downloads[track.id]
                 val isDownloaded = track.id in downloadedIds
                 when {
+                    downloadStatus is DownloadStatus.Queued ->
+                        SheetAction(Icons.Outlined.FileDownload, "Queued for download (tap to cancel)") {
+                            actions.removeDownload(track)
+                            onDismiss()
+                        }
                     downloadStatus is DownloadStatus.Downloading -> {
                         val accent = LocalAccentColor.current
                         val pct = downloadStatus.progressPercent

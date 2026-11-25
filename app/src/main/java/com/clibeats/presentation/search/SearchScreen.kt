@@ -92,6 +92,7 @@ fun SearchScreen(
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
     val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
+    val playingId by trackActions.playingTrackId.collectAsState()
     val query by viewModel.query.collectAsState()
     val state by viewModel.searchResults.collectAsState()
     val providerName by viewModel.activeProviderName.collectAsState()
@@ -168,6 +169,7 @@ fun SearchScreen(
                     RecentSearchesList(
                         tracks = recentSearches,
                         downloadedIds = downloadedIds,
+                        playingTrackId = playingId,
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
                         onClear = { confirmClearRecent = true },
                         onAddToQueue = { track ->
@@ -194,6 +196,7 @@ fun SearchScreen(
                         SearchResultsList(
                             tracks = currentState.tracks,
                             downloadedIds = downloadedIds,
+                            playingTrackId = playingId,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = { track ->
                                 trackActions.addToQueue(track)
@@ -231,6 +234,7 @@ fun SearchScreen(
 private fun RecentSearchesList(
     tracks: List<Track>,
     downloadedIds: Set<String> = emptySet(),
+    playingTrackId: String? = null,
     onTrackClick: (Int) -> Unit,
     onClear: () -> Unit,
     onAddToQueue: (Track) -> Unit,
@@ -260,6 +264,7 @@ private fun RecentSearchesList(
                 artist = track.artist,
                 duration = formatDuration(track.durationMs),
                 isDownloaded = track.id in downloadedIds,
+                isNowPlaying = track.id == playingTrackId,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },
@@ -348,6 +353,7 @@ private fun SearchNoResultsState() {
 private fun SearchResultsList(
     tracks: List<Track>,
     downloadedIds: Set<String> = emptySet(),
+    playingTrackId: String? = null,
     onTrackClick: (Int) -> Unit,
     onAddToQueue: (Track) -> Unit,
     onFavorite: (Track) -> Unit,
@@ -369,6 +375,7 @@ private fun SearchResultsList(
                 duration = formatDuration(track.durationMs),
                 index = index + 1,
                 isDownloaded = track.id in downloadedIds,
+                isNowPlaying = track.id == playingTrackId,
                 artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                 onClick = { onTrackClick(index) },
                 onSwipeRight = { onAddToQueue(track) },

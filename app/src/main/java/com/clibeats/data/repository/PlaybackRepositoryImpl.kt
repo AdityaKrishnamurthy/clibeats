@@ -247,6 +247,18 @@ class PlaybackRepositoryImpl
         override fun setQueue(
             tracks: List<Track>,
             startIndex: Int,
+        ) = startQueue(tracks, startIndex, source = null)
+
+        override fun playFrom(
+            tracks: List<Track>,
+            startIndex: Int,
+            source: String,
+        ) = startQueue(tracks, startIndex, source)
+
+        private fun startQueue(
+            tracks: List<Track>,
+            startIndex: Int,
+            source: String?,
         ) {
             if (tracks.isEmpty()) return
             val traceId = DiagnosticLogger.generateTraceId()
@@ -254,7 +266,7 @@ class PlaybackRepositoryImpl
             repositoryScope.launch(Dispatchers.Main) {
                 val targetIndex = startIndex.coerceIn(tracks.indices)
                 DiagnosticLogger.logTrackSelected(traceId, tracks[targetIndex].id, tracks[targetIndex].title)
-                playerAdapter.setQueue(tracks, targetIndex)
+                playerAdapter.setQueue(tracks, targetIndex, source)
             }
         }
 

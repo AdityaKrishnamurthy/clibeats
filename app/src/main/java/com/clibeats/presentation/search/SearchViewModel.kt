@@ -80,9 +80,9 @@ class SearchViewModel
                 // Autoplay on: the song starts a fresh radio of related songs, in its own language and style,
                 // instead of keeping the old radio. Autoplay off: the other results play after it.
                 if (appPreferences.autoplayEnabled.first()) {
-                    playbackRepository.setQueue(listOf(tracks[index]), 0)
+                    playbackRepository.playFrom(listOf(tracks[index]), 0, SOURCE)
                 } else {
-                    playbackRepository.setQueue(tracks, index)
+                    playbackRepository.playFrom(tracks, index, SOURCE)
                 }
             }
         }
@@ -156,4 +156,8 @@ class SearchViewModel
             tracks: List<Track>,
             index: Int,
         ) = onPlay(tracks, index)
+
+        private companion object {
+            const val SOURCE = "Search"
+        }
     }

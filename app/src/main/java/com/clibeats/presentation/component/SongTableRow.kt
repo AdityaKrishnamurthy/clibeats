@@ -45,10 +45,10 @@ import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsDivider
-import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextDisabled
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.LocalAccentColor
 
 /**
  * Dense 48dp song table row — the primary list item component.
@@ -83,11 +83,25 @@ fun SongTableRow(
     swipeRightLabel: String = "+ QUEUE",
     onLongPress: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
+    /** Selection mode: true/false draws `[x]`/`[ ]` in front of the row; null = not selecting. */
+    selected: Boolean? = null,
+    /** Greyed out, e.g. a song still waiting to download; it gets full colour when done. */
+    dimmed: Boolean = false,
+    /** Short text shown instead of the length, e.g. "QUEUED" or "42%". */
+    status: String? = null,
 ) {
-    val semanticsDescription = "$trackTitle by $artist"
+    val accent = LocalAccentColor.current
+    val semanticsDescription =
+        buildString {
+            append("$trackTitle by $artist")
+            if (isNowPlaying) append(", playing now")
+            if (selected == true) append(", selected")
+            status?.let { append(", $it") }
+        }
     val rowHeight = if (large) LARGE_ROW_DP.dp else 48.dp
     val rowBackground = when {
-        isNowPlaying -> CliBeatsSurface
+        selected == true -> accent.copy(alpha = SELECTED_ALPHA)
+        isNowPlaying -> accent.copy(alpha = PLAYING_ALPHA)
         else -> CliBeatsBackground
     }
 
@@ -127,7 +141,10 @@ fun SongTableRow(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .graphicsLayer { translationX = dragX },
+                .graphicsLayer {
+                    translationX = dragX
+                    alpha = if (dimmed) DIMMED_ALPHA else 1f
+                },
         ) {
             Row(
                 modifier = Modifier
@@ -152,13 +169,22 @@ fun SongTableRow(
                         modifier = Modifier
                             .width(2.dp)
                             .height(rowHeight)
-                            .background(CliBeatsAccent),
+                            .background(accent),
                     )
                 } else {
                     Spacer(modifier = Modifier.width(2.dp))
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
+
+                if (selected != null) {
+                    Text(
+                        text = if (selected) "[x]" else "[ ]",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = if (selected) accent else CliBeatsTextSecondary,
+                        modifier = Modifier.padding(end = 8.dp),
+                    )
+                }
 
                 leading?.invoke()
 
@@ -187,17 +213,24 @@ fun SongTableRow(
                     modifier = Modifier.weight(1f),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (isNowPlaying) {
+                            Text(
+                                text = "▶ ",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = accent,
+                            )
+                        }
                         if (isDownloaded) {
                             Text(
                                 text = "[↓] ",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = CliBeatsAccent,
+                                color = accent,
                             )
                         }
                         Text(
                             text = trackTitle,
                             style = MaterialTheme.typography.bodyLarge,
-                            color = if (isNowPlaying) CliBeatsAccent else CliBeatsTextPrimary,
+                            color = if (isNowPlaying) accent else CliBeatsTextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
@@ -216,9 +249,9 @@ fun SongTableRow(
 
                 // ── Duration (end-aligned, tabular) ───────────────────────────
                 Text(
-                    text = duration,
+                    text = status ?: duration,
                     style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsTextSecondary,
+                    color = if (status != null) accent else CliBeatsTextSecondary,
                     modifier = Modifier.padding(end = if (actions == null) 16.dp else 8.dp),
                 )
 
@@ -297,3 +330,6 @@ private fun BoxScope.SwipeHint(
 
 private const val LARGE_ROW_DP = 64
 private const val LARGE_ART_DP = 52
+private const val SELECTED_ALPHA = 0.18f
+private const val PLAYING_ALPHA = 0.10f
+private const val DIMMED_ALPHA = 0.4f

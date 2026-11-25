@@ -286,6 +286,37 @@ class TrackDownloadManagerTest {
             assertThat(ranges).hasSize(3)
         }
 
+    @Test
+    fun `bulk downloads queue up, run two at a time, and leave the pending list when done`() =
+        runTest {
+            val resolver: StreamResolver = mock()
+            whenever(streamResolver.get()).thenReturn(resolver)
+            val tracks = (1..4).map { fakeTrack("bulk$it", "Song $it", "https://ok.example/audio$it") }
+            val running = java.util.concurrent.atomic.AtomicInteger(0)
+            val maxRunning = java.util.concurrent.atomic.AtomicInteger(0)
+            whenever(okHttpClient.newCall(any())).thenAnswer { inv ->
+                val req = inv.getArgument<Request>(0)
+                val call: Call = mock()
+                whenever(call.execute()).thenAnswer {
+                    maxRunning.accumulateAndGet(running.incrementAndGet(), ::maxOf)
+                    Thread.sleep(150)
+                    running.decrementAndGet()
+                    httpResponse(req.url.toString(), 200, byteArrayOf(1, 2, 3))
+                }
+                call
+            }
+
+            manager.downloadAll(tracks)
+
+            // All four show as pending straight away (greyed out in Downloaded).
+            assertThat(manager.pendingTracks.value.map { it.id }).containsExactly("bulk1", "bulk2", "bulk3", "bulk4")
+            tracks.forEach { awaitTerminalStatus(it.id) }
+            withContext(Dispatchers.Default) {
+                withTimeout(5_000L) { manager.pendingTracks.first { it.isEmpty() } }
+            }
+            assertThat(maxRunning.get()).isAtMost(TrackDownloadManager.PARALLEL_DOWNLOADS)
+        }
+
     private suspend fun awaitTerminalStatus(trackId: String): DownloadStatus? =
         withContext(Dispatchers.Default) {
             withTimeout(5_000L) {
