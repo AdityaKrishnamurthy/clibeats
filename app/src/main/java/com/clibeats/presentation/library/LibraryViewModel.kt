@@ -115,12 +115,13 @@ class LibraryViewModel
             index: Int,
         ) {
             viewModelScope.launch {
-                val autoQueue = appPreferences?.autoQueueRelated?.first() ?: false
-                if (autoQueue) {
-                    playbackRepository.setQueue(tracks, index)
-                } else {
-                    // Replace queue with just this song so autoplay re-seeds from the new context.
+                // Autoplay on: the song starts a fresh radio of related songs (the old radio is dropped).
+                // Autoplay off: the rest of the list plays after it, so the music doesn't stop.
+                val radio = appPreferences?.autoplayEnabled?.first() ?: true
+                if (radio) {
                     playbackRepository.setQueue(listOf(track), 0)
+                } else {
+                    playbackRepository.setQueue(tracks, index)
                 }
             }
         }

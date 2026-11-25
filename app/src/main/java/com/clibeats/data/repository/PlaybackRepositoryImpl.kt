@@ -272,7 +272,9 @@ class PlaybackRepositoryImpl
             val enabled = runCatching { appPreferences.autoplayEnabled.first() }.getOrDefault(false)
             if (!enabled) return
             if (playerAdapter.playbackState.value.repeatMode != RepeatMode.OFF) return
-            if (networkMonitor?.isOnline?.value != true) return
+            // Offline when the queue nears its end (e.g. a downloaded playlist): wait for the connection
+            // instead of giving up; switching songs cancels the wait.
+            networkMonitor?.let { monitor -> if (!monitor.isOnline.value) monitor.isOnline.first { it } }
             val queue = playerAdapter.queueFlow.value
             val currentIndex = queue.indexOfFirst { it.id == current.id }
             if (currentIndex < 0 || currentIndex < queue.lastIndex - 1) return
