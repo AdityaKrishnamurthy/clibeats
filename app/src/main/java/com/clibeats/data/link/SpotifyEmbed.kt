@@ -56,7 +56,10 @@ object SpotifyEmbed {
                     }
                 }
             }
-        return if (songs.isEmpty()) null else SpotifyPlaylist(name, songs)
+        val cover =
+            entity.at("coverArt")?.let { (it as? JsonObject)?.get("sources") }?.list()
+                ?.mapNotNull { (it as? JsonObject)?.text("url") }?.lastOrNull()
+        return if (songs.isEmpty()) null else SpotifyPlaylist(name, songs, cover)
     }
 
     private fun JsonElement.at(vararg keys: String): JsonElement? =

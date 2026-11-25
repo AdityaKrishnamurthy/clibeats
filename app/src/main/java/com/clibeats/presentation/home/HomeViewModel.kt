@@ -5,6 +5,7 @@ package com.clibeats.presentation.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.home.HomeFeedRepository
+import com.clibeats.data.home.HomeLanguage
 import com.clibeats.data.home.LocalHome
 import com.clibeats.data.home.LocalHomeRepository
 import com.clibeats.data.network.NetworkMonitor
@@ -65,6 +66,8 @@ data class OpenedCollection(
     val tracks: List<Track>? = null,
     val title: String = item.title,
     val failed: Boolean = false,
+    /** While a Spotify chart's songs are still being found ("finding songs 12/50…"). */
+    val progress: String? = null,
 )
 
 @Suppress("LongParameterList", "LargeClass", "TooManyFunctions")
@@ -211,11 +214,32 @@ class HomeViewModel
         private val _moods = MutableStateFlow<List<HomeMood>>(emptyList())
         val moods: StateFlow<List<HomeMood>> = _moods.asStateFlow()
 
-        private val feedCache = mutableMapOf<String?, HomeFeed>()
+        /** Languages the online Home is tuned to; empty = every language. */
+        private val _languages = MutableStateFlow<Set<HomeLanguage>>(emptySet())
+        val languages: StateFlow<Set<HomeLanguage>> = _languages.asStateFlow()
+
+        /** False until the language picker was answered once; Home suggests it until then. */
+        val languagesAsked: StateFlow<Boolean> =
+            appPreferences.homeLanguagesAsked.stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+        /** Saves the picked languages (empty = every language) and reloads Home for them. */
+        fun setLanguages(picked: Set<HomeLanguage>) {
+            viewModelScope.launch { appPreferences.setHomeLanguages(picked.mapTo(HashSet()) { it.name }) }
+        }
+
+        private val feedCache = mutableMapOf<String, HomeFeed>()
+
+        private fun feedKey(params: String?): String {
+            val picked = languages.value.map { it.name }.sorted().joinToString(",")
+            return "${params.orEmpty()}|$picked"
+        }
+
         private var feedJob: Job? = null
 
         /** Picks a mood chip; tapping the picked one again goes back to the full feed. */
         fun selectMood(mood: HomeMood) {
+            // Moods filter the online page only.
+            if (shownProviderId != YOUTUBE_ID) return
             _selectedMood.value = if (_selectedMood.value == mood) null else mood
             showFeed(force = false)
         }
@@ -224,8 +248,10 @@ class HomeViewModel
             val repo = homeFeedRepository ?: return
             localJob?.cancel()
             val params = _selectedMood.value?.params
+            val key = feedKey(params)
+            val picked = languages.value
             feedJob?.cancel()
-            val cached = feedCache[params]
+            val cached = feedCache[key]
             if (cached != null && !force) {
                 _isRefreshing.value = false
                 _feed.value = FeedState.Loaded(cached)
@@ -235,17 +261,17 @@ class HomeViewModel
             feedJob =
                 viewModelScope.launch {
                     if (keepShown) _isRefreshing.value = true else _feed.value = FeedState.Loading
-                    var result = repo.feed(params)
+                    var result = repo.feed(params, picked)
                     if (result == null && !networkMonitor.isOnline.value) {
                         // Just started and not connected yet: wait for the network, then try once more.
                         withTimeoutOrNull(NETWORK_WAIT_MS) { networkMonitor.isOnline.first { it } }
-                        result = repo.feed(params)
+                        result = repo.feed(params, picked)
                     }
                     _isRefreshing.value = false
                     when {
                         result != null -> {
                             if (params == null && result.moods.isNotEmpty()) _moods.value = result.moods
-                            feedCache[params] = result
+                            feedCache[key] = result
                             _feed.value = FeedState.Loaded(result)
                             streamResolver?.warmTracks(result.shelves.first().songs, WARM_TRACKS_COUNT)
                         }
@@ -337,6 +363,7 @@ class HomeViewModel
         val opened: StateFlow<OpenedCollection?> = _opened.asStateFlow()
         private var openJob: Job? = null
 
+        @Suppress("ReturnCount")
         fun openCollection(item: HomeItem.Collection) {
             _local.value?.collections?.get(item.browseId)?.let { tracks ->
                 openJob?.cancel()
@@ -346,6 +373,21 @@ class HomeViewModel
             val repo = homeFeedRepository ?: return
             _opened.value = OpenedCollection(item)
             openJob?.cancel()
+            if (item.browseId.startsWith(HomeFeedRepository.SPOTIFY_PREFIX)) {
+                openJob =
+                    viewModelScope.launch {
+                        repo.spotifyChart(item.browseId.removePrefix(HomeFeedRepository.SPOTIFY_PREFIX)).collect { p ->
+                            _opened.value =
+                                OpenedCollection(
+                                    item,
+                                    tracks = p.tracks.takeIf { it.isNotEmpty() || p.done },
+                                    failed = p.done && p.tracks.isEmpty(),
+                                    progress = if (p.done) null else "finding songs ${p.tried}/${p.total}\u2026",
+                                )
+                        }
+                    }
+                return
+            }
             openJob =
                 viewModelScope.launch {
                     val page = repo.collection(item.browseId)
@@ -441,6 +483,15 @@ class HomeViewModel
         // field it touches must already be set up.
         init {
             viewModelScope.launch {
+                // The saved languages first, so the first load is already tuned (no unfiltered flash).
+                _languages.value = HomeLanguage.fromNames(appPreferences.homeLanguages.first())
+                launch {
+                    appPreferences.homeLanguages.map { HomeLanguage.fromNames(it) }.collect { picked ->
+                        if (picked == _languages.value) return@collect
+                        _languages.value = picked
+                        if (shownProviderId == YOUTUBE_ID && homeFeedRepository != null) showFeed(force = false)
+                    }
+                }
                 activeProviderId.collect { id ->
                     shownProviderId = id
                     _local.value = null

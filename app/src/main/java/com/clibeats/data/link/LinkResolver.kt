@@ -90,7 +90,8 @@ class LinkResolver
                 ?: LinkTarget.Failed("Couldn't find \"${song.title}\" on YouTube Music.")
         }
 
-        private fun spotify(
+        /** A Spotify track, album or playlist read from its embed page (blocking; call off the main thread). */
+        fun spotify(
             kind: String,
             id: String,
         ): SpotifyPlaylist? = fetch(SpotifyEmbed.url(kind, id))?.second?.let(SpotifyEmbed::parse)

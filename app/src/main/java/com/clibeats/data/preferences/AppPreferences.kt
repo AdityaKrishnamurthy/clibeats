@@ -42,6 +42,8 @@ class AppPreferences
             val LOCAL_MUSIC_TREE_URI = stringPreferencesKey("local_music_tree_uri") // legacy single folder
             val LOCAL_MUSIC_TREE_URIS = stringSetPreferencesKey("local_music_tree_uris")
             val HOME_RECENTS_CLEARED_AT = longPreferencesKey("home_recents_cleared_at")
+            val HOME_LANGUAGES = stringSetPreferencesKey("home_languages")
+            val HOME_LANGUAGES_ASKED = booleanPreferencesKey("home_languages_asked")
             val LIBRARY_HISTORY_CLEARED_AT = longPreferencesKey("library_history_cleared_at")
             val LIBRARY_SECTION = stringPreferencesKey("library_section")
             val RECENT_SEARCH_TRACKS = stringPreferencesKey("recent_search_tracks")
@@ -329,6 +331,19 @@ class AppPreferences
 
         suspend fun setHomeView(name: String) {
             dataStore.edit { it[Keys.HOME_VIEW] = name }
+        }
+
+        /** Languages the online Home is tuned to (HomeLanguage names); empty = every language. */
+        val homeLanguages: Flow<Set<String>> = dataStore.data.map { it[Keys.HOME_LANGUAGES].orEmpty() }
+
+        /** True once the language picker was answered (chosen or skipped), so Home stops suggesting it. */
+        val homeLanguagesAsked: Flow<Boolean> = dataStore.data.map { it[Keys.HOME_LANGUAGES_ASKED] ?: false }
+
+        suspend fun setHomeLanguages(names: Set<String>) {
+            dataStore.edit {
+                it[Keys.HOME_LANGUAGES] = names
+                it[Keys.HOME_LANGUAGES_ASKED] = true
+            }
         }
 
         suspend fun setPlaylistView(name: String) {

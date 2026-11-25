@@ -35,6 +35,16 @@ fun JsonElement.homeMoods(): List<HomeMood> =
         if (title.equals("Podcasts", ignoreCase = true)) null else HomeMood(title, params)
     }.distinctBy { it.title }
 
+/** The Moods & genres page's buttons: name ("Kannada", "J-Pop") to the page's browse id and params. */
+fun JsonElement.genreButtons(): Map<String, Pair<String, String>> =
+    findAll(this, "musicNavigationButtonRenderer").mapNotNull { button ->
+        val name = button.nav("buttonText")?.runsText()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+        val browse = button.nav("clickCommand", "browseEndpoint") ?: return@mapNotNull null
+        val id = browse.nav("browseId")?.safeString() ?: return@mapNotNull null
+        val params = browse.nav("params")?.safeString() ?: return@mapNotNull null
+        name to (id to params)
+    }.toMap()
+
 /** Token for the next part of a feed, or null when there's no more. */
 fun JsonElement.feedContinuation(): String? =
     findAll(this, "nextContinuationData").firstNotNullOfOrNull { it.nav("continuation")?.safeString() }

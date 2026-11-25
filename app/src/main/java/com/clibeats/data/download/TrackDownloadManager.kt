@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -95,7 +96,8 @@ class TrackDownloadManager
         private val downloadSlots = Semaphore(PARALLEL_DOWNLOADS)
 
         private fun publishPending() {
-            _pendingTracks.value = synchronized(pending) { pending.values.toList() }
+            // Under the lock, so a newer list is never replaced by an older one from another download.
+            synchronized(pending) { _pendingTracks.value = pending.values.toList() }
         }
 
         /** Downloads every song in [tracks] that isn't downloaded or on its way yet, in order. */
@@ -645,7 +647,7 @@ class TrackDownloadManager
                 val hash = sha256(trackId)
                 downloadsDir.listFiles { _, name -> name.startsWith(hash) }?.forEach { it.delete() }
                 trackTitles.remove(trackId)
-                _downloads.value = _downloads.value - trackId
+                _downloads.update { it - trackId }
                 if (_activeDownload.value?.trackId == trackId) _activeDownload.value = null
             }
         }
@@ -682,7 +684,8 @@ class TrackDownloadManager
                     _activeDownload.value = ActiveDownload(songId, title, status, waiting)
                 }
             }
-            _downloads.value = _downloads.value + (songId to status)
+            // Two downloads run at once: update atomically so one never overwrites the other's status.
+            _downloads.update { it + (songId to status) }
         }
 
         private fun sha256(input: String): String {

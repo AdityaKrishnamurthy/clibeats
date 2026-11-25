@@ -29,6 +29,12 @@ data class BrowseRequest(
 
         private const val HOME_BROWSE_ID = "FEmusic_home"
 
+        /** A page reached from a button with [params], e.g. a genre on the Moods & genres page. */
+        fun category(
+            browseId: String,
+            params: String,
+        ): BrowseRequest = BrowseRequest(InnerTubeContext.default(), browseId, params = params)
+
         /** YouTube Music's home feed (for the phone's country), optionally filtered by a mood chip's [params]. */
         fun home(params: String? = null): BrowseRequest {
             val context = InnerTubeContext.default()

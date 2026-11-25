@@ -60,6 +60,8 @@ class HomeViewModelTest {
         whenever(appPreferences.homeView).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(false))
         whenever(appPreferences.autoplayEnabled).thenReturn(flowOf(true))
+        whenever(appPreferences.homeLanguages).thenReturn(flowOf(emptySet()))
+        whenever(appPreferences.homeLanguagesAsked).thenReturn(flowOf(true))
         // Trending loads as soon as the ViewModel starts; tests that care stub their own result.
         runBlocking { whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(emptyList())) }
 
@@ -191,7 +193,7 @@ class HomeViewModelTest {
                     moods = listOf(HomeMood("Relax", "relax")),
                     shelves = listOf(HomeShelf("Quick picks", "", listOf(HomeItem.Song(fakeTrack())))),
                 )
-            whenever(feedRepository.feed(null)).thenReturn(feed)
+            whenever(feedRepository.feed(null, emptySet())).thenReturn(feed)
             val networkMonitor: NetworkMonitor = mock()
             whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
 
@@ -213,7 +215,7 @@ class HomeViewModelTest {
         runTest {
             Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
             val feedRepository: HomeFeedRepository = mock()
-            whenever(feedRepository.feed(null)).thenReturn(null)
+            whenever(feedRepository.feed(null, emptySet())).thenReturn(null)
             whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(listOf(fakeTrack())))
             val networkMonitor: NetworkMonitor = mock()
             whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))

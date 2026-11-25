@@ -99,6 +99,16 @@ fun HomeScreen(
     val selectedMood by homeViewModel.selectedMood.collectAsState()
     val opened by homeViewModel.opened.collectAsState()
     val localHome by homeViewModel.local.collectAsState()
+    val languages by homeViewModel.languages.collectAsState()
+    val languagesAsked by homeViewModel.languagesAsked.collectAsState()
+    var pickLanguages by remember { mutableStateOf(false) }
+    if (pickLanguages) {
+        LanguagePickerDialog(
+            current = languages,
+            onDone = homeViewModel::setLanguages,
+            onDismiss = { pickLanguages = false },
+        )
+    }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -123,6 +133,8 @@ fun HomeScreen(
                 songMenu = { addToPlaylistTrack = it },
                 open = homeViewModel::openCollection,
                 selectMood = homeViewModel::selectMood,
+                editLanguages = { pickLanguages = true },
+                skipLanguages = { homeViewModel.setLanguages(emptySet()) },
             )
         }
 
@@ -210,6 +222,7 @@ fun HomeScreen(
         }
 
         // 4. Online: YouTube Music's home page (mood chips, then its rows). Trending is the fallback.
+        val isLocalHome = activeProviderId == "local"
         feed?.let { state ->
             item(key = "feed_header") {
                 val busy = isRefreshing || state is FeedState.Loading
@@ -231,10 +244,13 @@ fun HomeScreen(
             }
             homeFeed(
                 state = state,
-                moods = moods,
-                selectedMood = selectedMood,
+                // Moods and languages belong to the online page only.
+                moods = if (isLocalHome) emptyList() else moods,
+                selectedMood = if (isLocalHome) null else selectedMood,
                 playingTrackId = playingId,
                 actions = feedActions,
+                languagesLabel = if (!isLocalHome) languages.joinToString(", ") { it.label } else null,
+                suggestLanguages = !isLocalHome && !languagesAsked && state is FeedState.Loaded,
                 emptyText =
                     if (localHome != null) {
                         "No local music yet. Pick your music folder in Settings \u2192 Local Music."
