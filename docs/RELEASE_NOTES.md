@@ -17,7 +17,7 @@
   - **✕ REMOVE** — removes them from the playlist (asks first),
   - **⋯** — the usual song menu, when one song is selected.
 
-  **Back** or **✕** ends the selection.
+  **Back** or **✕** ends the selection. While selecting, swiping sideways no longer flips to the next tab.
 
 ## Downloads
 
@@ -31,6 +31,8 @@
   Search, Home, Library, a link, or `∞ Radio` when autoplay's suggestions are playing.
 - **The playing song is highlighted** in every list (playlists, search results, Home, Library), in your
   accent colour with a `▶`, so you can see it at a glance.
+- **Sharp cover on the lock screen and media card.** When the high-res cover arrived a moment after the song
+  started, the notification card kept the blurry small one; it now switches to the sharp cover.
 
 # CLIBeats v2.5.5 — Release Notes
 
