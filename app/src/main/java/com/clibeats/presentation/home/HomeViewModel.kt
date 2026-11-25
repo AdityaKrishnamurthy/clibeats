@@ -5,6 +5,8 @@ package com.clibeats.presentation.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.home.HomeFeedRepository
+import com.clibeats.data.home.LocalHome
+import com.clibeats.data.home.LocalHomeRepository
 import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.HomeFeed
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -64,7 +67,7 @@ data class OpenedCollection(
     val failed: Boolean = false,
 )
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LargeClass", "TooManyFunctions")
 @HiltViewModel
 class HomeViewModel
     @Inject
@@ -78,6 +81,8 @@ class HomeViewModel
         /** YouTube Music's home feed; null (tests) keeps the plain Trending list. */
         private val homeFeedRepository: HomeFeedRepository? = null,
         private val playlistRepository: PlaylistRepository? = null,
+        /** Local Home (mixes, albums, artists from your library); null (tests) keeps the plain song list. */
+        private val localHomeRepository: LocalHomeRepository? = null,
     ) : ViewModel() {
         val providers: List<MusicProvider> = providerRegistry.providers
 
@@ -183,10 +188,10 @@ class HomeViewModel
         /** The reload button: fetches the home feed (or the active source's trending) again. */
         fun refreshTrending() {
             val id = shownProviderId ?: return
-            if (id == YOUTUBE_ID && homeFeedRepository != null) {
-                showFeed(force = true)
-            } else {
-                showTrending(id, force = true)
+            when {
+                id == YOUTUBE_ID && homeFeedRepository != null -> showFeed(force = true)
+                id == LOCAL_ID && localHomeRepository != null -> showLocal(reshuffle = true)
+                else -> showTrending(id, force = true)
             }
         }
 
@@ -217,6 +222,7 @@ class HomeViewModel
 
         private fun showFeed(force: Boolean) {
             val repo = homeFeedRepository ?: return
+            localJob?.cancel()
             val params = _selectedMood.value?.params
             feedJob?.cancel()
             val cached = feedCache[params]
@@ -254,6 +260,77 @@ class HomeViewModel
                 }
         }
 
+        // ── Local Home ──
+
+        private val _local = MutableStateFlow<LocalHome?>(null)
+
+        /** The local page while Home shows Local (for Shuffle all / Surprise album and the cards' songs). */
+        val local: StateFlow<LocalHome?> = _local.asStateFlow()
+        private var reshuffles = 0
+        private var localJob: Job? = null
+        private var libraryWatch: Job? = null
+
+        /**
+         * Builds the local page from the library and history (a quick database read). Shown again each time
+         * Local is picked, so "Jump back in" follows what was just played; [reshuffle] (Refresh) gives new picks.
+         */
+        private fun showLocal(reshuffle: Boolean) {
+            val repo = localHomeRepository ?: return
+            feedJob?.cancel()
+            loadJob?.cancel()
+            if (reshuffle) reshuffles++
+            localJob?.cancel()
+            val keepShown = _feed.value is FeedState.Loaded && _local.value != null
+            localJob =
+                viewModelScope.launch {
+                    if (keepShown) _isRefreshing.value = true else _feed.value = FeedState.Loading
+                    val page = runCatching { repo.build(reshuffles) }.getOrNull()
+                    _isRefreshing.value = false
+                    if (page == null) {
+                        _feed.value = null
+                        _local.value = null
+                        showTrending(LOCAL_ID, force = true)
+                        return@launch
+                    }
+                    _local.value = page
+                    _feed.value = FeedState.Loaded(HomeFeed(moods = emptyList(), shelves = page.shelves))
+                }
+            // A rescan that adds or removes songs rebuilds the page.
+            if (libraryWatch == null) {
+                libraryWatch =
+                    viewModelScope.launch {
+                        repo.libraryChanges().drop(1).collect {
+                            if (shownProviderId == LOCAL_ID) showLocal(reshuffle = false)
+                        }
+                    }
+            }
+        }
+
+        /** Shuffle all: the whole local library in random order. */
+        fun shuffleAll() {
+            val songs = _local.value?.allSongs.orEmpty()
+            if (songs.isNotEmpty()) playCollection(songs.shuffled(), 0, "Shuffle all")
+        }
+
+        /** Surprise album: a random album from the library, in track order. */
+        fun surpriseAlbum() {
+            val album = _local.value?.albums?.randomOrNull() ?: return
+            playCollection(album, 0, album.first().album)
+        }
+
+        /** A song in a Home row: online, like other Home songs (radio); local, the row plays as a list. */
+        fun playFromRow(
+            row: String,
+            tracks: List<Track>,
+            index: Int,
+        ) {
+            if (shownProviderId == LOCAL_ID && _local.value != null) {
+                playCollection(tracks, index, row)
+            } else {
+                playFromList(tracks, index)
+            }
+        }
+
         private val _opened = MutableStateFlow<OpenedCollection?>(null)
 
         /** The playlist, album or artist opened from a Home card (shown over Home); null when none is open. */
@@ -261,6 +338,11 @@ class HomeViewModel
         private var openJob: Job? = null
 
         fun openCollection(item: HomeItem.Collection) {
+            _local.value?.collections?.get(item.browseId)?.let { tracks ->
+                openJob?.cancel()
+                _opened.value = OpenedCollection(item, tracks = tracks)
+                return
+            }
             val repo = homeFeedRepository ?: return
             _opened.value = OpenedCollection(item)
             openJob?.cancel()
@@ -360,12 +442,15 @@ class HomeViewModel
         init {
             viewModelScope.launch {
                 activeProviderId.collect { id ->
-                    if (id == YOUTUBE_ID && homeFeedRepository != null) {
-                        shownProviderId = id
-                        showFeed(force = false)
-                    } else {
-                        _feed.value = null
-                        showTrending(id, force = false)
+                    shownProviderId = id
+                    _local.value = null
+                    when {
+                        id == YOUTUBE_ID && homeFeedRepository != null -> showFeed(force = false)
+                        id == LOCAL_ID && localHomeRepository != null -> showLocal(reshuffle = false)
+                        else -> {
+                            _feed.value = null
+                            showTrending(id, force = false)
+                        }
                     }
                 }
             }

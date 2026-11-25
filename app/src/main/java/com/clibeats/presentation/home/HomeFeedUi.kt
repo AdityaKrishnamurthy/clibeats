@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -68,8 +69,8 @@ import com.clibeats.presentation.theme.LocalAccentColor
 
 /** What Home's feed rows do when tapped or held. */
 internal class FeedActions(
-    /** A song in a row: the row's songs and the tapped one. */
-    val playSong: (List<Track>, Int) -> Unit,
+    /** A song in a row: the row's name, its songs and the tapped one. */
+    val playSong: (String, List<Track>, Int) -> Unit,
     val songMenu: (Track) -> Unit,
     val open: (HomeItem.Collection) -> Unit,
     val selectMood: (HomeMood) -> Unit,
@@ -79,12 +80,15 @@ internal class FeedActions(
  * YouTube Music's home page: mood chips, then each row of the feed. Song rows ("Quick picks") show four
  * songs per column and page sideways; playlist and album rows are cards that open the list.
  */
+@Suppress("LongParameterList")
 internal fun LazyListScope.homeFeed(
     state: FeedState,
     moods: List<HomeMood>,
     selectedMood: HomeMood?,
     playingTrackId: String?,
     actions: FeedActions,
+    /** Shown when the page has no rows at all (an empty local library). */
+    emptyText: String = "Nothing to show yet.",
 ) {
     if (moods.isNotEmpty()) {
         item(key = "moods") { MoodChips(moods, selectedMood, actions.selectMood) }
@@ -96,18 +100,20 @@ internal fun LazyListScope.homeFeed(
                 val mood = selectedMood?.title ?: "this mood"
                 FeedMessage("Couldn't load $mood. Check the connection or pick another.")
             }
-        is FeedState.Loaded ->
+        is FeedState.Loaded -> {
+            if (state.feed.shelves.isEmpty()) item(key = "feed_empty") { FeedMessage(emptyText) }
             state.feed.shelves.forEachIndexed { index, shelf ->
                 item(key = "shelf_${index}_${shelf.title}") {
                     ShelfTitle(shelf)
                     if (shelf.items.all { it is HomeItem.Song }) {
-                        SongShelf(shelf.songs, playingTrackId, actions)
+                        SongShelf(shelf.title, shelf.songs, playingTrackId, actions)
                     } else {
                         CardShelf(shelf, playingTrackId, actions)
                     }
                     Spacer(modifier = Modifier.height(SHELF_GAP))
                 }
             }
+        }
     }
 }
 
@@ -166,6 +172,7 @@ private fun ShelfTitle(shelf: HomeShelf) {
 /** Songs four to a column; the next column peeks in at the edge so it's clear the row scrolls. */
 @Composable
 private fun SongShelf(
+    row: String,
     songs: List<Track>,
     playingTrackId: String?,
     actions: FeedActions,
@@ -184,7 +191,7 @@ private fun SongShelf(
                         FeedSongRow(
                             track = track,
                             playing = track.id == playingTrackId,
-                            onClick = { actions.playSong(songs, index) },
+                            onClick = { actions.playSong(row, songs, index) },
                             onLongClick = { actions.songMenu(track) },
                         )
                     }
@@ -268,7 +275,7 @@ private fun CardShelf(
                         artworkUrl = item.track.artworkUrl,
                         round = false,
                         playing = item.track.id == playingTrackId,
-                        onClick = { actions.playSong(songs, songs.indexOf(item.track)) },
+                        onClick = { actions.playSong(shelf.title, songs, songs.indexOf(item.track)) },
                         onLongClick = { actions.songMenu(item.track) },
                     )
             }
@@ -350,6 +357,52 @@ private fun FeedMessage(
             Spacer(modifier = Modifier.width(12.dp))
         }
         Text(text = text, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
+    }
+}
+
+/** Local Home's two big buttons: the whole library shuffled, and a random album from start to end. */
+@Composable
+internal fun LocalQuickActions(
+    songCount: Int,
+    albumCount: Int,
+    onShuffleAll: () -> Unit,
+    onSurpriseAlbum: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        QuickAction("\u21c4 SHUFFLE ALL", "$songCount songs", enabled = songCount > 0, onClick = onShuffleAll)
+        QuickAction("\u2726 SURPRISE ALBUM", "$albumCount albums", enabled = albumCount > 0, onClick = onSurpriseAlbum)
+    }
+}
+
+@Composable
+private fun RowScope.QuickAction(
+    label: String,
+    detail: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    Column(
+        modifier =
+            Modifier
+                .weight(1f)
+                .clip(RoundedCornerShape(6.dp))
+                .background(CliBeatsSurface)
+                .border(1.dp, if (enabled) accent else CliBeatsBorderInactive, RoundedCornerShape(6.dp))
+                .clickable(enabled = enabled, onClick = onClick)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (enabled) accent else CliBeatsTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(text = detail, style = MaterialTheme.typography.labelSmall, color = CliBeatsTextSecondary, maxLines = 1)
     }
 }
 

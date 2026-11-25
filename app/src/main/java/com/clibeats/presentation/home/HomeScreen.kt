@@ -98,6 +98,7 @@ fun HomeScreen(
     val moods by homeViewModel.moods.collectAsState()
     val selectedMood by homeViewModel.selectedMood.collectAsState()
     val opened by homeViewModel.opened.collectAsState()
+    val localHome by homeViewModel.local.collectAsState()
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -118,7 +119,7 @@ fun HomeScreen(
     val feedActions =
         remember(homeViewModel) {
             FeedActions(
-                playSong = homeViewModel::playFromList,
+                playSong = homeViewModel::playFromRow,
                 songMenu = { addToPlaylistTrack = it },
                 open = homeViewModel::openCollection,
                 selectMood = homeViewModel::selectMood,
@@ -219,6 +220,14 @@ fun HomeScreen(
                     actionEnabled = !busy,
                     actionDescription = "Refresh home",
                 )
+                localHome?.let { page ->
+                    LocalQuickActions(
+                        songCount = page.allSongs.size,
+                        albumCount = page.albums.size,
+                        onShuffleAll = homeViewModel::shuffleAll,
+                        onSurpriseAlbum = homeViewModel::surpriseAlbum,
+                    )
+                }
             }
             homeFeed(
                 state = state,
@@ -226,6 +235,12 @@ fun HomeScreen(
                 selectedMood = selectedMood,
                 playingTrackId = playingId,
                 actions = feedActions,
+                emptyText =
+                    if (localHome != null) {
+                        "No local music yet. Pick your music folder in Settings \u2192 Local Music."
+                    } else {
+                        "Nothing to show yet."
+                    },
             )
             return@LazyColumn
         }
