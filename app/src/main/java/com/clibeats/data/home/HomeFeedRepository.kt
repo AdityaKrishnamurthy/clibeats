@@ -97,11 +97,12 @@ class HomeFeedRepository
                             moodParams == null -> readSaved()?.let(::parse)
                             else -> null
                         }
-                    val (charts, languageRows) = extras?.await() ?: (null to emptyList())
+                    val extra = extras?.await() ?: ExtraRows()
                     val shelves = HomeLanguageFilter.filter(main?.shelves.orEmpty(), languages)
-                    // Quick picks first, then the charts and your languages, then the rest of the feed.
-                    val ordered =
-                        shelves.take(1) + listOfNotNull(charts) + languageRows + shelves.drop(1)
+                    // What's trending where you are, then the charts, then your languages, then the feed
+                    // (Quick picks and the rest).
+                    val trending = extra.trending?.let { HomeLanguageFilter.filter(listOf(it), languages) }.orEmpty()
+                    val ordered = trending + listOfNotNull(extra.charts) + extra.languages + shelves
                     ordered.takeIf { it.isNotEmpty() }?.let { HomeFeed(main?.moods.orEmpty(), it) }
                 }
             }
@@ -150,14 +151,22 @@ class HomeFeedRepository
 
         // ── Extra rows ──
 
-        private suspend fun extraRows(languages: Set<HomeLanguage>): Pair<HomeShelf?, List<HomeShelf>> =
+        /** Home's own rows: trending where you are, charts, and your languages. */
+        private data class ExtraRows(
+            val trending: HomeShelf? = null,
+            val charts: HomeShelf? = null,
+            val languages: List<HomeShelf> = emptyList(),
+        )
+
+        private suspend fun extraRows(languages: Set<HomeLanguage>): ExtraRows =
             coroutineScope {
-                val charts = async { runCatching { chartsRow(languages) }.getOrNull() }
+                val charts = async { runCatching { chartsRows(languages) }.getOrNull() }
                 val rows =
                     languages.take(MAX_LANGUAGE_ROWS).map { language ->
                         async { runCatching { languageRows(language) }.getOrNull().orEmpty() }
                     }
-                charts.await() to rows.awaitAll().flatten()
+                val (trending, chartsRow) = charts.await() ?: (null to null)
+                ExtraRows(trending, chartsRow, rows.awaitAll().flatten())
             }
 
         /** A language's popular songs and featured playlists, from its YouTube Music genre page. */
@@ -176,23 +185,39 @@ class HomeFeedRepository
         }
 
         /**
-         * Spotify's Top 50 for the languages (or the country), then YouTube's charts: each country's Trending
-         * and Top 100 videos, and India's weekly chart for each picked Indian language.
+         * "Trending in <country>" (the songs of YouTube's Trending 20 where the phone is) and the
+         * "Charts & Top 50" row: Spotify's Top 50 Global, your country's, and your languages'; then YouTube's
+         * charts for your country and your languages' countries (Top 100 videos, Trending 20, and India's
+         * weekly chart for each picked Indian language).
          */
-        private suspend fun chartsRow(languages: Set<HomeLanguage>): HomeShelf? =
+        private suspend fun chartsRows(languages: Set<HomeLanguage>): Pair<HomeShelf?, HomeShelf?> =
             coroutineScope {
-                val countries = languages.map { it.chartCountry }.distinct().ifEmpty { listOf(UserLocale.gl) }
-                val spotify =
-                    (languages.flatMap { it.spotifyCharts }.ifEmpty { defaultCharts() })
-                        .distinct()
-                        .map { chart -> async { spotifyCard(chart) } }
-                val youtube = countries.map { country -> async { youTubeCharts(country, languages) } }
-                val items = spotify.awaitAll().filterNotNull() + youtube.awaitAll().flatten()
-                items.takeIf { it.isNotEmpty() }?.let { HomeShelf(CHARTS_TITLE, "WHAT'S HOT RIGHT NOW", it) }
-            }
+                val home = UserLocale.gl
+                val countries = (listOf(home) + languages.map { it.chartCountry }).distinct()
+                val spotifyCharts =
+                    (
+                        listOf(HomeLanguage.globalChart) + listOfNotNull(HomeLanguage.countryChart(home)) +
+                            languages.flatMap { it.spotifyCharts }
+                    ).distinct()
+                val spotify = spotifyCharts.map { chart -> async { spotifyCard(chart) } }
+                val youtube = countries.map { country -> async { country to youTubeCharts(country, languages) } }
+                val byCountry = youtube.awaitAll().toMap()
 
-        private fun defaultCharts(): List<SpotifyChart> =
-            HomeLanguage.entries.filter { it.chartCountry == UserLocale.gl }.flatMap { it.spotifyCharts }.take(1)
+                // Your country's Trending 20 becomes a row of songs at the top (not a card).
+                val trendingCard = byCountry[home].orEmpty().firstOrNull { it.title.startsWith(TRENDING, true) }
+                val trending =
+                    trendingCard?.let { card ->
+                        val songs = runCatching { youTube.page(card.browseId) }.getOrNull()?.second.orEmpty()
+                        val place = UserLocale.countryName.ifBlank { card.title.removePrefix(TRENDING).trim() }
+                        val items = songs.take(ROW_SONGS).map(HomeItem::Song)
+                        items.takeIf { it.isNotEmpty() }?.let { HomeShelf("Trending in $place", TRENDING_STRAP, it) }
+                    }
+                val youTubeCards =
+                    countries.flatMap { byCountry[it].orEmpty() }.filterNot { trending != null && it == trendingCard }
+                val cards = spotify.awaitAll().filterNotNull() + youTubeCards
+                val chartsRow = cards.takeIf { it.isNotEmpty() }?.let { HomeShelf(CHARTS_TITLE, CHARTS_STRAP, it) }
+                trending to chartsRow
+            }
 
         private suspend fun spotifyCard(chart: SpotifyChart): HomeItem.Collection? {
             val list =
@@ -273,7 +298,10 @@ class HomeFeedRepository
             private const val GENRE_PLAYLISTS = "Featured playlists"
             private const val CHARTS_TITLE = "Charts & Top 50"
             private const val WEEKLY_CHART = "Top Weekly Videos"
-            private val GENERAL_CHARTS = listOf("Trending 20", "Top 100 Music Videos")
+            private const val TRENDING = "Trending 20"
+            private const val TRENDING_STRAP = "WHAT EVERYONE'S PLAYING"
+            private const val CHARTS_STRAP = "WHAT'S HOT RIGHT NOW"
+            private val GENERAL_CHARTS = listOf(TRENDING, "Top 100 Music Videos")
             private const val MAX_LANGUAGE_ROWS = 6
             private const val ROW_SONGS = 20
             private const val MATCH_PARALLEL = 4

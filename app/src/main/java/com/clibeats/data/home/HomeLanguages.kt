@@ -8,12 +8,23 @@ import com.clibeats.domain.radio.RadioLanguage
 data class SpotifyChart(
     val id: String,
     val name: String,
+    /** The chart's country (ISO code); null for Global. */
+    val country: String? = null,
 )
+
+private val COUNTRY_CODES =
+    mapOf(
+        "India" to "IN", "USA" to "US", "Egypt" to "EG", "Saudi Arabia" to "SA", "Taiwan" to "TW",
+        "Netherlands" to "NL", "Philippines" to "PH", "France" to "FR", "Germany" to "DE", "Israel" to "IL",
+        "Indonesia" to "ID", "Italy" to "IT", "Japan" to "JP", "South Korea" to "KR", "Poland" to "PL",
+        "Brazil" to "BR", "Mexico" to "MX", "Spain" to "ES", "Sweden" to "SE", "Thailand" to "TH",
+        "Turkey" to "TR", "Ukraine" to "UA", "Pakistan" to "PK", "Vietnam" to "VN",
+    )
 
 private fun top50(
     country: String,
     id: String,
-) = SpotifyChart(id, "Top 50 - $country")
+) = SpotifyChart(id, "Top 50 - $country", COUNTRY_CODES[country])
 
 private val TOP50_GLOBAL = top50("Global", "37i9dQZEVXbMDoHDwVN2tF")
 private val TOP50_INDIA = top50("India", "37i9dQZEVXbLZ52XmnySJg")
@@ -81,6 +92,15 @@ enum class HomeLanguage(
     ;
 
     companion object {
+        /** Spotify's worldwide Top 50, shown on every Home. */
+        val globalChart: SpotifyChart get() = TOP50_GLOBAL
+
+        /** Spotify's Top 50 for a country (ISO code), when there is one. */
+        fun countryChart(country: String): SpotifyChart? {
+            val charts = entries.flatMap { it.spotifyCharts }
+            return charts.firstOrNull { it.country == country }
+        }
+
         /** The picker's order: alphabetical by name. */
         val ordered: List<HomeLanguage> = entries.sortedBy { it.label }
 
