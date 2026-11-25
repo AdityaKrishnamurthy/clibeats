@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -53,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -385,9 +387,14 @@ private fun PlaylistDetailView(
     // (Most Played, M3U files) are only sorted on screen, until you leave them.
     var viewSort by remember(title) { mutableStateOf<SongSort?>(null) }
     val shown = remember(tracks, viewSort) { viewSort?.let { sortSongs(tracks, it) } ?: tracks }
+    // After a sort the list starts again from the top (it used to stay on the row that was visible).
+    var sortCount by remember(title) { mutableIntStateOf(0) }
+    val fixedListState = rememberLazyListState()
     val onSort: (SongSort) -> Unit = { sort ->
+        sortCount++
         if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
     }
+    LaunchedEffect(sortCount, viewSort) { if (sortCount > 0) fixedListState.scrollToItem(0) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -466,6 +473,7 @@ private fun PlaylistDetailView(
                 items = shown,
                 itemId = { it.id },
                 onReorder = { _, _, reordered -> onReorder(reordered) },
+                scrollToTopRequest = sortCount,
             ) { track, index ->
                 SongTableRow(
                     trackTitle = track.title,
@@ -502,7 +510,11 @@ private fun PlaylistDetailView(
                 )
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {
+            LazyColumn(
+                state = fixedListState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Top,
+            ) {
                 itemsIndexed(items = shown, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     SongTableRow(
                         trackTitle = track.title,

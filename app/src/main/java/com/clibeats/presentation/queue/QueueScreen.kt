@@ -33,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -173,6 +174,8 @@ private fun SplitQueueView(
     val nowPlayingTrack = if (currentIndex in tracks.indices) tracks[currentIndex] else tracks.firstOrNull()
     val upcomingStartIndex = if (currentIndex >= 0) currentIndex + 1 else 0
     val upcoming = if (currentIndex >= 0) tracks.drop(currentIndex + 1) else emptyList()
+    // Shuffle reorders Up Next: start it again from the top instead of following the row that was visible.
+    var shuffleCount by remember { mutableIntStateOf(0) }
 
     Column(
         modifier =
@@ -229,7 +232,10 @@ private fun SplitQueueView(
                         color = CliBeatsAccent,
                         modifier =
                             Modifier
-                                .clickable { viewModel.onShuffle() }
+                                .clickable {
+                                    shuffleCount++
+                                    viewModel.onShuffle()
+                                }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -266,6 +272,7 @@ private fun SplitQueueView(
                         startIndex = upcomingStartIndex,
                         viewModel = viewModel,
                         onRemove = onRemove,
+                        scrollToTopRequest = shuffleCount,
                     )
                 }
             }
@@ -284,11 +291,13 @@ private fun ReorderableUpcomingList(
     startIndex: Int,
     viewModel: QueueViewModel,
     onRemove: (Int, Track) -> Unit,
+    scrollToTopRequest: Int,
 ) {
     ReorderableList(
         items = upcoming,
         itemId = { it.id },
         onReorder = { from, to, _ -> viewModel.onMove(from + startIndex, to + startIndex) },
+        scrollToTopRequest = scrollToTopRequest,
     ) { track, index ->
         val queueIndex = index + startIndex
         SongTableRow(

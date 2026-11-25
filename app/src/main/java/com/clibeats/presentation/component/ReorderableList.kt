@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import kotlinx.coroutines.delay
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
 
@@ -75,6 +76,12 @@ fun <T> ReorderableList(
     itemId: (T) -> String,
     onReorder: (from: Int, to: Int, reordered: List<T>) -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * Bump this when the whole list is about to be reordered (sort, shuffle): the list goes back to the top,
+     * also once the new order arrives. Without it the list follows the row that was on screen to its new
+     * place, which lands somewhere in the middle.
+     */
+    scrollToTopRequest: Int = 0,
     // [index] is the item's position in [items] (what a tap should play), not where it is mid-drag.
     row: @Composable ReorderRowScope.(item: T, index: Int) -> Unit,
 ) {
@@ -85,11 +92,31 @@ fun <T> ReorderableList(
     var shown by remember { mutableStateOf(keyed) }
     var draggingKey by remember { mutableStateOf<String?>(null) }
     var dragFrom by remember { mutableIntStateOf(-1) }
+    val listState = rememberLazyListState()
+    var topPending by remember { mutableStateOf(false) }
+
+    // A reorder was asked for: go to the top now, and again when the new order arrives (below). If the
+    // order doesn't change (already sorted), stop waiting so a later edit doesn't jump to the top.
+    LaunchedEffect(scrollToTopRequest) {
+        if (scrollToTopRequest == 0) return@LaunchedEffect
+        topPending = true
+        listState.scrollToItem(0)
+        delay(TOP_PENDING_MS)
+        topPending = false
+    }
 
     // New data from the app (saved order, a song added or removed): show it, unless a row is in the air.
-    LaunchedEffect(keyed) { if (draggingKey == null) shown = keyed }
+    LaunchedEffect(keyed) {
+        if (draggingKey == null) {
+            shown = keyed
+            // Same frame as the new rows, so it wins over the "keep the visible row in view" adjustment.
+            if (topPending) {
+                listState.requestScrollToItem(0)
+                topPending = false
+            }
+        }
+    }
 
-    val listState = rememberLazyListState()
     val reorderState =
         rememberReorderableLazyListState(listState) { from, to ->
             val fromIndex = shown.indexOfFirst { it.key == from.key }
@@ -183,3 +210,4 @@ private fun Modifier.claimPress(onTap: (() -> Unit)?): Modifier =
 private const val HANDLE_DP = 36
 private const val HANDLE_PADDING_DP = 8
 private const val DRAG_ELEVATION_DP = 6
+private const val TOP_PENDING_MS = 3_000L
