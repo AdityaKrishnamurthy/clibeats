@@ -378,13 +378,13 @@ class TrackDownloadManager
             songId: String,
             status: DownloadStatus,
         ) {
-            _downloads.value = _downloads.value + (songId to status)
             val title = trackTitles[songId]
             if (status is DownloadStatus.Idle) {
                 if (_activeDownload.value?.trackId == songId) _activeDownload.value = null
             } else if (title != null) {
                 _activeDownload.value = ActiveDownload(songId, title, status)
             }
+            _downloads.value = _downloads.value + (songId to status)
         }
 
         private fun sha256(input: String): String {

@@ -180,7 +180,15 @@ class TrackDownloadManagerTest {
             assertThat(finalStatus).isInstanceOf(DownloadStatus.Completed::class.java)
             verify(resolver).invalidate("youtube_music", "yt1")
             verify(downloadedTrackDao).insert(any())
-            assertThat(manager.activeDownload.value?.status).isInstanceOf(DownloadStatus.Completed::class.java)
+            val activeStatus =
+                withContext(Dispatchers.Default) {
+                    withTimeout(5_000L) {
+                        manager.activeDownload.first {
+                            it?.trackId == track.id && it.status is DownloadStatus.Completed
+                        }
+                    }
+                }
+            assertThat(activeStatus?.status).isInstanceOf(DownloadStatus.Completed::class.java)
         }
 
     @Test
