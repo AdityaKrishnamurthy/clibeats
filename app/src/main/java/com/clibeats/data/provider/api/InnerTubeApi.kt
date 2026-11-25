@@ -11,7 +11,9 @@ import com.clibeats.data.provider.dto.SearchRequest
 import com.clibeats.data.provider.dto.SearchResponse
 import kotlinx.serialization.json.JsonElement
 import retrofit2.http.Body
+import retrofit2.http.Header
 import retrofit2.http.POST
+import retrofit2.http.Query
 
 interface InnerTubeApi {
     @POST("search")
@@ -22,6 +24,16 @@ interface InnerTubeApi {
     @POST("browse")
     suspend fun browse(
         @Body body: BrowseRequest,
+    ): BrowseResponse
+
+    /** The next part of a feed; [token] is used as given (YouTube sends it already URL-encoded). */
+    @POST("browse")
+    suspend fun browseContinuation(
+        @Query("ctoken", encoded = true) token: String,
+        @Query("continuation", encoded = true) continuation: String,
+        @Header("X-Goog-Visitor-Id") visitorData: String?,
+        @Body body: BrowseRequest,
+        @Query("type") type: String = "next",
     ): BrowseResponse
 
     @POST("player")

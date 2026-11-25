@@ -9,8 +9,10 @@ import kotlinx.serialization.json.JsonElement
 @Serializable
 data class BrowseRequest(
     val context: InnerTubeContext,
-    val browseId: String,
+    val browseId: String? = null,
     val formData: BrowseFormData? = null,
+    /** A filter on the page, e.g. a mood chip ("Relax") on the home feed. */
+    val params: String? = null,
 ) {
     companion object {
         private const val CHARTS_BROWSE_ID = "FEmusic_charts"
@@ -24,6 +26,23 @@ data class BrowseRequest(
             )
 
         fun page(browseId: String): BrowseRequest = BrowseRequest(InnerTubeContext.default(), browseId)
+
+        private const val HOME_BROWSE_ID = "FEmusic_home"
+
+        /** YouTube Music's home feed (for the phone's country), optionally filtered by a mood chip's [params]. */
+        fun home(params: String? = null): BrowseRequest {
+            val context = InnerTubeContext.default()
+            return BrowseRequest(context, HOME_BROWSE_ID, params = params)
+        }
+
+        /**
+         * The next part of a page (sent with the continuation token in the URL). [visitorData] comes from the
+         * first part's response: YouTube only serves the rest of a feed to the same visitor.
+         */
+        fun continuation(visitorData: String?): BrowseRequest {
+            val context = InnerTubeContext.default()
+            return BrowseRequest(context.copy(client = context.client.copy(visitorData = visitorData)))
+        }
     }
 }
 
@@ -35,4 +54,12 @@ data class BrowseFormData(
 @Serializable
 data class BrowseResponse(
     val contents: JsonElement? = null,
+    /** The rest of a feed, in a continuation response. */
+    val continuationContents: JsonElement? = null,
+    val responseContext: BrowseResponseContext? = null,
+)
+
+@Serializable
+data class BrowseResponseContext(
+    val visitorData: String? = null,
 )

@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -92,10 +93,37 @@ fun HomeScreen(
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
     val isOnline by homeViewModel.isOnline.collectAsState()
     val viewMode by homeViewModel.viewMode.collectAsState()
+    val feed by homeViewModel.feed.collectAsState()
+    val homeListState = rememberLazyListState()
+    val moods by homeViewModel.moods.collectAsState()
+    val selectedMood by homeViewModel.selectedMood.collectAsState()
+    val opened by homeViewModel.opened.collectAsState()
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
+
+    // A playlist or album opened from a card shows over Home; Back returns to the same spot.
+    opened?.let { collection ->
+        OpenedCollectionView(
+            opened = collection,
+            homeViewModel = homeViewModel,
+            trackActions = trackActions,
+            playingTrackId = playingId,
+            downloadedIds = downloadedIds,
+            onSongMenu = { addToPlaylistTrack = it },
+        )
+        return
+    }
+    val feedActions =
+        remember(homeViewModel) {
+            FeedActions(
+                playSong = homeViewModel::playFromList,
+                songMenu = { addToPlaylistTrack = it },
+                open = homeViewModel::openCollection,
+                selectMood = homeViewModel::selectMood,
+            )
+        }
 
     var confirmClearRecent by remember { mutableStateOf(false) }
     if (confirmClearRecent) {
@@ -108,6 +136,7 @@ fun HomeScreen(
         )
     }
     LazyColumn(
+        state = homeListState,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -177,6 +206,28 @@ fun HomeScreen(
                 onLongPress = { addToPlaylistTrack = it },
             )
             item { Spacer(modifier = Modifier.height(12.dp)) }
+        }
+
+        // 4. Online: YouTube Music's home page (mood chips, then its rows). Trending is the fallback.
+        feed?.let { state ->
+            item(key = "feed_header") {
+                val busy = isRefreshing || state is FeedState.Loading
+                SectionHeader(
+                    title = "Home / $providerName",
+                    actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ REFRESH ]",
+                    onAction = homeViewModel::refreshTrending,
+                    actionEnabled = !busy,
+                    actionDescription = "Refresh home",
+                )
+            }
+            homeFeed(
+                state = state,
+                moods = moods,
+                selectedMood = selectedMood,
+                playingTrackId = playingId,
+                actions = feedActions,
+            )
+            return@LazyColumn
         }
 
         // 4. Trending Tracks Block Header

@@ -125,6 +125,8 @@ internal fun PlaylistDetailView(
     onSwipeLeft: (Track) -> Unit,
     selection: SelectionActions,
     headerAction: Pair<String, () -> Unit>? = null,
+    /** Buttons under the header, side by side ([headerAction] alone by default). */
+    headerActions: List<Pair<String, () -> Unit>> = listOfNotNull(headerAction),
     coverUrl: String? = null,
     onChangeCoverClick: (() -> Unit)? = null,
     /** Non-null: rows get a ≡ handle to drag them into a new order. */
@@ -229,16 +231,20 @@ internal fun PlaylistDetailView(
                 onSort = if (tracks.size > 1) onSort else null,
             )
         }
-        if (headerAction != null && !selecting) {
-            Text(
-                text = headerAction.first,
-                style = MaterialTheme.typography.labelMedium,
-                color = accent,
-                modifier =
-                    Modifier
-                        .clickable(onClick = headerAction.second)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-            )
+        if (headerActions.isNotEmpty() && !selecting) {
+            Row(modifier = Modifier.padding(horizontal = 4.dp)) {
+                headerActions.forEach { (label, onClick) ->
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = accent,
+                        modifier =
+                            Modifier
+                                .clickable(onClick = onClick)
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                    )
+                }
+            }
         }
         if (tracks.size > 1) PlaylistSearchField(query = query, onQueryChange = { query = it })
 
