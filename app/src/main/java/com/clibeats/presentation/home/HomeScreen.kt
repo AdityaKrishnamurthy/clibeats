@@ -6,6 +6,9 @@
 
 package com.clibeats.presentation.home
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,6 +29,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -38,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -92,10 +97,62 @@ fun HomeScreen(
     val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
     val isOnline by homeViewModel.isOnline.collectAsState()
     val viewMode by homeViewModel.viewMode.collectAsState()
+    val feed by homeViewModel.feed.collectAsState()
+    val homeListState = rememberLazyListState()
+    val moods by homeViewModel.moods.collectAsState()
+    val selectedMood by homeViewModel.selectedMood.collectAsState()
+    val opened by homeViewModel.opened.collectAsState()
+    val localHome by homeViewModel.local.collectAsState()
+    val languages by homeViewModel.languages.collectAsState()
+    val localSetup by homeViewModel.localSetup.collectAsState()
+    val context = LocalContext.current
+    // The same folder picker as Settings -> Local Music; read access is kept across reboots.
+    val pickMusicFolder =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                homeViewModel.addLocalFolder(uri.toString())
+            }
+        }
+    val languagesAsked by homeViewModel.languagesAsked.collectAsState()
+    var pickLanguages by remember { mutableStateOf(false) }
+    if (pickLanguages) {
+        LanguagePickerDialog(
+            current = languages,
+            onDone = homeViewModel::setLanguages,
+            onDismiss = { pickLanguages = false },
+        )
+    }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
+
+    // A playlist or album opened from a card shows over Home; Back returns to the same spot.
+    opened?.let { collection ->
+        OpenedCollectionView(
+            opened = collection,
+            homeViewModel = homeViewModel,
+            trackActions = trackActions,
+            playingTrackId = playingId,
+            downloadedIds = downloadedIds,
+            onSongMenu = { addToPlaylistTrack = it },
+        )
+        return
+    }
+    val feedActions =
+        remember(homeViewModel) {
+            FeedActions(
+                playSong = homeViewModel::playFromRow,
+                songMenu = { addToPlaylistTrack = it },
+                open = homeViewModel::openCollection,
+                selectMood = homeViewModel::selectMood,
+                editLanguages = { pickLanguages = true },
+                skipLanguages = { homeViewModel.setLanguages(emptySet()) },
+            )
+        }
 
     var confirmClearRecent by remember { mutableStateOf(false) }
     if (confirmClearRecent) {
@@ -108,6 +165,7 @@ fun HomeScreen(
         )
     }
     LazyColumn(
+        state = homeListState,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -177,6 +235,45 @@ fun HomeScreen(
                 onLongPress = { addToPlaylistTrack = it },
             )
             item { Spacer(modifier = Modifier.height(12.dp)) }
+        }
+
+        // 4. Online: YouTube Music's home page (mood chips, then its rows). Trending is the fallback.
+        val isLocalHome = activeProviderId == "local"
+        feed?.let { state ->
+            item(key = "feed_header") {
+                val busy = isRefreshing || state is FeedState.Loading
+                SectionHeader(
+                    title = "Home / $providerName",
+                    actionLabel = if (busy) "[ LOADING… ]" else "[ ↻ REFRESH ]",
+                    onAction = homeViewModel::refreshTrending,
+                    actionEnabled = !busy,
+                    actionDescription = "Refresh home",
+                )
+                localHome?.takeIf { it.allSongs.isEmpty() }?.let {
+                    LocalSetupCard(setup = localSetup, onChooseFolder = { pickMusicFolder.launch(null) })
+                }
+                localHome?.takeIf { it.allSongs.isNotEmpty() }?.let { page ->
+                    LocalQuickActions(
+                        songCount = page.allSongs.size,
+                        albumCount = page.albums.size,
+                        onShuffleAll = homeViewModel::shuffleAll,
+                        onSurpriseAlbum = homeViewModel::surpriseAlbum,
+                    )
+                }
+            }
+            homeFeed(
+                state = state,
+                // Moods and languages belong to the online page only.
+                moods = if (isLocalHome) emptyList() else moods,
+                selectedMood = if (isLocalHome) null else selectedMood,
+                playingTrackId = playingId,
+                actions = feedActions,
+                languagesLabel = if (!isLocalHome) languages.joinToString(", ") { it.label } else null,
+                suggestLanguages = !isLocalHome && !languagesAsked && state is FeedState.Loaded,
+                // Local's empty library has its own set-up card above.
+                emptyText = if (localHome != null) null else "Nothing to show yet.",
+            )
+            return@LazyColumn
         }
 
         // 4. Trending Tracks Block Header

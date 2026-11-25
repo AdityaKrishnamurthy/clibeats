@@ -16,6 +16,8 @@ data class SpotifySong(
 data class SpotifyPlaylist(
     val name: String,
     val songs: List<SpotifySong>,
+    /** The cover, when read from Spotify's page (not in Exportify files). */
+    val coverUrl: String? = null,
 )
 
 /** The file isn't an Exportify export (or is damaged); [message] is shown to the user as is. */

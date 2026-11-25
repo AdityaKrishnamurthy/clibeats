@@ -198,7 +198,7 @@ fun JsonElement.toRadioTrackList(): List<Track> {
 }
 
 /** Every value stored under [key] anywhere in the tree, in document order. */
-private fun findAll(
+internal fun findAll(
     root: JsonElement,
     key: String,
 ): List<JsonElement> {
@@ -218,7 +218,7 @@ private fun findAll(
     return found
 }
 
-private fun JsonElement.parseTrack(): Track? {
+internal fun JsonElement.parseTrack(): Track? {
     val flexCols = this.nav("flexColumns")?.safeArray() ?: return null
 
     // Column 0: title + videoId
@@ -339,7 +339,7 @@ fun PlayerResponse.extractStreamUrl(): String? {
 
 // ── Navigation helpers ─────────────────────────────────────────────────────
 
-private fun JsonElement.nav(vararg keys: String): JsonElement? {
+internal fun JsonElement.nav(vararg keys: String): JsonElement? {
     var current: JsonElement = this
     for (key in keys) {
         current =
@@ -351,6 +351,6 @@ private fun JsonElement.nav(vararg keys: String): JsonElement? {
     return current
 }
 
-private fun JsonElement.safeArray(): List<JsonElement>? = runCatching { this.jsonArray }.getOrNull()
+internal fun JsonElement.safeArray(): List<JsonElement>? = runCatching { this.jsonArray }.getOrNull()
 
-private fun JsonElement.safeString(): String? = runCatching { this.jsonPrimitive.contentOrNull }.getOrNull()
+internal fun JsonElement.safeString(): String? = runCatching { this.jsonPrimitive.contentOrNull }.getOrNull()

@@ -65,6 +65,13 @@ class TrackActionsViewModel
             notices.show("Added ${tracks.size} to queue")
         }
 
+        /** Selected songs: right after the song playing now, keeping their order. */
+        fun playAllNext(tracks: List<Track>) {
+            // Each one goes straight after the current song, so add them last to first.
+            tracks.asReversed().forEach(playbackRepository::playNext)
+            notices.show(if (tracks.size == 1) "Playing next" else "Playing ${tracks.size} songs next")
+        }
+
         /** Selected songs: add all to ♥ Favorites. */
         fun favoriteAll(tracks: List<Track>) {
             viewModelScope.launch {

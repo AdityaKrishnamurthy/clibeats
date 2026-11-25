@@ -96,6 +96,7 @@ fun PlaylistScreen(
                 download = trackActions::downloadAll,
                 addToPlaylist = { bulkAddTracks = it },
                 queue = trackActions::addAllToQueue,
+                playNext = trackActions::playAllNext,
                 favorite = trackActions::favoriteAll,
                 more = { addToPlaylistTrack = it },
             )
