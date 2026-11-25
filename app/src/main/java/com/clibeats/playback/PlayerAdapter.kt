@@ -10,6 +10,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -40,6 +43,8 @@ class PlayerAdapter
         private val player: ExoPlayer,
         private val streamResolver: StreamResolver,
         @ApplicationContext private val context: Context,
+        /** Offline downloads: queued songs that are downloaded play from the file, not the network. */
+        private val downloadedTrackDao: dagger.Lazy<DownloadedTrackDao>? = null,
     ) {
         /**
          * Starts the media session foreground service so playback keeps running
@@ -84,6 +89,34 @@ class PlayerAdapter
         private var consecutiveFailures = 0
 
         private val trackList = mutableListOf<Track>()
+
+        /**
+         * Songs autoplay added (the radio). A song you add to the queue goes before them, so it plays after
+         * the current song instead of after every suggestion.
+         */
+        private val autoplayIds = mutableSetOf<String>()
+
+        /** The radio songs, for the Queue screen's "from radio" divider. */
+        private val _radioTrackIds = MutableStateFlow<Set<String>>(emptySet())
+        val radioTrackIds: StateFlow<Set<String>> = _radioTrackIds.asStateFlow()
+
+        /** Bumped whenever a new queue starts (or it is cleared): autoplay then starts a new radio. */
+        @Volatile var queueGeneration = 0
+            private set
+
+        private fun publishRadio() {
+            _radioTrackIds.value = autoplayIds.toSet()
+        }
+
+        /** A new queue: forget the old radio. */
+        private fun startNewQueue() {
+            autoplayIds.clear()
+            publishRadio()
+            queueGeneration++
+        }
+
+        /** Song id -> downloaded file path, kept in step with the downloads table. */
+        private val downloadedFiles = ConcurrentHashMap<String, String>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
         private var tickerJob: Job? = null
 
@@ -102,6 +135,48 @@ class PlayerAdapter
             tickerJob?.cancel()
             tickerJob = null
         }
+
+        init {
+            watchDownloads()
+        }
+
+        private fun watchDownloads() {
+            val dao = downloadedTrackDao ?: return
+            scope.launch {
+                val flow = withContext(Dispatchers.IO) { dao.get().getAllFlow() }
+                flow.collect { list -> onDownloadsChanged(list.associate { it.songId to it.filePath }) }
+            }
+        }
+
+        /**
+         * A song was downloaded or its download removed: queued copies switch between the file and the stream,
+         * so a removed file is never opened and a new download plays offline. The playing song keeps playing;
+         * only when its file was removed does it move to the stream at the same spot.
+         */
+        private fun onDownloadsChanged(files: Map<String, String>) {
+            val changed =
+                (downloadedFiles.keys + files.keys).filter { downloadedFiles[it] != files[it] }.toSet()
+            if (changed.isEmpty()) return
+            val removed = changed.filter { it !in files }.toSet()
+            downloadedFiles.clear()
+            downloadedFiles.putAll(files)
+            val current = player.currentMediaItemIndex
+            trackList.forEachIndexed { index, track ->
+                if (track.id !in changed || index >= player.mediaItemCount) return@forEachIndexed
+                if (index != current) {
+                    player.replaceMediaItem(index, track.toMediaItem())
+                } else if (track.id in removed && isFile(player.getMediaItemAt(index))) {
+                    val position = player.currentPosition.coerceAtLeast(0L)
+                    val playWhenReady = player.playWhenReady
+                    player.replaceMediaItem(index, track.toMediaItem())
+                    player.seekTo(index, position)
+                    player.prepare()
+                    player.playWhenReady = playWhenReady
+                }
+            }
+        }
+
+        private fun isFile(item: MediaItem): Boolean = item.localConfiguration?.uri?.scheme == "file"
 
         init {
             player.addListener(
@@ -195,6 +270,7 @@ class PlayerAdapter
             }
             unshuffledOrder = null
             trackList.clear()
+            startNewQueue()
             trackList.add(track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -222,6 +298,7 @@ class PlayerAdapter
                 start = startIndex
             }
             trackList.clear()
+            startNewQueue()
             trackList.addAll(ordered)
             syncQueue()
             val mediaItems = ordered.map { it.toMediaItem() }
@@ -233,10 +310,15 @@ class PlayerAdapter
 
         fun addToQueue(track: Track) {
             startPlaybackService()
-            // Shuffle on: mix the new song in among the upcoming ones instead of always playing it last.
-            val first = player.currentMediaItemIndex + 1
-            val shuffleIn = shuffleOn && first in 1..trackList.size
-            val index = if (shuffleIn) (first..trackList.size).random() else trackList.size
+            if (autoplayIds.remove(track.id)) publishRadio()
+            val first = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
+            // Songs you queue play before the autoplay suggestions (after the ones you queued earlier).
+            val radioStart =
+                (first until trackList.size).firstOrNull { trackList[it].id in autoplayIds }
+                    ?: trackList.size
+            // Shuffle on: mix the new song in among your upcoming songs instead of always playing it last.
+            val shuffleIn = shuffleOn && first in 1..radioStart
+            val index = if (shuffleIn) (first..radioStart).random() else radioStart
             trackList.add(index, track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -244,6 +326,35 @@ class PlayerAdapter
             if (player.playbackState == Player.STATE_IDLE || player.mediaItemCount == 1) {
                 player.prepare()
             }
+            updateState()
+        }
+
+        /** Autoplay's related songs: queued at the end and remembered as the radio (see [addToQueue]). */
+        fun addAutoplayTracks(tracks: List<Track>) {
+            if (tracks.isEmpty()) return
+            // The last song already finished (e.g. offline at the end of a playlist): carry on with the radio.
+            val endedAt = player.mediaItemCount.takeIf { player.playbackState == Player.STATE_ENDED }
+            autoplayIds += tracks.map { it.id }
+            publishRadio()
+            addAllToQueue(tracks)
+            if (endedAt != null && player.playWhenReady) {
+                player.seekTo(endedAt, 0L)
+                player.prepare()
+                player.play()
+            }
+        }
+
+        /** "Refresh radio": drops the radio songs still to come; autoplay then starts over from the current song. */
+        fun removeUpcomingRadio() {
+            val current = player.currentMediaItemIndex
+            for (i in trackList.indices.reversed()) {
+                if (i > current && trackList[i].id in autoplayIds && i < player.mediaItemCount) {
+                    trackList.removeAt(i)
+                    player.removeMediaItem(i)
+                }
+            }
+            startNewQueue()
+            syncQueue()
             updateState()
         }
 
@@ -286,6 +397,7 @@ class PlayerAdapter
         ) {
             if (tracks.isEmpty()) return
             trackList.clear()
+            startNewQueue()
             trackList.addAll(tracks)
             syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
@@ -535,12 +647,14 @@ class PlayerAdapter
             val current = player.currentMediaItemIndex
             if (current !in trackList.indices) {
                 trackList.clear()
+                startNewQueue()
                 player.clearMediaItems()
             } else {
                 if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
                 if (current > 0) player.removeMediaItems(0, current)
                 val keep = trackList[current]
                 trackList.clear()
+                startNewQueue()
                 trackList.add(keep)
             }
             syncQueue()
@@ -640,6 +754,9 @@ class PlayerAdapter
                     sampleRateHz = format?.sampleRate?.takeIf { it > 0 },
                     bitDepth = format?.pcmEncoding?.let(::bitDepthOf),
                     durationMs = player.duration.takeIf { it > 0 } ?: (currentTrack?.durationMs ?: 0L),
+                    fromDownload =
+                        currentTrack?.providerId != LOCAL_PROVIDER_ID &&
+                            player.currentMediaItem?.let(::isFile) == true,
                 )
         }
 
@@ -723,7 +840,12 @@ class PlayerAdapter
             // so queued tracks are playable and expired URLs never reach the network.
             // Signed (expiring) URLs, e.g. googlevideo `expire=`, always go through the resolver.
             val direct = streamUrl?.takeIf { it.isNotBlank() && !it.contains("expire") }
-            val uri = direct?.let { android.net.Uri.parse(it) } ?: TrackUriResolver.placeholderUri(this)
+            // A downloaded song plays straight from its file: works offline and skips the streaming cache.
+            val downloaded = downloadedFiles[id]?.takeIf { providerId != LOCAL_PROVIDER_ID }
+            val uri =
+                downloaded?.let { android.net.Uri.fromFile(java.io.File(it)) }
+                    ?: direct?.let { android.net.Uri.parse(it) }
+                    ?: TrackUriResolver.placeholderUri(this)
 
             return MediaItem.Builder()
                 .setMediaId(id)
@@ -751,6 +873,7 @@ class PlayerAdapter
             private const val BITS_PER_KBIT = 1000
             private const val MESSAGE_BUFFER = 4
             private const val MAX_CONSECUTIVE_FAILURES = 5
+            private const val LOCAL_PROVIDER_ID = "local"
 
             fun codecLabel(mime: String): String =
                 when (mime) {

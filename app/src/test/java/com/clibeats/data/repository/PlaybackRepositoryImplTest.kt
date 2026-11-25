@@ -395,8 +395,8 @@ class PlaybackRepositoryImplTest {
             val kn = track("kn1")
             val knRelated = track("kn_rel")
             val jpGate = CompletableDeferred<ProviderResult<List<Track>>>()
-            whenever(provider.relatedTracks("jp1")).doSuspendableAnswer { jpGate.await() }
-            whenever(provider.relatedTracks("kn1")).thenReturn(ProviderResult.Success(listOf(knRelated)))
+            whenever(provider.relatedTracks(eq("jp1"), any())).doSuspendableAnswer { jpGate.await() }
+            whenever(provider.relatedTracks(eq("kn1"), any())).thenReturn(ProviderResult.Success(listOf(knRelated)))
 
             val repo =
                 PlaybackRepositoryImpl(
@@ -417,8 +417,8 @@ class PlaybackRepositoryImplTest {
             nowPlaying(kn)
             jpGate.complete(ProviderResult.Success(listOf(jpRelated)))
 
-            verify(playerAdapter, never()).addAllToQueue(listOf(jpRelated))
-            verify(playerAdapter).addAllToQueue(listOf(knRelated))
+            verify(playerAdapter, never()).addAutoplayTracks(listOf(jpRelated))
+            verify(playerAdapter).addAutoplayTracks(listOf(knRelated))
             assertThat(repo.playbackState.value.currentTrack).isEqualTo(kn)
         }
 }

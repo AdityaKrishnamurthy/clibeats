@@ -581,10 +581,18 @@ private fun AudioOutputChip(
 
 private const val OUTPUT_ICON_DP = 14
 
-/** e.g. `[LOCAL] FLAC · 1076 kbps · 44.1 kHz · 24-bit` or `[ONLINE · YouTube Music] OPUS · 160 kbps · 48 kHz`. */
+/**
+ * e.g. `[LOCAL] FLAC · 1076 kbps · 44.1 kHz · 24-bit`, `[ONLINE · YouTube Music] OPUS · 160 kbps · 48 kHz`, or
+ * `[DOWNLOADED · YouTube Music] …` when the song plays from its offline download.
+ */
 internal fun qualityLine(state: PlaybackState): String {
     val providerId = state.currentTrack?.providerId ?: return ""
-    val source = if (providerId == "local") "[LOCAL]" else "[ONLINE · ${providerLabel(providerId)}]"
+    val source =
+        when {
+            providerId == "local" -> "[LOCAL]"
+            state.fromDownload -> "[DOWNLOADED · ${providerLabel(providerId)}]"
+            else -> "[ONLINE · ${providerLabel(providerId)}]"
+        }
     val parts =
         listOfNotNull(
             state.codec,

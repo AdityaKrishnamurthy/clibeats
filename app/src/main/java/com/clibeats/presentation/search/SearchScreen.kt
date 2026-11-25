@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
@@ -99,6 +100,16 @@ fun SearchScreen(
     var menuTrack by remember { mutableStateOf<Track?>(null) }
     val recentSearches by viewModel.recentSearches.collectAsState()
     val focusManager = LocalFocusManager.current
+    var confirmClearRecent by remember { mutableStateOf(false) }
+    if (confirmClearRecent) {
+        CliConfirmDialog(
+            command = "clear --recent-searches",
+            message = "Clear all recent searches?",
+            confirmLabel = "Clear",
+            onConfirm = viewModel::clearRecentSearches,
+            onDismiss = { confirmClearRecent = false },
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -115,7 +126,12 @@ fun SearchScreen(
             modifier = Modifier.semantics { contentDescription = "Search music" },
             focusRequester = searchFocus,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+            // The search key closes the keyboard so the results can be seen (clearing focus alone left it open).
+            keyboardActions =
+                KeyboardActions(onSearch = {
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                }),
             trailingContent = {
                 if (query.isNotEmpty()) {
                     IconButton(
@@ -153,7 +169,7 @@ fun SearchScreen(
                         tracks = recentSearches,
                         downloadedIds = downloadedIds,
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
-                        onClear = viewModel::clearRecentSearches,
+                        onClear = { confirmClearRecent = true },
                         onAddToQueue = { track ->
                             trackActions.addToQueue(track)
                             viewModel.rememberPick(track)

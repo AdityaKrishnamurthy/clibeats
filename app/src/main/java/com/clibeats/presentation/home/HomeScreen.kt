@@ -45,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ProviderSwitcher
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
@@ -94,6 +95,16 @@ fun HomeScreen(
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
 
+    var confirmClearRecent by remember { mutableStateOf(false) }
+    if (confirmClearRecent) {
+        CliConfirmDialog(
+            command = "clear --recently-played",
+            message = "Clear the Recently Played list? Favorites and playlists aren't touched.",
+            confirmLabel = "Clear",
+            onConfirm = homeViewModel::clearRecentlyPlayed,
+            onDismiss = { confirmClearRecent = false },
+        )
+    }
     LazyColumn(
         modifier =
             Modifier
@@ -149,7 +160,7 @@ fun HomeScreen(
                 SectionHeader(
                     title = "Recently Played",
                     actionLabel = "[ CLEAR ]",
-                    onAction = homeViewModel::clearRecentlyPlayed,
+                    onAction = { confirmClearRecent = true },
                 )
             }
             homeTracks(

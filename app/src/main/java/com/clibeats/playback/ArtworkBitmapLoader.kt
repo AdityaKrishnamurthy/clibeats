@@ -62,7 +62,25 @@ class ArtworkBitmapLoader(
         return source?.let(::load)
     }
 
+    // The card is rebuilt on every play, pause and seek and asks for the cover each time. Hand back the
+    // same cover (already loaded, so the card is drawn at once, in one pass) instead of loading it again,
+    // which posted the card twice per tap: first without the cover, then with it.
+    @Volatile private var lastSource: String? = null
+
+    @Volatile private var lastResult: ListenableFuture<Bitmap>? = null
+
     private fun load(source: String): ListenableFuture<Bitmap> {
+        synchronized(this) {
+            val cached = lastResult
+            if (source == lastSource && cached != null && !cached.isCancelled) return cached
+            val fresh = loadFresh(source)
+            lastSource = source
+            lastResult = fresh
+            return fresh
+        }
+    }
+
+    private fun loadFresh(source: String): ListenableFuture<Bitmap> {
         val result = SettableFuture.create<Bitmap>()
         scope.launch {
             val full = artworkUrlFor(source, ARTWORK_FULL_PX) ?: source
@@ -83,7 +101,16 @@ class ArtworkBitmapLoader(
                 val sharp = withTimeoutOrNull(HIRES_WAIT_MS) { fetch(full, cacheOnly = false) }
                 result.set(sharp ?: cachedSmaller)
                 // Slow network: show the small one now and still try to swap the high-res in when it lands.
-                if (sharp == null && fetch(full, cacheOnly = false) != null) onBetterArtwork()
+                if (sharp == null) {
+                    val late = fetch(full, cacheOnly = false)
+                    if (late != null) {
+                        // Later redraws of this song use the sharp cover straight away.
+                        synchronized(this@ArtworkBitmapLoader) {
+                            if (lastSource == source) lastResult = Futures.immediateFuture(late)
+                        }
+                        onBetterArtwork()
+                    }
+                }
                 return@launch
             }
             val downloaded =
@@ -91,6 +118,12 @@ class ArtworkBitmapLoader(
                     fetch(full, cacheOnly = false) ?: smaller.firstNotNullOfOrNull { fetch(it, cacheOnly = false) }
                 }
             result.set(downloaded ?: logo)
+            // No cover (offline, slow network): try again on the next redraw instead of keeping the logo.
+            if (downloaded == null) {
+                synchronized(this@ArtworkBitmapLoader) {
+                    if (lastSource == source) lastResult = null
+                }
+            }
         }
         return result
     }

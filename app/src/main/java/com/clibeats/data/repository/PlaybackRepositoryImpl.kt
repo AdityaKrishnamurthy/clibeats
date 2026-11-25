@@ -16,6 +16,7 @@ import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.ProviderRegistry
+import com.clibeats.domain.radio.RadioLanguage
 import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.PlayerAdapter
@@ -38,6 +39,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -267,23 +270,46 @@ class PlaybackRepositoryImpl
             }
         }
 
+        /**
+         * One radio per queue, like the YouTube Music app: a long list for the song that started it, handed out
+         * a batch at a time, in its language first. Only when that list runs out does a new radio start, from
+         * the latest radio song in the same language.
+         */
+        private class RadioSession(
+            val generation: Int,
+            val seedId: String,
+            /** The language the radio keeps to (e.g. "kannada"), or null when it can't be told. */
+            val language: String?,
+            val pending: ArrayDeque<Track>,
+            /** Every song this radio has offered; a current song outside it means the user moved on. */
+            val known: MutableSet<String>,
+        )
+
+        private var radio: RadioSession? = null
+        private val radioMutex = Mutex()
+
         @Suppress("ReturnCount")
         private suspend fun checkAutoplay(current: Track) {
             val enabled = runCatching { appPreferences.autoplayEnabled.first() }.getOrDefault(false)
             if (!enabled) return
             if (playerAdapter.playbackState.value.repeatMode != RepeatMode.OFF) return
-            if (networkMonitor?.isOnline?.value != true) return
+            // Offline when the queue nears its end (e.g. a downloaded playlist): wait for the connection
+            // instead of giving up; switching songs cancels the wait.
+            networkMonitor?.let { monitor -> if (!monitor.isOnline.value) monitor.isOnline.first { it } }
             val queue = playerAdapter.queueFlow.value
             val currentIndex = queue.indexOfFirst { it.id == current.id }
             if (currentIndex < 0 || currentIndex < queue.lastIndex - 1) return
+            radioMutex.withLock { addRadioBatch(current) }
+        }
 
-            val provider =
-                providerRegistry?.getProvider(current.providerId)
-                    ?: providerRegistry?.defaultProvider()
-                    ?: return
-            val result = provider.relatedTracks(current.id)
-            val related = (result as? com.clibeats.domain.provider.ProviderResult.Success)?.data.orEmpty()
-            if (related.isEmpty()) return
+        /** Adds the next batch of the radio after the queue (starting or continuing the radio as needed). */
+        @Suppress("CyclomaticComplexMethod")
+        private suspend fun addRadioBatch(current: Track) {
+            val generation = playerAdapter.queueGeneration
+            val existing =
+                radio?.takeIf { it.generation == generation && (current.id == it.seedId || current.id in it.known) }
+            var session: RadioSession =
+                existing ?: startRadio(current, generation, inheritedLanguage = null) ?: return
 
             val recentHistory =
                 runCatching {
@@ -292,14 +318,89 @@ class PlaybackRepositoryImpl
                         ?.map { it.id }
                         ?.toSet()
                 }.getOrNull().orEmpty()
+            val skip = playerAdapter.queueFlow.value.map { it.id }.toMutableSet().apply { addAll(recentHistory) }
+            val batch = takeBatch(session, skip)
+            if (batch.size < RADIO_BATCH && session.pending.isEmpty()) {
+                // This radio is used up: carry on from its latest song in the radio's language.
+                val queue = playerAdapter.queueFlow.value
+                val seed =
+                    queue.lastOrNull { it.id in session.known && RadioLanguage.languageOf(it) == session.language }
+                        ?: queue.lastOrNull()
+                        ?: current
+                val next = startRadio(seed, generation, inheritedLanguage = session.language ?: NO_LANGUAGE)
+                if (next != null) {
+                    session = next
+                    skip.addAll(batch.map { it.id })
+                    batch += takeBatch(next, skip)
+                }
+            }
+            radio = session
+            if (batch.isEmpty()) return
+            withContext(Dispatchers.Main) {
+                // Still the same song and queue (the user didn't move on while this loaded).
+                if (playerAdapter.playbackState.value.currentTrack?.id == current.id &&
+                    playerAdapter.queueGeneration == generation
+                ) {
+                    playerAdapter.addAutoplayTracks(batch)
+                }
+            }
+        }
 
-            val existingIds = queue.map { it.id }.toSet()
-            val candidates = related.filter { it.id !in existingIds && it.id !in recentHistory }
-            if (candidates.isNotEmpty()) {
-                withContext(Dispatchers.Main) {
-                    if (playerAdapter.playbackState.value.currentTrack?.id == current.id) {
-                        playerAdapter.addAllToQueue(candidates)
-                    }
+        /**
+         * Fetches [seed]'s radio, ordered for the radio's language; null when nothing came back. A new radio
+         * decides its language from the seed (or its suggestions); a follow-on radio keeps [inheritedLanguage].
+         */
+        @Suppress("ReturnCount")
+        private suspend fun startRadio(
+            seed: Track,
+            generation: Int,
+            inheritedLanguage: String?,
+        ): RadioSession? {
+            val provider =
+                providerRegistry?.getProvider(seed.providerId)
+                    ?: providerRegistry?.defaultProvider()
+                    ?: return null
+            val result = provider.relatedTracks(seed.id, RADIO_FETCH_LIMIT)
+            val related = (result as? com.clibeats.domain.provider.ProviderResult.Success)?.data.orEmpty()
+            if (related.isEmpty()) return null
+            val language =
+                when (inheritedLanguage) {
+                    null -> RadioLanguage.forRadio(seed, related)
+                    NO_LANGUAGE -> null
+                    else -> inheritedLanguage
+                }
+            val ordered = RadioLanguage.preferSameLanguage(language, related)
+            return RadioSession(
+                generation = generation,
+                seedId = seed.id,
+                language = language,
+                pending = ArrayDeque(ordered),
+                known = ordered.mapTo(mutableSetOf()) { it.id }.apply { add(seed.id) },
+            )
+        }
+
+        private fun takeBatch(
+            session: RadioSession,
+            skip: Set<String>,
+        ): MutableList<Track> {
+            val batch = mutableListOf<Track>()
+            while (batch.size < RADIO_BATCH && session.pending.isNotEmpty()) {
+                val next = session.pending.removeFirst()
+                if (next.id !in skip && batch.none { it.id == next.id }) batch += next
+            }
+            return batch
+        }
+
+        override val radioTrackIds: StateFlow<Set<String>> get() = playerAdapter.radioTrackIds
+
+        /** Queue screen [ RADIO ]: drop the radio songs to come and start a new radio from the current song. */
+        override fun refreshRadio() {
+            repositoryScope.launch {
+                val current = playerAdapter.playbackState.value.currentTrack ?: return@launch
+                withContext(Dispatchers.Main) { playerAdapter.removeUpcomingRadio() }
+                radioMutex.withLock {
+                    radio = null
+                    addRadioBatch(current)
                 }
             }
         }
@@ -433,6 +534,15 @@ class PlaybackRepositoryImpl
             const val PREFETCH_COUNT = 2
             const val HISTORY_LIMIT = 100
             const val AUTOPLAY_HISTORY_DEDUP_LIMIT = 25
+
+            /** Songs added each time the queue nears its end. */
+            const val RADIO_BATCH = 15
+
+            /** Songs fetched for one radio (a few pages), handed out [RADIO_BATCH] at a time. */
+            const val RADIO_FETCH_LIMIT = 80
+
+            /** A follow-on radio whose first radio had no language: keep YouTube Music's order. */
+            const val NO_LANGUAGE = ""
             const val POSITION_SAVE_STEP_MS = 5_000L
             const val RESTART_THRESHOLD_MS = 3_000L
             const val LOCAL_PROVIDER = "local"

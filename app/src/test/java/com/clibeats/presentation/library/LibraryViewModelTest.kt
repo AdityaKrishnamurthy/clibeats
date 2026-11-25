@@ -77,7 +77,7 @@ class LibraryViewModelTest {
         }
 
     @Test
-    fun `onTrackClick replaces queue with single track when autoQueueRelated is false`() =
+    fun `onTrackClick starts a fresh radio from the tapped track when autoplay is on`() =
         runTest {
             val t1 = Track("1", "Song 1", "Artist A", "Album X", 180000L, null, null, "local")
             val t2 = Track("2", "Song 2", "Artist A", "Album Y", 200000L, null, null, "local")

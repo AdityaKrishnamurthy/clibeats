@@ -77,11 +77,12 @@ class SearchViewModel
         ) {
             viewModelScope.launch {
                 appPreferences.addRecentSearchTrack(tracks[index])
-                // "Auto-queue related" off: replace queue with tapped song so autoplay re-seeds.
-                if (appPreferences.autoQueueRelated.first()) {
-                    playbackRepository.setQueue(tracks, index)
-                } else {
+                // Autoplay on: the song starts a fresh radio of related songs, in its own language and style,
+                // instead of keeping the old radio. Autoplay off: the other results play after it.
+                if (appPreferences.autoplayEnabled.first()) {
                     playbackRepository.setQueue(listOf(tracks[index]), 0)
+                } else {
+                    playbackRepository.setQueue(tracks, index)
                 }
             }
         }

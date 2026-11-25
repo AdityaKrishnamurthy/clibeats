@@ -242,6 +242,50 @@ class TrackDownloadManagerTest {
             assertThat(downloadsDir.listFiles().orEmpty()).isEmpty()
         }
 
+    @Test
+    fun `downloadTrack fetches a ranged file in pieces and reassembles it byte for byte`() =
+        runTest {
+            val resolver: StreamResolver = mock()
+            whenever(streamResolver.get()).thenReturn(resolver)
+            val track = fakeTrack("yt4", "Big Song", "https://ok.example/audio")
+            // 2.5 pieces long, so the last piece is short.
+            val content = ByteArray(2_621_440 + 123) { (it % 251).toByte() }
+            val ranges = java.util.Collections.synchronizedList(mutableListOf<String>())
+            whenever(okHttpClient.newCall(any())).thenAnswer { inv ->
+                val req = inv.getArgument<Request>(0)
+                val range = req.header("Range")!!
+                ranges += range
+                val (from, to) = range.removePrefix("bytes=").split("-").map(String::toLong)
+                val end = minOf(to, content.size - 1L)
+                val call: Call = mock()
+                whenever(call.execute()).thenReturn(
+                    Response.Builder()
+                        .request(req)
+                        .protocol(Protocol.HTTP_1_1)
+                        .code(206)
+                        .message("Partial Content")
+                        .header("Content-Type", "audio/webm")
+                        .header("Content-Range", "bytes $from-$end/${content.size}")
+                        .body(
+                            content
+                                .copyOfRange(from.toInt(), end.toInt() + 1)
+                                .toResponseBody("audio/webm".toMediaType()),
+                        )
+                        .build(),
+                )
+                call
+            }
+
+            manager.downloadTrack(track)
+
+            val finalStatus = awaitTerminalStatus(track.id)
+            assertThat(finalStatus).isInstanceOf(DownloadStatus.Completed::class.java)
+            val file = (finalStatus as DownloadStatus.Completed).file
+            assertThat(file.name).endsWith(".webm")
+            assertThat(file.readBytes()).isEqualTo(content)
+            assertThat(ranges).hasSize(3)
+        }
+
     private suspend fun awaitTerminalStatus(trackId: String): DownloadStatus? =
         withContext(Dispatchers.Default) {
             withTimeout(5_000L) {

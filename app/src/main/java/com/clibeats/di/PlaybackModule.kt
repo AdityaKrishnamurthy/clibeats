@@ -35,7 +35,9 @@ object PlaybackModule {
     private const val MIN_BUFFER_MS = 15_000
     private const val MAX_BUFFER_MS = 50_000
     private const val BUFFER_FOR_PLAYBACK_MS = 300
-    private const val BUFFER_AFTER_REBUFFER_MS = 1_000
+
+    // After a stall, wait for 1.5 s of audio before resuming so a weak network does not stutter on and off.
+    private const val BUFFER_AFTER_REBUFFER_MS = 1_500
 
     @Provides
     @Singleton
@@ -70,9 +72,11 @@ object PlaybackModule {
                 .build()
         // Reuse the app's OkHttp pool: warm TLS sessions and HTTP/2 instead of a cold handshake per play.
         val httpFactory = OkHttpDataSource.Factory(okHttpClient)
+        // The resolver can also answer with a downloaded or cached file (file://), which plain HTTP can't
+        // open; DefaultDataSource opens files itself and hands http(s) to the OkHttp factory.
         val resolvingFactory =
             ResolvingDataSource.Factory(
-                httpFactory,
+                DefaultDataSource.Factory(context, httpFactory),
                 TrackUriResolver(streamResolver, cacheManager, downloadedTrackDao),
             )
         // Remote audio goes through the song cache. The cache key is the stable placeholder/track URI,

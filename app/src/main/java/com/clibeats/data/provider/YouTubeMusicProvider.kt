@@ -11,6 +11,7 @@
 
 package com.clibeats.data.provider
 
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.InnerTubeContext
@@ -23,6 +24,7 @@ import com.clibeats.data.provider.mapper.pageArtist
 import com.clibeats.data.provider.mapper.pageCover
 import com.clibeats.data.provider.mapper.pageTitle
 import com.clibeats.data.provider.mapper.playlistTracks
+import com.clibeats.data.provider.mapper.radioContinuation
 import com.clibeats.data.provider.mapper.toAlbumHits
 import com.clibeats.data.provider.mapper.toRadioTrackList
 import com.clibeats.data.provider.mapper.toTrack
@@ -57,6 +59,8 @@ class YouTubeMusicProvider
         private val poTokenGenerator: PoTokenGenerator,
         private val streamCacheManager: StreamCacheManager,
         private val newPipeExtractorResolver: NewPipeExtractorResolver,
+        /** Settings -> Audio Quality (High quality / Data saver); null in tests means high quality. */
+        private val appPreferences: AppPreferences? = null,
     ) : MusicProvider {
         override val providerId: String = "youtube_music"
         override val displayName: String = "YouTube Music"
@@ -190,7 +194,9 @@ class YouTubeMusicProvider
                 return ProviderResult.Success(cached.url)
             }
 
-            val highQuality = true
+            // Every path follows the Audio Quality setting (the fast path used to always pick the best stream,
+            // so Data saver was ignored).
+            val highQuality = appPreferences?.highQualityStreaming?.first() ?: true
 
             // 2. Fast path: direct InnerTube call with ANDROID_MUSIC (no PO token, 1.2s budget)
             val fast =
@@ -244,12 +250,21 @@ class YouTubeMusicProvider
         ): ProviderResult<List<Track>> {
             val rawId = ProviderId.rawSourceId(providerId, trackId)
             return runCatching {
-                val nextJson = api.next(NextRequest.radio(rawId))
-                val tracks =
-                    nextJson.toRadioTrackList()
+                // The song's radio, page after page (about 25 songs each) until [limit], like the YouTube Music
+                // app keeps playing one radio instead of starting a new one from each song.
+                val tracks = LinkedHashMap<String, Track>()
+                var json = api.next(NextRequest.radio(rawId))
+                var pages = 1
+                while (true) {
+                    json.toRadioTrackList()
                         .filter { ProviderId.rawSourceId(providerId, it.id) != rawId }
-                        .take(limit)
-                ProviderResult.Success(tracks)
+                        .forEach { tracks.putIfAbsent(it.id, it) }
+                    val more = json.radioContinuation()
+                    if (tracks.size >= limit || more == null || pages >= MAX_RADIO_PAGES) break
+                    json = runCatching { api.next(NextRequest.radioPage(more)) }.getOrNull() ?: break
+                    pages++
+                }
+                ProviderResult.Success(tracks.values.take(limit))
             }.getOrElse { e ->
                 ProviderResult.Error(
                     message = "Radio failed for $rawId: ${e.message}",
@@ -370,4 +385,5 @@ class YouTubeMusicProvider
 
 private const val BITS_PER_KBIT = 1000
 private const val FAST_PATH_TIMEOUT_MS = 1_200L
+private const val MAX_RADIO_PAGES = 4
 private const val FULL_PATH_TIMEOUT_MS = 20_000L

@@ -53,6 +53,7 @@ class HomeViewModelTest {
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("youtube_music"))
         whenever(appPreferences.homeView).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(false))
+        whenever(appPreferences.autoplayEnabled).thenReturn(flowOf(true))
         // Trending loads as soon as the ViewModel starts; tests that care stub their own result.
         runBlocking { whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(emptyList())) }
 
@@ -152,7 +153,7 @@ class HomeViewModelTest {
         }
 
     @Test
-    fun `playFromList replaces queue with single track when autoQueueRelated is false`() =
+    fun `playFromList starts a fresh radio from the tapped track when autoplay is on`() =
         runTest {
             val playbackRepository: PlaybackRepository = mock()
             val networkMonitor: NetworkMonitor = mock()

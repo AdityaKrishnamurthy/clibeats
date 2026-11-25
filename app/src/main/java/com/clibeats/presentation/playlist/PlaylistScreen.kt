@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -53,6 +54,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -68,6 +70,7 @@ import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableRow
@@ -299,60 +302,40 @@ fun PlaylistScreen(
     }
     // Clearing a whole list always asks first, so it can't happen by a stray tap.
     pendingClear?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingClear = null },
-            modifier = Modifier.border(1.dp, CliBeatsAccent),
-            title = {
-                Text(
-                    when (target) {
-                        ClearTarget.FAVORITES -> "> clear --favorites"
-                        ClearTarget.MOST_PLAYED -> "> clear --most-played"
-                        ClearTarget.DOWNLOADED -> "> clear --downloaded"
-                    },
-                )
+        CliConfirmDialog(
+            command =
+                when (target) {
+                    ClearTarget.FAVORITES -> "clear --favorites"
+                    ClearTarget.MOST_PLAYED -> "clear --most-played"
+                    ClearTarget.DOWNLOADED -> "rm -r downloads/"
+                },
+            message =
+                when (target) {
+                    ClearTarget.FAVORITES -> "Remove every song from ♥ Favorites?"
+                    ClearTarget.MOST_PLAYED ->
+                        "Reset Most Played? It starts counting again from now. Your listening history is kept."
+                    ClearTarget.DOWNLOADED ->
+                        "Delete every downloaded song? The files are removed from your phone and the songs " +
+                            "stream again when played."
+                },
+            confirmLabel = "Clear all",
+            onConfirm = {
+                when (target) {
+                    ClearTarget.FAVORITES -> viewModel.clearFavorites()
+                    ClearTarget.MOST_PLAYED -> viewModel.clearMostPlayed()
+                    ClearTarget.DOWNLOADED -> viewModel.clearAllDownloaded()
+                }
             },
-            text = {
-                Text(
-                    when (target) {
-                        ClearTarget.FAVORITES -> "Remove every song from ♥ Favorites?"
-                        ClearTarget.MOST_PLAYED ->
-                            "Reset Most Played? It starts counting again from now. " +
-                                "Your listening history is kept."
-                        ClearTarget.DOWNLOADED ->
-                            "Delete all downloaded songs from offline storage? " +
-                                "Files will be removed from your device."
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when (target) {
-                            ClearTarget.FAVORITES -> viewModel.clearFavorites()
-                            ClearTarget.MOST_PLAYED -> viewModel.clearMostPlayed()
-                            ClearTarget.DOWNLOADED -> viewModel.clearAllDownloaded()
-                        }
-                        pendingClear = null
-                    },
-                ) { Text("Clear all", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { pendingClear = null }) { Text("Cancel") } },
-            containerColor = CliBeatsSurface,
+            onDismiss = { pendingClear = null },
         )
     }
     pendingDelete?.let { playlist ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("> rm \"${playlist.name}\"") },
-            text = { Text("Delete this playlist? The songs themselves are not deleted.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePlaylist(playlist.id)
-                    pendingDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
-            containerColor = CliBeatsSurface,
+        CliConfirmDialog(
+            command = "rm \"${playlist.name}\"",
+            message = "Delete this playlist? The songs themselves are not deleted.",
+            confirmLabel = "Delete",
+            onConfirm = { viewModel.deletePlaylist(playlist.id) },
+            onDismiss = { pendingDelete = null },
         )
     }
     addToPlaylistTrack?.let { track ->
@@ -360,6 +343,7 @@ fun PlaylistScreen(
     }
 }
 
+@Suppress("CyclomaticComplexMethod")
 @Composable
 private fun PlaylistDetailView(
     title: String,
@@ -385,9 +369,14 @@ private fun PlaylistDetailView(
     // (Most Played, M3U files) are only sorted on screen, until you leave them.
     var viewSort by remember(title) { mutableStateOf<SongSort?>(null) }
     val shown = remember(tracks, viewSort) { viewSort?.let { sortSongs(tracks, it) } ?: tracks }
+    // After a sort the list starts again from the top (it used to stay on the row that was visible).
+    var sortCount by remember(title) { mutableIntStateOf(0) }
+    val fixedListState = rememberLazyListState()
     val onSort: (SongSort) -> Unit = { sort ->
+        sortCount++
         if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
     }
+    LaunchedEffect(sortCount, viewSort) { if (sortCount > 0) fixedListState.scrollToItem(0) }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -466,6 +455,7 @@ private fun PlaylistDetailView(
                 items = shown,
                 itemId = { it.id },
                 onReorder = { _, _, reordered -> onReorder(reordered) },
+                scrollToTopRequest = sortCount,
             ) { track, index ->
                 SongTableRow(
                     trackTitle = track.title,
@@ -502,7 +492,11 @@ private fun PlaylistDetailView(
                 )
             }
         } else {
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top) {
+            LazyColumn(
+                state = fixedListState,
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Top,
+            ) {
                 itemsIndexed(items = shown, key = { index, track -> "${track.id}_$index" }) { index, track ->
                     SongTableRow(
                         trackTitle = track.title,

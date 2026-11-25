@@ -1,3 +1,52 @@
+# CLIBeats v2.5.5 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.5.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.6 MB
+
+## Downloads
+
+- **Much faster downloads.** Songs now download in small pieces, several at once, instead of one slow stream.
+  A song you've already played to the end is copied from the song cache almost instantly.
+- **Downloaded songs play offline.** Before, a downloaded song only played if it was also in the song cache.
+  Now Playing shows `[DOWNLOADED · YouTube Music]` when a song plays from its download.
+- **Removing downloads works properly.** Removing a song, or **Clear all**, empties the Downloaded playlist at
+  once, stops downloads still running, and a queued song that loses its download streams instead. Leftover
+  files from interrupted downloads are cleaned up.
+- **Downloaded shows only what's really on your phone,** and its size in Settings is measured from the files.
+- **Downloading a song doesn't change it anywhere else:** playlists, Favorites, backups and playlist export
+  keep it exactly as before.
+
+## Settings
+
+- **Storage and Cache:** a total at the top, and every size in **MB** or **GB** (the limits read 256 MB, 512 MB,
+  1 GB, 2 GB). Downloads show their real size and song count, with Manage and Clear all.
+- **Data saver works again:** songs stream at the lower quality when Settings → Audio Quality is set to save
+  data.
+
+## Autoplay and queue
+
+- **Radio that stays on track.** Autoplay now keeps to the radio of the song you started with, page after
+  page, like the YouTube Music app, instead of starting over from each new song (which let it wander into
+  other languages). Songs in the same language as your song come first; songs in other languages only play
+  when there are none left. A song's language comes from its script (Kannada, Japanese, ...) or a language
+  in its title, and for titles in English letters, from YouTube Music's own suggestions.
+- **Queue:** a `∞ FROM RADIO` line shows where your songs end and the suggestions begin, and `[ ↻ RADIO ]`
+  starts a fresh radio from the song playing now.
+- **A new song starts its own radio.** Play a song from Search, Home or Library and the suggestions follow
+  that song (a Kannada song after a Japanese radio gets Kannada suggestions).
+- **Songs you add play next.** While a suggestion plays, **Add to queue** puts your song right after it,
+  ahead of the other suggestions.
+- **Offline at the end of a playlist:** autoplay waits for the connection, adds suggestions and carries on
+  playing, even if the last song already finished.
+
+## Smaller fixes
+
+- Sorting a playlist or shuffling the queue goes back to the top of the list.
+- The search key closes the keyboard (Search and the import Find box).
+- Every clear or bulk delete asks first, in the terminal style (`> rm -r cache/songs`).
+- The notification and lock-screen card redraw once per tap (play, pause, seek), with the cover kept.
+- Fewer stutters on weak connections after the music pauses to load.
+
 # CLIBeats v2.5.4 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.4.apk` (verify with `SHA256SUMS.txt`)

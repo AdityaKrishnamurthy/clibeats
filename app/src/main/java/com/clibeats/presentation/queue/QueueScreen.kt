@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.DragHandle
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -33,16 +34,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -173,6 +179,18 @@ private fun SplitQueueView(
     val nowPlayingTrack = if (currentIndex in tracks.indices) tracks[currentIndex] else tracks.firstOrNull()
     val upcomingStartIndex = if (currentIndex >= 0) currentIndex + 1 else 0
     val upcoming = if (currentIndex >= 0) tracks.drop(currentIndex + 1) else emptyList()
+    // Shuffle reorders Up Next: start it again from the top instead of following the row that was visible.
+    var shuffleCount by remember { mutableIntStateOf(0) }
+    var confirmClear by remember { mutableStateOf(false) }
+    if (confirmClear) {
+        CliConfirmDialog(
+            command = "clear --queue",
+            message = "Remove all ${upcoming.size} songs from Up Next? The playing song keeps playing.",
+            confirmLabel = "Clear",
+            onConfirm = viewModel::onClear,
+            onDismiss = { confirmClear = false },
+        )
+    }
 
     Column(
         modifier =
@@ -223,13 +241,32 @@ private fun SplitQueueView(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val autoplayOn by viewModel.autoplayEnabled.collectAsState()
+                    if (autoplayOn) {
+                        Text(
+                            text = "[ ↻ RADIO ]",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = CliBeatsAccent,
+                            modifier =
+                                Modifier
+                                    .semantics { contentDescription = "Restart the radio from the song playing now" }
+                                    .clickable {
+                                        shuffleCount++
+                                        viewModel.onRefreshRadio()
+                                    }.padding(horizontal = 6.dp, vertical = 4.dp),
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
                     Text(
                         text = "[ SHUFFLE ]",
                         style = MaterialTheme.typography.labelSmall,
                         color = CliBeatsAccent,
                         modifier =
                             Modifier
-                                .clickable { viewModel.onShuffle() }
+                                .clickable {
+                                    shuffleCount++
+                                    viewModel.onShuffle()
+                                }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -244,7 +281,7 @@ private fun SplitQueueView(
                             },
                         modifier =
                             Modifier
-                                .clickable(enabled = upcoming.isNotEmpty()) { viewModel.onClear() }
+                                .clickable(enabled = upcoming.isNotEmpty()) { confirmClear = true }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                     )
                 }
@@ -266,10 +303,29 @@ private fun SplitQueueView(
                         startIndex = upcomingStartIndex,
                         viewModel = viewModel,
                         onRemove = onRemove,
+                        scrollToTopRequest = shuffleCount,
                     )
                 }
             }
         }
+    }
+}
+
+/** `── from radio ──` above the songs autoplay added. */
+@Suppress("FunctionNaming")
+@Composable
+private fun RadioDivider() {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HorizontalDivider(modifier = Modifier.weight(1f), color = CliBeatsTextSecondary.copy(alpha = 0.4f))
+        Text(
+            text = "  ∞ FROM RADIO  ",
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
+        HorizontalDivider(modifier = Modifier.weight(1f), color = CliBeatsTextSecondary.copy(alpha = 0.4f))
     }
 }
 
@@ -284,48 +340,56 @@ private fun ReorderableUpcomingList(
     startIndex: Int,
     viewModel: QueueViewModel,
     onRemove: (Int, Track) -> Unit,
+    scrollToTopRequest: Int,
 ) {
+    val radioIds by viewModel.radioTrackIds.collectAsState()
+    // The first radio song gets a "from radio" line above it: your queued songs above, suggestions below.
+    val firstRadio = upcoming.indexOfFirst { it.id in radioIds }
     ReorderableList(
         items = upcoming,
         itemId = { it.id },
         onReorder = { from, to, _ -> viewModel.onMove(from + startIndex, to + startIndex) },
+        scrollToTopRequest = scrollToTopRequest,
     ) { track, index ->
         val queueIndex = index + startIndex
-        SongTableRow(
-            trackTitle = track.title,
-            artist = track.artist,
-            duration = formatDuration(track.durationMs),
-            index = index + 2,
-            artworkContent = {
-                TrackArtwork(
-                    artworkUrl = track.artworkUrl,
-                    size = 32,
-                    modifier = Modifier.artworkHandle { viewModel.onTrackClick(track, queueIndex) },
-                )
-            },
-            onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
-            onSwipeRight = { onRemove(queueIndex, track) },
-            swipeRightLabel = "✕ REMOVE",
-            // Position counted from now (playing = 1), in front of the cover.
-            leading = {
-                Text(
-                    text = "${index + 2}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                    textAlign = TextAlign.End,
-                    maxLines = 1,
-                    modifier = Modifier.width(24.dp).padding(end = 6.dp),
-                )
-            },
-            actions = { DragHandle() },
-            // Swipe can't be done with TalkBack: offer removal as a spoken action instead.
-            accessibilityActions =
-                listOf(
-                    CustomAccessibilityAction("Remove from queue") {
-                        onRemove(queueIndex, track)
-                        true
-                    },
-                ),
-        )
+        Column {
+            if (index == firstRadio) RadioDivider()
+            SongTableRow(
+                trackTitle = track.title,
+                artist = track.artist,
+                duration = formatDuration(track.durationMs),
+                index = index + 2,
+                artworkContent = {
+                    TrackArtwork(
+                        artworkUrl = track.artworkUrl,
+                        size = 32,
+                        modifier = Modifier.artworkHandle { viewModel.onTrackClick(track, queueIndex) },
+                    )
+                },
+                onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
+                onSwipeRight = { onRemove(queueIndex, track) },
+                swipeRightLabel = "✕ REMOVE",
+                // Position counted from now (playing = 1), in front of the cover.
+                leading = {
+                    Text(
+                        text = "${index + 2}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CliBeatsTextSecondary,
+                        textAlign = TextAlign.End,
+                        maxLines = 1,
+                        modifier = Modifier.width(24.dp).padding(end = 6.dp),
+                    )
+                },
+                actions = { DragHandle() },
+                // Swipe can't be done with TalkBack: offer removal as a spoken action instead.
+                accessibilityActions =
+                    listOf(
+                        CustomAccessibilityAction("Remove from queue") {
+                            onRemove(queueIndex, track)
+                            true
+                        },
+                    ),
+            )
+        }
     }
 }
