@@ -69,6 +69,7 @@ import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
 import com.clibeats.data.scan.ScanStatus
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
@@ -80,6 +81,25 @@ import com.clibeats.presentation.update.UpdateSection
 
 private const val BYTES_PER_MB = 1048576L
 private const val MB_PER_GB = 1024
+private const val BYTES_PER_GB = BYTES_PER_MB * MB_PER_GB
+
+/** Sizes in settings are MB or GB only: "0 MB", "3.4 MB", "512 MB", "1.25 GB". */
+internal fun formatSize(bytes: Long): String {
+    if (bytes <= 0L) return "0 MB"
+    if (bytes >= BYTES_PER_GB) {
+        val gb = bytes.toDouble() / BYTES_PER_GB
+        return "${trimZeros(String.format(java.util.Locale.US, "%.2f", gb))} GB"
+    }
+    val mb = bytes.toDouble() / BYTES_PER_MB
+    val text = if (mb >= 100) "%.0f" else "%.1f"
+    return "${trimZeros(String.format(java.util.Locale.US, text, mb.coerceAtLeast(0.1)))} MB"
+}
+
+/** A limit picked in MB: "256 MB", "1 GB", "2 GB". */
+internal fun formatMb(mb: Int): String =
+    if (mb >= MB_PER_GB && mb % MB_PER_GB == 0) "${mb / MB_PER_GB} GB" else formatSize(mb * BYTES_PER_MB)
+
+private fun trimZeros(number: String): String = if ('.' in number) number.trimEnd('0').trimEnd('.') else number
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
@@ -110,74 +130,47 @@ fun SettingsScreen(
     var folderToRemove by remember { mutableStateOf<String?>(null) }
     folderToRemove?.let { folder ->
         val appContext = LocalContext.current
-        AlertDialog(
-            onDismissRequest = { folderToRemove = null },
-            title = { Text("Remove folder?") },
-            text = {
-                Text(
-                    "\"${folderLabel(folder)}\" and its songs will be removed from your library. " +
-                        "The files on your phone are not deleted.",
-                )
+        CliConfirmDialog(
+            command = "rm \"${folderLabel(folder)}\"",
+            message =
+                "\"${folderLabel(folder)}\" and its songs will be removed from your library. " +
+                    "The files on your phone are not deleted.",
+            confirmLabel = "Remove",
+            onConfirm = {
+                runCatching {
+                    appContext.contentResolver.releasePersistableUriPermission(
+                        Uri.parse(folder),
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+                viewModel.removeLocalFolder(folder)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    folderToRemove = null
-                    runCatching {
-                        appContext.contentResolver.releasePersistableUriPermission(
-                            Uri.parse(folder),
-                            Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                        )
-                    }
-                    viewModel.removeLocalFolder(folder)
-                }) { Text("REMOVE", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { folderToRemove = null }) { Text("CANCEL") }
-            },
+            onDismiss = { folderToRemove = null },
         )
     }
     // The trash button deletes every saved backup, so it asks first.
     var confirmClearBackups by remember { mutableStateOf(false) }
     if (confirmClearBackups) {
-        AlertDialog(
-            onDismissRequest = { confirmClearBackups = false },
-            title = { Text("Delete saved backups?") },
-            text = {
-                Text(
-                    "Deletes the backups CLIBeats saved inside the app and in Download/CLIBeats. A new one is " +
-                        "saved the next time you open the app. Your library isn't touched.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmClearBackups = false
-                    viewModel.clearBackups()
-                }) { Text("DELETE", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClearBackups = false }) { Text("CANCEL") }
-            },
+        CliConfirmDialog(
+            command = "rm backups/*",
+            message =
+                "Deletes the backups CLIBeats saved inside the app and in Download/CLIBeats. A new one is " +
+                    "saved the next time you open the app. Your library isn't touched.",
+            confirmLabel = "Delete",
+            onConfirm = viewModel::clearBackups,
+            onDismiss = { confirmClearBackups = false },
         )
     }
     var confirmClearDownloads by remember { mutableStateOf(false) }
     if (confirmClearDownloads) {
-        AlertDialog(
-            onDismissRequest = { confirmClearDownloads = false },
-            title = { Text("Delete all downloaded songs?") },
-            text = {
-                Text(
-                    "Deletes all songs stored offline by CLIBeats. Downloaded files will be removed from your device.",
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmClearDownloads = false
-                    viewModel.clearAllDownloads()
-                }) { Text("DELETE ALL", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmClearDownloads = false }) { Text("CANCEL") }
-            },
+        CliConfirmDialog(
+            command = "rm -r downloads/",
+            message =
+                "Delete every downloaded song? The files are removed from your phone and the songs stream " +
+                    "again when played.",
+            confirmLabel = "Delete all",
+            onConfirm = viewModel::clearAllDownloads,
+            onDismiss = { confirmClearDownloads = false },
         )
     }
     var showManageDownloads by remember { mutableStateOf(false) }
@@ -209,7 +202,7 @@ fun SettingsScreen(
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = "${item.artist} · ${item.sizeBytes / BYTES_PER_MB} MB",
+                                        text = "${item.artist} · ${formatSize(item.sizeBytes)}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = CliBeatsTextSecondary,
                                         maxLines = 1,
@@ -425,20 +418,51 @@ fun SettingsScreen(
             }
         }
 
-        // ── Section: Storage (caches + offline downloads) ───────────────────
+        // ── Section: Storage and Cache (caches + offline downloads) ─────────
         val cacheUsage by viewModel.cacheUsage.collectAsState()
         val artworkCacheMb by viewModel.artworkCacheMb.collectAsState()
         val downloadedBytes by viewModel.downloadedBytes.collectAsState()
         val downloadedItems by viewModel.downloadedSongItems.collectAsState()
-        TuiBlock(title = "Storage", isActive = true) {
+        // Clearing a cache asks first, like every other bulk delete.
+        var confirmClearArtwork by remember { mutableStateOf(false) }
+        var confirmClearSongs by remember { mutableStateOf(false) }
+        if (confirmClearArtwork) {
+            CliConfirmDialog(
+                command = "rm -r cache/artwork",
+                message =
+                    "Delete all saved cover images (${formatSize(cacheUsage.artworkBytes)})? " +
+                        "They download again when needed.",
+                confirmLabel = "Clear",
+                onConfirm = viewModel::clearArtworkCache,
+                onDismiss = { confirmClearArtwork = false },
+            )
+        }
+        if (confirmClearSongs) {
+            CliConfirmDialog(
+                command = "rm -r cache/songs",
+                message =
+                    "Delete all songs saved while streaming (${formatSize(cacheUsage.songBytes)})? " +
+                        "They stream again next time. Your downloads aren't touched.",
+                confirmLabel = "Clear",
+                onConfirm = viewModel::clearSongCache,
+                onDismiss = { confirmClearSongs = false },
+            )
+        }
+        TuiBlock(title = "Storage and Cache", isActive = true) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "TOTAL USED  " +
+                        formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent,
+                )
                 CacheRow(
                     label = "ARTWORK",
                     usedBytes = cacheUsage.artworkBytes,
                     options = ARTWORK_CACHE_OPTIONS,
                     selectedMb = artworkCacheMb,
                     onSelect = viewModel::setArtworkCacheMb,
-                    onClear = viewModel::clearArtworkCache,
+                    onClear = { confirmClearArtwork = true },
                     note = "new limit applies on next app start",
                 )
                 CacheRow(
@@ -447,14 +471,15 @@ fun SettingsScreen(
                     options = SONG_CACHE_OPTIONS,
                     selectedMb = uiState.cacheMaxMb,
                     onSelect = viewModel::setSongCacheMb,
-                    onClear = viewModel::clearSongCache,
+                    onClear = { confirmClearSongs = true },
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val songs = downloadedItems.size
                     Text(
-                        text = "DOWNLOADS  ${downloadedBytes / BYTES_PER_MB} MB (${downloadedItems.size} songs)",
+                        text = "DOWNLOADS  ${formatSize(downloadedBytes)} · $songs ${if (songs == 1) "song" else "songs"}",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f),
@@ -470,11 +495,12 @@ fun SettingsScreen(
                     )
                     if (downloadedItems.isNotEmpty()) {
                         Text(
-                            text = "[ CLEAR ]",
+                            text = "[ CLEAR ALL ]",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.error,
                             modifier =
                                 Modifier
+                                    .semantics { contentDescription = "Delete all downloaded songs" }
                                     .clickable(role = Role.Button) { confirmClearDownloads = true }
                                     .padding(horizontal = 6.dp, vertical = 8.dp),
                         )
@@ -612,7 +638,7 @@ private fun CacheRow(
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = "$label  ${usedBytes / BYTES_PER_MB} / $selectedMb MB",
+                text = "$label  ${formatSize(usedBytes)} / ${formatMb(selectedMb)}",
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -632,7 +658,7 @@ private fun CacheRow(
             options.forEach { mb ->
                 val isSelected = mb == selectedMb
                 Text(
-                    text = if (mb >= MB_PER_GB) "${mb / MB_PER_GB}G" else "${mb}M",
+                    text = formatMb(mb),
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier =
