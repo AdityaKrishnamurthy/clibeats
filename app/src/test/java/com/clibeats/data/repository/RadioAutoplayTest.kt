@@ -116,7 +116,7 @@ class RadioAutoplayTest {
             advanceUntilIdle()
 
             assertThat(repo).isNotNull()
-            verify(playerAdapter).addAllToQueue(listOf(relatedTrack))
+            verify(playerAdapter).addAutoplayTracks(listOf(relatedTrack))
         }
 
     @Test
@@ -146,7 +146,7 @@ class RadioAutoplayTest {
             advanceUntilIdle()
 
             assertThat(repo).isNotNull()
-            verify(playerAdapter, never()).addAllToQueue(any())
+            verify(playerAdapter, never()).addAutoplayTracks(any())
         }
 
     private fun testTrack(id: String) =

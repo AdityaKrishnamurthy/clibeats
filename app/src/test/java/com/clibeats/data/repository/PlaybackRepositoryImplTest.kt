@@ -417,8 +417,8 @@ class PlaybackRepositoryImplTest {
             nowPlaying(kn)
             jpGate.complete(ProviderResult.Success(listOf(jpRelated)))
 
-            verify(playerAdapter, never()).addAllToQueue(listOf(jpRelated))
-            verify(playerAdapter).addAllToQueue(listOf(knRelated))
+            verify(playerAdapter, never()).addAutoplayTracks(listOf(jpRelated))
+            verify(playerAdapter).addAutoplayTracks(listOf(knRelated))
             assertThat(repo.playbackState.value.currentTrack).isEqualTo(kn)
         }
 }

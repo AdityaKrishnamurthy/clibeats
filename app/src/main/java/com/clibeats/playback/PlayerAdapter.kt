@@ -90,6 +90,12 @@ class PlayerAdapter
 
         private val trackList = mutableListOf<Track>()
 
+        /**
+         * Songs autoplay added (the radio). A song you add to the queue goes before them, so it plays after
+         * the current song instead of after every suggestion.
+         */
+        private val autoplayIds = mutableSetOf<String>()
+
         /** Song id -> downloaded file path, kept in step with the downloads table. */
         private val downloadedFiles = ConcurrentHashMap<String, String>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -245,6 +251,7 @@ class PlayerAdapter
             }
             unshuffledOrder = null
             trackList.clear()
+            autoplayIds.clear()
             trackList.add(track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -272,6 +279,7 @@ class PlayerAdapter
                 start = startIndex
             }
             trackList.clear()
+            autoplayIds.clear()
             trackList.addAll(ordered)
             syncQueue()
             val mediaItems = ordered.map { it.toMediaItem() }
@@ -283,10 +291,14 @@ class PlayerAdapter
 
         fun addToQueue(track: Track) {
             startPlaybackService()
-            // Shuffle on: mix the new song in among the upcoming ones instead of always playing it last.
-            val first = player.currentMediaItemIndex + 1
-            val shuffleIn = shuffleOn && first in 1..trackList.size
-            val index = if (shuffleIn) (first..trackList.size).random() else trackList.size
+            autoplayIds.remove(track.id)
+            val first = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
+            // Songs you queue play before the autoplay suggestions (after the ones you queued earlier).
+            val radioStart = (first until trackList.size).firstOrNull { trackList[it].id in autoplayIds }
+                ?: trackList.size
+            // Shuffle on: mix the new song in among your upcoming songs instead of always playing it last.
+            val shuffleIn = shuffleOn && first in 1..radioStart
+            val index = if (shuffleIn) (first..radioStart).random() else radioStart
             trackList.add(index, track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -295,6 +307,12 @@ class PlayerAdapter
                 player.prepare()
             }
             updateState()
+        }
+
+        /** Autoplay's related songs: queued at the end and remembered as the radio (see [addToQueue]). */
+        fun addAutoplayTracks(tracks: List<Track>) {
+            autoplayIds += tracks.map { it.id }
+            addAllToQueue(tracks)
         }
 
         fun addAllToQueue(tracks: List<Track>) {
@@ -336,6 +354,7 @@ class PlayerAdapter
         ) {
             if (tracks.isEmpty()) return
             trackList.clear()
+            autoplayIds.clear()
             trackList.addAll(tracks)
             syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
@@ -585,12 +604,14 @@ class PlayerAdapter
             val current = player.currentMediaItemIndex
             if (current !in trackList.indices) {
                 trackList.clear()
+                autoplayIds.clear()
                 player.clearMediaItems()
             } else {
                 if (current + 1 < trackList.size) player.removeMediaItems(current + 1, trackList.size)
                 if (current > 0) player.removeMediaItems(0, current)
                 val keep = trackList[current]
                 trackList.clear()
+                autoplayIds.clear()
                 trackList.add(keep)
             }
             syncQueue()

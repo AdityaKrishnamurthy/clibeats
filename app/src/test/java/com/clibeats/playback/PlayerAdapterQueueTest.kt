@@ -226,4 +226,30 @@ class PlayerAdapterQueueTest {
         verify(exoPlayer).removeMediaItems(0, 1)
         assertThat(adapter.queueFlow.value.map { it.id }).containsExactly("t2")
     }
+
+    @Test
+    fun addToQueue_whileRadioPlays_goesRightAfterTheCurrentSong_beforeTheSuggestions() {
+        adapter.setQueue(listOf(track("mine")))
+        adapter.addAutoplayTracks(listOf(track("r1"), track("r2"), track("r3")))
+        // The first suggestion is playing.
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(1)
+
+        adapter.addToQueue(track("next1"))
+        adapter.addToQueue(track("next2"))
+
+        assertThat(adapter.queueFlow.value.map { it.id })
+            .containsExactly("mine", "r1", "next1", "next2", "r2", "r3").inOrder()
+        verify(exoPlayer).addMediaItem(eq(2), any())
+        verify(exoPlayer).addMediaItem(eq(3), any())
+    }
+
+    @Test
+    fun addToQueue_withoutRadio_stillAddsAtTheEnd() {
+        adapter.setQueue(listOf(track("a"), track("b")))
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(0)
+
+        adapter.addToQueue(track("c"))
+
+        assertThat(adapter.queueFlow.value.map { it.id }).containsExactly("a", "b", "c").inOrder()
+    }
 }

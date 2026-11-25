@@ -300,7 +300,7 @@ class PlaybackRepositoryImpl
             if (candidates.isNotEmpty()) {
                 withContext(Dispatchers.Main) {
                     if (playerAdapter.playbackState.value.currentTrack?.id == current.id) {
-                        playerAdapter.addAllToQueue(candidates)
+                        playerAdapter.addAutoplayTracks(candidates)
                     }
                 }
             }
