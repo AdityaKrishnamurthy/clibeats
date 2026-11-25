@@ -99,12 +99,14 @@ fun PlayerBar(
     onSeek: (positionMs: Long) -> Unit = {},
     modifier: Modifier = Modifier,
     onExpandClick: () -> Unit = {},
+    /** Where the music comes from ("Search", a playlist's name, "∞ Radio"), shown in the border. */
+    source: String? = null,
 ) {
     val accent = LocalAccentColor.current
     val playPauseDescription = if (isPlaying) "Pause $trackTitle" else "Play $trackTitle"
 
     TuiBlock(
-        title = "Playing",
+        title = source?.let { "Playing · ${it.ellipsize(SOURCE_MAX_CHARS)}" } ?: "Playing",
         isActive = isPlaying,
         modifier = modifier.padding(horizontal = 8.dp, vertical = 4.dp),
     ) {
@@ -374,3 +376,8 @@ private fun formatPlayerTime(ms: Long): String {
 }
 
 private const val MAX_BADGE = 99
+
+/** [this] cut to [max] characters with "…" (a long playlist name must not fill the border). */
+internal fun String.ellipsize(max: Int): String = if (length <= max) this else take(max - 1).trimEnd() + "…"
+
+private const val SOURCE_MAX_CHARS = 24

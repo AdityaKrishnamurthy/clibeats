@@ -40,6 +40,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -81,6 +83,26 @@ class TrackDownloadManager
 
         private val trackTitles = ConcurrentHashMap<String, String>()
         private val activeJobs = ConcurrentHashMap<String, Job>()
+
+        /** Songs asked for but not finished yet (queued or downloading), in the order they were asked for. */
+        private val pending = java.util.Collections.synchronizedMap(LinkedHashMap<String, Track>())
+        private val _pendingTracks = MutableStateFlow<List<Track>>(emptyList())
+
+        /** Shown in Downloaded (greyed out) until each one finishes. */
+        val pendingTracks: StateFlow<List<Track>> = _pendingTracks.asStateFlow()
+
+        /** At most this many songs download at once; the rest wait their turn (a whole playlist can be queued). */
+        private val downloadSlots = Semaphore(PARALLEL_DOWNLOADS)
+
+        private fun publishPending() {
+            _pendingTracks.value = synchronized(pending) { pending.values.toList() }
+        }
+
+        /** Downloads every song in [tracks] that isn't downloaded or on its way yet, in order. */
+        fun downloadAll(tracks: List<Track>) {
+            val have = downloadedTrackIds.value
+            tracks.filter { it.id !in have && it.providerId != LOCAL_PROVIDER_ID }.forEach(::downloadTrack)
+        }
 
         private val downloadsDir: File by lazy {
             File(context.filesDir, "downloads").apply {
@@ -159,82 +181,98 @@ class TrackDownloadManager
             val partFile = File(downloadsDir, "$hash.part")
 
             activeJobs.remove(track.id)?.cancel()
+            pending[track.id] = track
+            publishPending()
             // Publish the start synchronously so the UI never observes a stale Completed/Failed status.
-            updateStatus(track.id, DownloadStatus.Downloading(0))
+            updateStatus(track.id, DownloadStatus.Queued)
 
             val job =
                 scope.launch {
                     try {
-                        existingDownload(track.id)?.let { existing ->
-                            updateStatus(track.id, DownloadStatus.Completed(existing))
-                            return@launch
-                        }
-
-                        // Played to the end before? The whole song is in the streaming cache: copy it.
-                        val cached = runCatching { copyFromSongCache(track, partFile) }.getOrNull()
-                        if (cached != null) {
-                            finish(track, hash, partFile, cached)
-                            return@launch
-                        }
-
-                        var streamUrl: String =
-                            resolveStreamUrl(track, forceRefresh = false) ?: run {
-                                updateStatus(track.id, DownloadStatus.Failed("No stream URL available"))
-                                return@launch
-                            }
-
-                        var lastError = "Download failed"
-                        for (attempt in 1..MAX_ATTEMPTS) {
-                            try {
-                                val format = fetch(track.id, streamUrl, partFile)
-                                finish(track, hash, partFile, format)
-                                return@launch
-                            } catch (e: CancellationException) {
-                                throw e
-                            } catch (e: Exception) {
-                                partFile.delete()
-                                lastError = e.message?.takeIf { it.isNotBlank() } ?: lastError
-                                if (attempt == MAX_ATTEMPTS) {
-                                    DiagnosticLogger.logError(
-                                        "TrackDownloadManager",
-                                        "DOWNLOAD_FAILED",
-                                        "${track.id}: $lastError",
-                                    )
-                                    updateStatus(track.id, DownloadStatus.Failed(lastError))
-                                    return@launch
-                                }
-                                // A stale signed URL or PO token is the usual cause of a 403: invalidate and refresh.
-                                streamResolver.get().invalidate(track.providerId, track.id)
-                                streamUrl =
-                                    resolveStreamUrl(track, forceRefresh = true) ?: run {
-                                        DiagnosticLogger.logError(
-                                            "TrackDownloadManager",
-                                            "DOWNLOAD_FAILED",
-                                            "${track.id}: $lastError",
-                                        )
-                                        updateStatus(track.id, DownloadStatus.Failed(lastError))
-                                        return@launch
-                                    }
-                            }
-                        }
-                    } catch (e: CancellationException) {
-                        // Only the job that is still current may delete the shared part file.
-                        if (activeJobs[track.id] == null) {
-                            if (partFile.exists()) partFile.delete()
-                            updateStatus(track.id, DownloadStatus.Idle)
-                        }
-                        throw e
-                    } catch (e: Exception) {
-                        if (partFile.exists()) partFile.delete()
-                        if (activeJobs[track.id] == coroutineContext[Job]) {
-                            updateStatus(track.id, DownloadStatus.Failed(e.message ?: "Download failed"))
-                        }
+                        downloadSlots.withPermit { runDownload(track, hash, partFile) }
                     } finally {
-                        activeJobs.remove(track.id, coroutineContext[Job])
+                        if (pending.remove(track.id) != null) publishPending()
                     }
                 }
 
             activeJobs[track.id] = job
+        }
+
+        @Suppress("LongMethod", "CyclomaticComplexMethod", "ThrowsCount", "NestedBlockDepth", "ReturnCount")
+        private suspend fun runDownload(
+            track: Track,
+            hash: String,
+            partFile: File,
+        ) {
+            updateStatus(track.id, DownloadStatus.Downloading(0))
+            try {
+                existingDownload(track.id)?.let { existing ->
+                    updateStatus(track.id, DownloadStatus.Completed(existing))
+                    return
+                }
+
+                // Played to the end before? The whole song is in the streaming cache: copy it.
+                val cached = runCatching { copyFromSongCache(track, partFile) }.getOrNull()
+                if (cached != null) {
+                    finish(track, hash, partFile, cached)
+                    return
+                }
+
+                var streamUrl: String =
+                    resolveStreamUrl(track, forceRefresh = false) ?: run {
+                        updateStatus(track.id, DownloadStatus.Failed("No stream URL available"))
+                        return
+                    }
+
+                var lastError = "Download failed"
+                for (attempt in 1..MAX_ATTEMPTS) {
+                    try {
+                        val format = fetch(track.id, streamUrl, partFile)
+                        finish(track, hash, partFile, format)
+                        return
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        partFile.delete()
+                        lastError = e.message?.takeIf { it.isNotBlank() } ?: lastError
+                        if (attempt == MAX_ATTEMPTS) {
+                            DiagnosticLogger.logError(
+                                "TrackDownloadManager",
+                                "DOWNLOAD_FAILED",
+                                "${track.id}: $lastError",
+                            )
+                            updateStatus(track.id, DownloadStatus.Failed(lastError))
+                            return
+                        }
+                        // A stale signed URL or PO token is the usual cause of a 403: invalidate and refresh.
+                        streamResolver.get().invalidate(track.providerId, track.id)
+                        streamUrl =
+                            resolveStreamUrl(track, forceRefresh = true) ?: run {
+                                DiagnosticLogger.logError(
+                                    "TrackDownloadManager",
+                                    "DOWNLOAD_FAILED",
+                                    "${track.id}: $lastError",
+                                )
+                                updateStatus(track.id, DownloadStatus.Failed(lastError))
+                                return
+                            }
+                    }
+                }
+            } catch (e: CancellationException) {
+                // Only the job that is still current may delete the shared part file.
+                if (activeJobs[track.id] == null) {
+                    if (partFile.exists()) partFile.delete()
+                    updateStatus(track.id, DownloadStatus.Idle)
+                }
+                throw e
+            } catch (e: Exception) {
+                if (partFile.exists()) partFile.delete()
+                if (activeJobs[track.id] == coroutineContext[Job]) {
+                    updateStatus(track.id, DownloadStatus.Failed(e.message ?: "Download failed"))
+                }
+            } finally {
+                activeJobs.remove(track.id, coroutineContext[Job])
+            }
         }
 
         /** Renames the part file after its container, records it, and reports the download done. */
@@ -619,6 +657,8 @@ class TrackDownloadManager
         suspend fun deleteAllDownloads() {
             withContext(Dispatchers.IO + NonCancellable) {
                 activeJobs.keys.toList().forEach(::cancelDownload)
+                pending.clear()
+                publishPending()
                 downloadedTrackDao.deleteAll()
                 downloadsDir.listFiles()?.forEach { it.delete() }
                 trackTitles.clear()
@@ -632,10 +672,15 @@ class TrackDownloadManager
             status: DownloadStatus,
         ) {
             val title = trackTitles[songId]
-            if (status is DownloadStatus.Idle) {
-                if (_activeDownload.value?.trackId == songId) _activeDownload.value = null
-            } else if (title != null) {
-                _activeDownload.value = ActiveDownload(songId, title, status)
+            when {
+                status is DownloadStatus.Idle ->
+                    if (_activeDownload.value?.trackId == songId) _activeDownload.value = null
+                // A queued song doesn't take over the banner from the one downloading now.
+                status is DownloadStatus.Queued -> Unit
+                title != null -> {
+                    val waiting = synchronized(pending) { pending.keys.count { it != songId } }
+                    _activeDownload.value = ActiveDownload(songId, title, status, waiting)
+                }
             }
             _downloads.value = _downloads.value + (songId to status)
         }
@@ -645,21 +690,24 @@ class TrackDownloadManager
             return bytes.joinToString("") { "%02x".format(it) }
         }
 
-        private companion object {
-            const val BUFFER_SIZE = 64 * 1024
-            const val PERCENT = 100
-            const val MAX_ATTEMPTS = 2
-            const val HTTP_PARTIAL = 206
+        companion object {
+            /** Songs downloaded at the same time. */
+            const val PARALLEL_DOWNLOADS = 2
+            private const val BUFFER_SIZE = 64 * 1024
+            private const val PERCENT = 100
+            private const val MAX_ATTEMPTS = 2
+            private const val HTTP_PARTIAL = 206
 
             /** 1 MB pieces: small enough that YouTube serves each one at full speed. */
-            const val CHUNK_BYTES = 1L * 1024 * 1024
+            private const val CHUNK_BYTES = 1L * 1024 * 1024
 
             /** Pieces fetched at the same time (a typical song is 3 to 8 pieces). */
-            const val PARALLEL_CHUNKS = 4
-            const val RANGE_ATTEMPTS = 3
-            const val SNIFF_BYTES = 12
-            const val LEFTOVER_AGE_MS = 60_000L
-            const val LEFTOVER_CLEANUP_DELAY_MS = 30_000L
+            private const val PARALLEL_CHUNKS = 4
+            private const val RANGE_ATTEMPTS = 3
+            private const val LOCAL_PROVIDER_ID = "local"
+            private const val SNIFF_BYTES = 12
+            private const val LEFTOVER_AGE_MS = 60_000L
+            private const val LEFTOVER_CLEANUP_DELAY_MS = 30_000L
         }
     }
 
@@ -667,4 +715,6 @@ data class ActiveDownload(
     val trackId: String,
     val title: String,
     val status: DownloadStatus,
+    /** Other songs still queued or downloading. */
+    val waiting: Int = 0,
 )

@@ -137,9 +137,11 @@ class PlayerViewModel
                         is DownloadStatus.Downloading -> {
                             val pct = status.progressPercent
                             val suffix = if (pct > 0) " \u00b7 $pct%" else ""
+                            // Bulk downloads: how many are still to come.
+                            val more = if (active.waiting > 0) " \u00b7 ${active.waiting} more" else ""
                             emit(
                                 DownloadBanner(
-                                    text = "Downloading \u201c${active.title}\u201d$suffix",
+                                    text = "Downloading \u201c${active.title}\u201d$suffix$more",
                                     progressPercent = pct,
                                 ),
                             )
@@ -159,7 +161,7 @@ class PlayerViewModel
                             delay(MESSAGE_MS)
                             emit(null)
                         }
-                        DownloadStatus.Idle -> emit(null)
+                        DownloadStatus.Idle, DownloadStatus.Queued -> emit(null)
                     }
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), null)
 

@@ -10,7 +10,11 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,6 +33,45 @@ class TrackActionsViewModel
     ) : ViewModel() {
         val downloadedTrackIds: StateFlow<Set<String>> = downloadManager.downloadedTrackIds
         val downloads: StateFlow<Map<String, DownloadStatus>> = downloadManager.downloads
+
+        /** Songs queued or downloading (shown greyed out in Downloaded until done). */
+        val pendingTrackIds: StateFlow<Set<String>> =
+            downloadManager.pendingTracks
+                .map { list -> list.mapTo(HashSet()) { it.id } }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), emptySet())
+
+        /** The song playing now, so every list can highlight it. */
+        val playingTrackId: StateFlow<String?> =
+            playbackRepository.playbackState
+                .map { it.currentTrack?.id }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+        /** Selected songs: download the ones not downloaded yet (they show in Downloaded at once, greyed out). */
+        fun downloadAll(tracks: List<Track>) {
+            val have = downloadedTrackIds.value
+            val todo = tracks.filter { it.id !in have && it.providerId != "local" }
+            if (todo.isEmpty()) {
+                notices.show("Already downloaded")
+                return
+            }
+            downloadManager.downloadAll(todo)
+            notices.show("Downloading ${todo.size} ${if (todo.size == 1) "song" else "songs"}")
+        }
+
+        /** Selected songs, in order, after the songs already queued. */
+        fun addAllToQueue(tracks: List<Track>) {
+            tracks.forEach(playbackRepository::addToQueue)
+            notices.show("Added ${tracks.size} to queue")
+        }
+
+        /** Selected songs: add all to ♥ Favorites. */
+        fun favoriteAll(tracks: List<Track>) {
+            viewModelScope.launch {
+                tracks.forEach { runCatching { libraryRepository.addToFavorites(it) } }
+                notices.show("♥ Added ${tracks.size} to favorites")
+            }
+        }
 
         fun favorite(track: Track) {
             viewModelScope.launch {
@@ -57,5 +100,9 @@ class TrackActionsViewModel
                 downloadManager.deleteDownload(track.id)
                 notices.show("Removed download")
             }
+        }
+
+        private companion object {
+            const val STOP_TIMEOUT_MS = 5_000L
         }
     }

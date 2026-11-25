@@ -119,9 +119,9 @@ class LibraryViewModel
                 // Autoplay off: the rest of the list plays after it, so the music doesn't stop.
                 val radio = appPreferences?.autoplayEnabled?.first() ?: true
                 if (radio) {
-                    playbackRepository.setQueue(listOf(track), 0)
+                    playbackRepository.playFrom(listOf(track), 0, "Library")
                 } else {
-                    playbackRepository.setQueue(tracks, index)
+                    playbackRepository.playFrom(tracks, index, "Library")
                 }
             }
         }

@@ -108,9 +108,9 @@ class HomeViewModel
                 // Autoplay on: the song starts a fresh radio of related songs (the old radio is dropped).
                 // Autoplay off: the rest of the list plays after it, so the music doesn't stop.
                 if (appPreferences.autoplayEnabled.first()) {
-                    repo.setQueue(listOf(tracks[index]), 0)
+                    repo.playFrom(listOf(tracks[index]), 0, "Home")
                 } else {
-                    repo.setQueue(tracks, index)
+                    repo.playFrom(tracks, index, "Home")
                 }
             }
         }

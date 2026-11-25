@@ -45,6 +45,7 @@ class PlaylistViewModelTest {
         whenever(playlistRepository.getAllPlaylistsAsFlow()).thenReturn(fakePlaylistsFlow)
         whenever(playlistRepository.getPlaylistCoversAsFlow()).thenReturn(flowOf(emptyMap()))
         whenever(downloadManager.getDownloadedSongs()).thenReturn(flowOf(emptyList()))
+        whenever(downloadManager.pendingTracks).thenReturn(MutableStateFlow(emptyList()))
         viewModel =
             PlaylistViewModel(
                 playlistRepository = playlistRepository,

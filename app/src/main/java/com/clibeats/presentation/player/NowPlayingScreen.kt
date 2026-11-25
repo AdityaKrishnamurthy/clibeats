@@ -92,6 +92,7 @@ import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.HintedControl
 import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.presentation.layout.playingFromLabel
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsBorderInactive
@@ -279,7 +280,18 @@ fun NowPlayingScreen(
 
                 Spacer(Modifier.height(20.dp))
 
-                // ── Title / artist / quality ──
+                // ── Where it's playing from, then title / artist / quality ──
+                playingFromLabel(state)?.let { from ->
+                    Text(
+                        text = "PLAYING FROM ${from.uppercase()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LocalAccentColor.current,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.padding(bottom = 4.dp),
+                    )
+                }
                 Text(
                     text = track?.title ?: "Nothing playing",
                     style = MaterialTheme.typography.headlineSmall,

@@ -58,7 +58,7 @@ class LinkViewModel
         private suspend fun open(link: MusicLink) {
             _messages.send(if (link is MusicLink.YouTubeSong) "Opening song…" else "Opening link…")
             when (val target = resolver.resolve(link)) {
-                is LinkTarget.Play -> playback.setQueue(target.tracks, 0)
+                is LinkTarget.Play -> playback.playFrom(target.tracks, 0, "Link")
                 is LinkTarget.Import -> {
                     if (importer.state.value is ImportState.Running) {
                         _messages.send("An import is already running. Open the link again when it's done.")

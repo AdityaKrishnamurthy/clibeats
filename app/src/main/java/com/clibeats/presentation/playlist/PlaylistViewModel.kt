@@ -44,8 +44,14 @@ class PlaylistViewModel
         private val favorites: Flow<List<Track>> =
             libraryRepository?.getLikedSongs() ?: flowOf(emptyList())
 
+        /** Songs still downloading come first (greyed out in the list), then the finished ones. */
         private val downloadedSongs: Flow<List<Track>> =
-            downloadManager?.getDownloadedSongs() ?: flowOf(emptyList())
+            downloadManager?.let { manager ->
+                combine(manager.getDownloadedSongs(), manager.pendingTracks) { done, waiting ->
+                    val doneIds = done.mapTo(HashSet()) { it.id }
+                    waiting.filterNot { it.id in doneIds } + done
+                }
+            } ?: flowOf(emptyList())
 
         // Most Played has its own clear / per-song reset times; the listening history itself is kept.
         @OptIn(ExperimentalCoroutinesApi::class)
@@ -236,11 +242,16 @@ class PlaylistViewModel
             }
         }
 
+        /** Plays [tracks] from [startIndex]; [source] (the playlist's name) shows as "Playing from …". */
         fun playPlaylist(
             tracks: List<Track>,
             startIndex: Int = 0,
+            source: String? = null,
         ) {
-            if (tracks.isNotEmpty()) {
+            if (tracks.isEmpty()) return
+            if (source != null) {
+                playbackRepository.playFrom(tracks, startIndex, source)
+            } else {
                 playbackRepository.setQueue(tracks, startIndex)
             }
         }

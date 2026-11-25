@@ -164,7 +164,7 @@ class SearchViewModelTest {
             val t2 = Track("2", "Song 2", "Artist", "Album", 180_000L, null, null, "youtube_music")
             viewModel.onPlay(listOf(t1, t2), 1)
             testDispatcher.scheduler.advanceUntilIdle()
-            verify(playbackRepository).setQueue(listOf(t2), 0)
+            verify(playbackRepository).playFrom(listOf(t2), 0, "Search")
         }
 
     @Test
@@ -175,6 +175,6 @@ class SearchViewModelTest {
             val t2 = Track("2", "Song 2", "Artist", "Album", 180_000L, null, null, "youtube_music")
             viewModel.onPlay(listOf(t1, t2), 1)
             testDispatcher.scheduler.advanceUntilIdle()
-            verify(playbackRepository).setQueue(listOf(t1, t2), 1)
+            verify(playbackRepository).playFrom(listOf(t1, t2), 1, "Search")
         }
 }

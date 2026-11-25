@@ -54,21 +54,23 @@ class AddToPlaylistViewModel
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         fun add(
-            track: Track,
+            tracks: List<Track>,
             playlistId: String,
         ) {
-            viewModelScope.launch { runCatching { playlistRepository.addTrackToPlaylist(playlistId, track) } }
+            viewModelScope.launch {
+                tracks.forEach { runCatching { playlistRepository.addTrackToPlaylist(playlistId, it) } }
+            }
         }
 
         fun createAndAdd(
             name: String,
-            track: Track,
+            tracks: List<Track>,
         ) {
             if (name.isBlank()) return
             viewModelScope.launch {
                 runCatching {
                     val id = playlistRepository.createAppPlaylist(name.trim(), emptyList())
-                    playlistRepository.addTrackToPlaylist(id, track)
+                    tracks.forEach { playlistRepository.addTrackToPlaylist(id, it) }
                 }
             }
         }
@@ -83,6 +85,14 @@ fun Playlist.isLocalFilePlaylist(): Boolean = id.startsWith("localpl:")
 fun AddToPlaylistDialog(
     track: Track,
     onDismiss: () -> Unit,
+) = AddToPlaylistDialog(tracks = listOf(track), onDismiss = onDismiss)
+
+/** The same picker for several songs at once (a selection in a playlist). */
+@Suppress("FunctionNaming", "LongMethod")
+@Composable
+fun AddToPlaylistDialog(
+    tracks: List<Track>,
+    onDismiss: () -> Unit,
     viewModel: AddToPlaylistViewModel = hiltViewModel(),
 ) {
     val playlists by viewModel.appPlaylists.collectAsState()
@@ -96,7 +106,8 @@ fun AddToPlaylistDialog(
             Column {
                 Text("> add --to-playlist", style = MaterialTheme.typography.titleSmall)
                 Text(
-                    text = "${track.title} — ${track.artist}",
+                    text =
+                        tracks.singleOrNull()?.let { "${it.title} — ${it.artist}" } ?: "${tracks.size} songs",
                     style = MaterialTheme.typography.bodySmall,
                     color = CliBeatsTextSecondary,
                     maxLines = 1,
@@ -141,7 +152,7 @@ fun AddToPlaylistDialog(
                                         Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                viewModel.add(track, playlist.id)
+                                                viewModel.add(tracks, playlist.id)
                                                 onDismiss()
                                             }
                                             .padding(vertical = 12.dp),
@@ -156,7 +167,7 @@ fun AddToPlaylistDialog(
             if (creating) {
                 TextButton(
                     onClick = {
-                        viewModel.createAndAdd(newName, track)
+                        viewModel.createAndAdd(newName, tracks)
                         onDismiss()
                     },
                     enabled = newName.isNotBlank(),

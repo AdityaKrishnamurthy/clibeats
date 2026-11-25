@@ -85,6 +85,6 @@ class LibraryViewModelTest {
             viewModel.onTrackClick(t2, listOf(t1, t2), 1)
             testDispatcher.scheduler.runCurrent()
 
-            verify(playbackRepository).setQueue(listOf(t2), 0)
+            verify(playbackRepository).playFrom(listOf(t2), 0, "Library")
         }
 }

@@ -37,6 +37,13 @@ interface PlaybackRepository {
         startIndex: Int = 0,
     )
 
+    /** [setQueue], remembering where it was started from ([source]: a playlist's name, "Search", ...). */
+    fun playFrom(
+        tracks: List<Track>,
+        startIndex: Int,
+        source: String,
+    ) = setQueue(tracks, startIndex)
+
     fun addToQueue(track: Track)
 
     fun playNext(track: Track)

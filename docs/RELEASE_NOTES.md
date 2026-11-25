@@ -1,3 +1,39 @@
+# CLIBeats v2.5.6 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.6.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.8 MB
+
+## Playlists
+
+- **Search inside a playlist.** A **Find** box at the top of every playlist (Favorites, Most Played,
+  Downloaded and yours) filters by title, artist or album; case and accents don't matter, and several words
+  narrow it down. Tapping a found song still plays the whole playlist from that song.
+- **Select several songs.** Hold a song to start selecting, then tap more. A bar at the top shows how many are
+  selected, with **ALL** / **NONE**, and:
+  - **↓ DOWNLOAD** — downloads all of them (see below),
+  - **+ PLAYLIST** — adds them to one of your playlists or a new one,
+  - **≡ QUEUE** — adds them to the queue, in order,
+  - **♥** — adds them to Favorites,
+  - **✕ REMOVE** — removes them from the playlist (asks first),
+  - **⋯** — the usual song menu, when one song is selected.
+
+  **Back** or **✕** ends the selection. While selecting, swiping sideways no longer flips to the next tab.
+
+## Downloads
+
+- **Download many songs at once.** Selected songs go into **Downloaded** straight away, greyed out with
+  `QUEUED` or their progress, and each gets full colour as it finishes. Two download at a time, so even a whole
+  playlist downloads smoothly; the banner shows how many are still to come. Removing a queued song cancels it.
+
+## Now playing
+
+- **Playing from …** The player bar and Now Playing show where the music comes from: the playlist's name,
+  Search, Home, Library, a link, or `∞ Radio` when autoplay's suggestions are playing.
+- **The playing song is highlighted** in every list (playlists, search results, Home, Library), in your
+  accent colour with a `▶`, so you can see it at a glance.
+- **Sharp cover on the lock screen and media card.** When the high-res cover arrived a moment after the song
+  started, the notification card kept the blurry small one; it now switches to the sharp cover.
+
 # CLIBeats v2.5.5 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.5.apk` (verify with `SHA256SUMS.txt`)

@@ -16,28 +16,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Sort
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,36 +41,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.CliConfirmDialog
-import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongActionsSheet
-import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackActionsViewModel
-import com.clibeats.presentation.component.TrackArtwork
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.importer.ImportScreen
-import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import java.text.Collator
@@ -109,6 +85,21 @@ fun PlaylistScreen(
     var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
     var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
     val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
+    val downloads by trackActions.downloads.collectAsState()
+    val pendingIds by trackActions.pendingTrackIds.collectAsState()
+    val playingId by trackActions.playingTrackId.collectAsState()
+    // Several songs picked in a playlist, going to "add to playlist".
+    var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
+    val selection =
+        remember(trackActions) {
+            SelectionActions(
+                download = trackActions::downloadAll,
+                addToPlaylist = { bulkAddTracks = it },
+                queue = trackActions::addAllToQueue,
+                favorite = trackActions::favoriteAll,
+                more = { addToPlaylistTrack = it },
+            )
+        }
     // Import from Spotify opens over the playlist list; saveable so rotating doesn't drop you out of it.
     var showImport by rememberSaveable { mutableStateOf(false) }
     if (showImport) {
@@ -153,16 +144,18 @@ fun PlaylistScreen(
                             tracks = tracks,
                             emptyText = "No favorites yet. Tap ♥ in Now Playing to add songs.",
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index, "♥ Favorites") },
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
                             onReorder = viewModel::reorderFavorites,
                             onSwipeRight = trackActions::addToQueue,
                             onSwipeLeft = trackActions::favorite,
-                            onLongPress = { addToPlaylistTrack = it },
+                            selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.FAVORITES },
                             downloadedIds = downloadedIds,
+                            downloads = downloads,
+                            playingTrackId = playingId,
                         )
                     }
                     s.isMostPlayedOpen -> {
@@ -173,36 +166,48 @@ fun PlaylistScreen(
                             tracks = tracks,
                             emptyText = "Nothing played yet. Your most played songs will show up here.",
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index, "Most Played") },
                             onRemoveClick = viewModel::removeFromMostPlayed,
                             removeLabel = "Remove from Most Played",
                             onSwipeRight = trackActions::addToQueue,
                             onSwipeLeft = trackActions::favorite,
-                            onLongPress = { addToPlaylistTrack = it },
+                            selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.MOST_PLAYED },
                             downloadedIds = downloadedIds,
+                            downloads = downloads,
+                            playingTrackId = playingId,
                         )
                     }
                     s.isDownloadedOpen -> {
                         BackHandler { viewModel.selectPlaylist(null) }
                         PlaylistDetailView(
                             title = "Downloaded",
-                            subtitle = "${tracks.size} tracks · offline",
+                            subtitle =
+                                pendingIds.count { it !in downloadedIds }.let { waiting ->
+                                    if (waiting > 0) {
+                                        "${tracks.size} tracks · $waiting downloading"
+                                    } else {
+                                        "${tracks.size} tracks · offline"
+                                    }
+                                },
                             tracks = tracks,
                             emptyText =
                                 "No downloaded songs yet. " +
                                     "Long-press any song and select 'Download for offline'.",
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index, "Downloaded") },
                             onRemoveClick = viewModel::removeFromDownloaded,
+                            pendingIds = pendingIds,
                             removeLabel = "Remove download",
                             onSwipeRight = trackActions::addToQueue,
                             onSwipeLeft = trackActions::favorite,
-                            onLongPress = { addToPlaylistTrack = it },
+                            selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.DOWNLOADED },
                             downloadedIds = downloadedIds,
+                            downloads = downloads,
+                            playingTrackId = playingId,
                         )
                     }
                     selected != null -> {
@@ -220,12 +225,22 @@ fun PlaylistScreen(
                                     "Playlist is empty. Long-press any song to add it."
                                 },
                             onBackClick = { viewModel.selectPlaylist(null) },
-                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index) },
+                            onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index, selected.name) },
                             onRemoveClick =
                                 if (readOnly) {
                                     null
                                 } else {
                                     { track -> viewModel.removeSongFromPlaylist(selected.id, track.id) }
+                                },
+                            // One save for many songs: the playlist keeps the rest, in order.
+                            onRemoveMany =
+                                if (readOnly) {
+                                    null
+                                } else {
+                                    { picked ->
+                                        val gone = picked.mapTo(HashSet()) { it.id }
+                                        viewModel.reorderPlaylist(selected.id, tracks.filterNot { it.id in gone })
+                                    }
                                 },
                             removeLabel = "Remove from playlist",
                             onReorder =
@@ -236,7 +251,7 @@ fun PlaylistScreen(
                                 },
                             onSwipeRight = trackActions::addToQueue,
                             onSwipeLeft = trackActions::favorite,
-                            onLongPress = { addToPlaylistTrack = it },
+                            selection = selection,
                             headerAction =
                                 if (readOnly && tracks.isNotEmpty()) {
                                     "[ SAVE AS APP PLAYLIST ]" to { viewModel.saveAsAppPlaylist(selected, tracks) }
@@ -251,6 +266,8 @@ fun PlaylistScreen(
                                     null
                                 },
                             downloadedIds = downloadedIds,
+                            downloads = downloads,
+                            playingTrackId = playingId,
                         )
                     }
                     else ->
@@ -341,190 +358,8 @@ fun PlaylistScreen(
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
-}
-
-@Suppress("CyclomaticComplexMethod")
-@Composable
-private fun PlaylistDetailView(
-    title: String,
-    subtitle: String,
-    tracks: List<Track>,
-    emptyText: String,
-    onBackClick: () -> Unit,
-    /** The list as shown (sorted on screen, if a sort was picked for a fixed-order list) and the tapped row. */
-    onTrackClick: (List<Track>, Int) -> Unit,
-    onRemoveClick: ((Track) -> Unit)?,
-    removeLabel: String,
-    onSwipeRight: (Track) -> Unit,
-    onSwipeLeft: (Track) -> Unit,
-    onLongPress: (Track) -> Unit,
-    headerAction: Pair<String, () -> Unit>? = null,
-    coverUrl: String? = null,
-    onChangeCoverClick: (() -> Unit)? = null,
-    /** Non-null: rows get a ≡ handle to drag them into a new order (long-press stays "add to playlist"). */
-    onReorder: ((List<Track>) -> Unit)? = null,
-    downloadedIds: Set<String> = emptySet(),
-) {
-    // A list you can reorder is re-saved in the picked order (and can still be dragged after). Fixed lists
-    // (Most Played, M3U files) are only sorted on screen, until you leave them.
-    var viewSort by remember(title) { mutableStateOf<SongSort?>(null) }
-    val shown = remember(tracks, viewSort) { viewSort?.let { sortSongs(tracks, it) } ?: tracks }
-    // After a sort the list starts again from the top (it used to stay on the row that was visible).
-    var sortCount by remember(title) { mutableIntStateOf(0) }
-    val fixedListState = rememberLazyListState()
-    val onSort: (SongSort) -> Unit = { sort ->
-        sortCount++
-        if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
-    }
-    LaunchedEffect(sortCount, viewSort) { if (sortCount > 0) fixedListState.scrollToItem(0) }
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(CliBeatsSurface)
-                .padding(horizontal = 4.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            IconButton(onClick = onBackClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Back to playlists",
-                    tint = CliBeatsTextPrimary,
-                )
-            }
-            if (onChangeCoverClick != null) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(CliBeatsSurfaceVariant)
-                        .border(1.dp, CliBeatsAccent, RoundedCornerShape(4.dp))
-                        .clickable(onClick = onChangeCoverClick),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (coverUrl.isNullOrBlank()) {
-                        Text(text = "♫", style = MaterialTheme.typography.titleMedium, color = CliBeatsAccent)
-                    } else {
-                        AsyncImage(
-                            model = artworkUrlFor(coverUrl, ARTWORK_THUMB_PX * 2),
-                            contentDescription = "Change playlist cover",
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = CliBeatsTextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
-            }
-            if (tracks.size > 1) SortButton(onSort = onSort)
-            if (onChangeCoverClick != null) {
-                IconButton(onClick = onChangeCoverClick) {
-                    Icon(
-                        imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Edit playlist name and cover",
-                        tint = CliBeatsAccent,
-                    )
-                }
-            }
-        }
-        if (headerAction != null) {
-            Text(
-                text = headerAction.first,
-                style = MaterialTheme.typography.labelMedium,
-                color = CliBeatsAccent,
-                modifier = Modifier
-                    .clickable(onClick = headerAction.second)
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-        }
-        if (tracks.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Text(text = emptyText, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
-            }
-        } else if (onReorder != null) {
-            ReorderableList(
-                items = shown,
-                itemId = { it.id },
-                onReorder = { _, _, reordered -> onReorder(reordered) },
-                scrollToTopRequest = sortCount,
-            ) { track, index ->
-                SongTableRow(
-                    trackTitle = track.title,
-                    artist = track.artist,
-                    duration = formatDuration(track.durationMs),
-                    index = index + 1,
-                    isDownloaded = track.id in downloadedIds,
-                    // Hold the cover (or drag ≡) to move the song; a quick tap on the cover still plays it.
-                    artworkContent = {
-                        TrackArtwork(
-                            artworkUrl = track.artworkUrl,
-                            size = 32,
-                            modifier = Modifier.artworkHandle { onTrackClick(shown, index) },
-                        )
-                    },
-                    onClick = { if (!isAnyDragging) onTrackClick(shown, index) },
-                    onSwipeRight = { onSwipeRight(track) },
-                    onSwipeLeft = { onSwipeLeft(track) },
-                    onLongPress = { onLongPress(track) },
-                    actions = {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            DragHandle()
-                            onRemoveClick?.let { remove ->
-                                IconButton(onClick = { remove(track) }, enabled = !isAnyDragging) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Delete,
-                                        contentDescription = "$removeLabel: ${track.title}",
-                                        tint = CliBeatsTextSecondary,
-                                    )
-                                }
-                            }
-                        }
-                    },
-                )
-            }
-        } else {
-            LazyColumn(
-                state = fixedListState,
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.Top,
-            ) {
-                itemsIndexed(items = shown, key = { index, track -> "${track.id}_$index" }) { index, track ->
-                    SongTableRow(
-                        trackTitle = track.title,
-                        artist = track.artist,
-                        duration = formatDuration(track.durationMs),
-                        index = index + 1,
-                        isDownloaded = track.id in downloadedIds,
-                        artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                        onClick = { onTrackClick(shown, index) },
-                        onSwipeRight = { onSwipeRight(track) },
-                        onSwipeLeft = { onSwipeLeft(track) },
-                        onLongPress = { onLongPress(track) },
-                        actions =
-                            onRemoveClick?.let { remove ->
-                                {
-                                    IconButton(onClick = { remove(track) }) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Delete,
-                                            contentDescription = "$removeLabel: ${track.title}",
-                                            tint = CliBeatsTextSecondary,
-                                        )
-                                    }
-                                }
-                            },
-                    )
-                }
-            }
-        }
+    bulkAddTracks?.let { picked ->
+        AddToPlaylistDialog(tracks = picked, onDismiss = { bulkAddTracks = null })
     }
 }
 
@@ -682,7 +517,7 @@ internal fun sortSongs(
 }
 
 @Composable
-private fun SortButton(onSort: (SongSort) -> Unit) {
+internal fun SortButton(onSort: (SongSort) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {

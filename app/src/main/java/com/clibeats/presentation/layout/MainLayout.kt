@@ -194,6 +194,7 @@ private fun PlayerBarHost(
         upNextCount = (queueSize - playbackState.currentIndex - 1).coerceAtLeast(0),
         onQueueClick = onQueueClick,
         onExpandClick = onExpandClick,
+        source = playingFromLabel(playbackState),
     )
 }
 
@@ -271,3 +272,11 @@ private fun NavigationSuiteScope.buildNavItems(
         )
     }
 }
+
+/** "Playing from": autoplay's radio, else where the queue was started ("Search", a playlist), else nothing. */
+internal fun playingFromLabel(state: com.clibeats.domain.model.PlaybackState): String? =
+    when {
+        state.currentTrack == null -> null
+        state.fromRadio -> "∞ Radio"
+        else -> state.queueSource
+    }

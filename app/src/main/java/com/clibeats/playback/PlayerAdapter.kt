@@ -115,6 +115,9 @@ class PlayerAdapter
             queueGeneration++
         }
 
+        /** Where the current queue was started from, for "Playing from …". */
+        private var queueSource: String? = null
+
         /** Song id -> downloaded file path, kept in step with the downloads table. */
         private val downloadedFiles = ConcurrentHashMap<String, String>()
         private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -271,6 +274,7 @@ class PlayerAdapter
             unshuffledOrder = null
             trackList.clear()
             startNewQueue()
+            queueSource = null
             trackList.add(track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -283,8 +287,11 @@ class PlayerAdapter
         fun setQueue(
             tracks: List<Track>,
             startIndex: Int = 0,
+            /** Shown as "Playing from …" (a playlist's name, "Search", ...). */
+            source: String? = null,
         ) {
             startPlaybackService()
+            queueSource = source
             // With shuffle on, a newly started list plays shuffled: the tapped song first, the rest mixed.
             val ordered: List<Track>
             val start: Int
@@ -398,6 +405,7 @@ class PlayerAdapter
             if (tracks.isEmpty()) return
             trackList.clear()
             startNewQueue()
+            queueSource = null
             trackList.addAll(tracks)
             syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
@@ -757,6 +765,8 @@ class PlayerAdapter
                     fromDownload =
                         currentTrack?.providerId != LOCAL_PROVIDER_ID &&
                             player.currentMediaItem?.let(::isFile) == true,
+                    queueSource = queueSource,
+                    fromRadio = currentTrack?.id in autoplayIds,
                 )
         }
 
