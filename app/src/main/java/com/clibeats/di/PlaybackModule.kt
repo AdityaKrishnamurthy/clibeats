@@ -70,9 +70,11 @@ object PlaybackModule {
                 .build()
         // Reuse the app's OkHttp pool: warm TLS sessions and HTTP/2 instead of a cold handshake per play.
         val httpFactory = OkHttpDataSource.Factory(okHttpClient)
+        // The resolver can also answer with a downloaded or cached file (file://), which plain HTTP can't
+        // open; DefaultDataSource opens files itself and hands http(s) to the OkHttp factory.
         val resolvingFactory =
             ResolvingDataSource.Factory(
-                httpFactory,
+                DefaultDataSource.Factory(context, httpFactory),
                 TrackUriResolver(streamResolver, cacheManager, downloadedTrackDao),
             )
         // Remote audio goes through the song cache. The cache key is the stable placeholder/track URI,
