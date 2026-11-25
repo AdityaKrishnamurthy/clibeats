@@ -246,35 +246,42 @@ fun NowPlayingScreen(
                     remember(artUrl) {
                         ImageRequest.Builder(context).data(artUrl).crossfade(ART_CROSSFADE_MS).build()
                     }
+                // The cover's area takes all the height left over, so the controls and the icons below them
+                // sit the same distance from the bottom on every phone; on tall screens the spare room goes
+                // above and below the cover instead of piling up under the icons.
                 Box(
-                    modifier =
-                        Modifier
-                            .weight(1f, fill = false)
-                            // Height first: on short screens the cover shrinks instead of spilling over the title.
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
-                            .then(dragToDismiss)
-                            .then(closeAction)
-                            .semantics { contentDescription = artworkDescription },
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    if (thumbUrl != null) {
-                        AsyncImage(
-                            model = thumbUrl,
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    }
-                    if (artUrl != null && artUrl != thumbUrl) {
-                        AsyncImage(
-                            model = hiResRequest,
-                            onError = { if (!artFallback) artFallback = true },
-                            contentDescription = null,
-                            contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxSize(),
-                        )
+                    Box(
+                        modifier =
+                            Modifier
+                                // Height first: on short screens the cover shrinks instead of spilling over the title.
+                                .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
+                                .then(dragToDismiss)
+                                .then(closeAction)
+                                .semantics { contentDescription = artworkDescription },
+                    ) {
+                        if (thumbUrl != null) {
+                            AsyncImage(
+                                model = thumbUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                        if (artUrl != null && artUrl != thumbUrl) {
+                            AsyncImage(
+                                model = hiResRequest,
+                                onError = { if (!artFallback) artFallback = true },
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
                     }
                 }
 
