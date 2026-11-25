@@ -1,3 +1,56 @@
+# CLIBeats v2.6.0 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.0.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.6 MB
+
+A new Home, online and local.
+
+## Home (online)
+
+- **Trending in your country** comes first: YouTube's daily top songs for the country your phone is in (from the
+  SIM or mobile network), the same list the old Trending used. Someone in Brazil sees Brazil's, in Japan Japan's.
+- **Charts & Top 50:** Spotify's **Top 50 – Global** and your country's Top 50 (25 countries), the Top 50 for each
+  language you pick, and YouTube's charts (Top 100 Music Videos, Trending 20, and India's weekly chart per
+  language). A Spotify Top 50 card finds its songs on YouTube Music as it opens, showing them as they're found;
+  after that it opens instantly.
+- **Your languages:** a **✎ Languages** chip picks the languages you listen to (33, alphabetical: Arabic, Bengali,
+  … English, … Hindi, … Kannada, … Vietnamese). Home hides rows and songs in other languages and adds songs and
+  playlists in yours. Pick none to see everything.
+- **YouTube Music's own feed** follows: Quick picks, new releases, mood and community playlists. Song rows show four
+  songs per column and page sideways; playlist, album and artist rows are cards.
+- **Mood chips** (Feel good, Relax, Workout, Focus, …) filter the feed; tap again for the full page.
+- **Cards open in the playlist view** (Find box, hold to select) with **▶ PLAY**, **SHUFFLE** and **+ SAVE**
+  (saves it as one of your playlists). Back returns to the same spot on Home.
+- Swiping a row sideways stays in the row instead of flipping to the next tab.
+- `[ ↻ REFRESH ]` reloads everything, including the Spotify charts. The last page is kept for offline starts.
+
+## Home (local)
+
+Built from your library and play history, no internet needed:
+
+- **Mixes for you:** a mix for the time of day (*Late night mix*: what you usually play around this hour) and a
+  mix per top artist, with the artists you tend to play in the same sitting.
+- **Jump back in** (albums played lately), **Recently added**, **Your top artists**, **Forgotten gems** (songs you
+  loved but haven't played for a month), **Never played** and **Albums to revisit**.
+- **⇄ Shuffle all** and **✦ Surprise album** (a random album from track 1).
+- Picks stay the same for a day; `[ ↻ REFRESH ]` reshuffles them. A rescan updates the page by itself.
+- **No music yet?** Home shows what to do next: choose your music folder (scanned right away), the scan's
+  progress, or, if the folder has no music or can't be read, a prompt to pick another.
+
+## Playlists
+
+- **No bin icon on every row.** Remove songs by holding one to select, then **Remove** (it asks first).
+- **The selection bar is one line of icons:** Play next (new), Add to queue, Download, Add to playlist,
+  Favourite, Remove, and More for a single song. Hold an icon to see its name. Play next puts the songs right after
+  the current one, in order.
+
+## Fixes
+
+- **Now Playing looks the same on every phone.** On taller screens (or smaller display size) the spare room
+  piled up under the bottom icons; it now goes around the cover, so the controls sit at the same height everywhere.
+- **Downloads:** with two songs downloading at once, one could overwrite the other's status and leave a finished
+  song showing "Downloading". Statuses now update safely.
+
 # CLIBeats v2.5.6 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.5.6.apk` (verify with `SHA256SUMS.txt`)

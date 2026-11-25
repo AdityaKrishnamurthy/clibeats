@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.5.6-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.6.0-1DB954)](#)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -60,9 +60,21 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Online:** YouTube Music.
 - **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A (AAC / ALAC), AAC, OGG Vorbis, Opus** (each checked
   with a real sample file in the tests; ALAC also needs the phone's decoder). AIFF isn't supported.
-- **Trending by country** — Home shows YouTube Music's own chart for the country your SIM / mobile network is in
-  (e.g. *Daily Top Music Videos – India*). It loads once per app open; `[ ↻ REFRESH ]` reloads it.
 - **Data saver** — turn off *High quality streaming* (Settings → Audio Quality) to stream the lowest-bitrate audio.
+
+### Home
+- **Online:** *Trending in <your country>* (YouTube's daily top songs for the country your SIM / mobile network is
+  in), then **Charts & Top 50** (Spotify's Top 50 Global and your country's, plus YouTube's charts), then rows for
+  your languages, then YouTube Music's own feed (Quick picks, new releases, playlists). **Mood chips** (Relax,
+  Workout, …) filter it.
+- **Languages:** pick the languages you listen to (33, from Arabic to Vietnamese); Home hides other languages and
+  adds songs, playlists and Top 50 charts in yours.
+- **Playlist, album and artist cards** open in the playlist view with ▶ Play, Shuffle and + Save as playlist.
+  Spotify Top 50 cards find their songs on YouTube Music as they open.
+- **Local:** mixes for the time of day and for your top artists (with the artists you play alongside them), Jump
+  back in, Recently added, Your top artists, Forgotten gems, Never played and Albums to revisit, plus **Shuffle all**
+  and **Surprise album**. With no music yet, Home offers to choose your music folder.
+- `[ ↻ REFRESH ]` reloads the online page or reshuffles the local one.
 
 ### Local library
 - Add **one or more music folders** (system picker, no storage permission); **Rescan** picks up changes.
@@ -73,11 +85,12 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 ### Library, playlists & favourites
 - **Library** has three sections: **Playlists**, **Online** (songs you've played, with its own `[ CLEAR ]`) and
   **Local** (your device music, Tracks / Artists / Albums).
-- **Playlists:** ♥ Favorites and Most Played pinned on top (each with ✕ per song and a confirmed `[ CLEAR ALL ]`),
+- **Playlists:** ♥ Favorites and Most Played pinned on top (each with a confirmed `[ CLEAR ALL ]`),
   then your playlists (`[ ↓ IMPORT ]`, `[ + NEW ]`), then local playlists in their own section. Four views — small
   grid, large grid, list and details — remembered between launches.
 - **Edit a playlist** with the pencil: rename it, pick a cover from your phone or an image URL, or reset the cover.
-- **Sort** a playlist's songs by title or artist, A–Z or Z–A.
+- **Sort** a playlist's songs by title or artist, A–Z or Z–A; **Find** searches inside a playlist.
+- **Hold a song to select several**, then play next, queue, download, add to a playlist, favourite or remove them.
 - **Favourites:** heart in Now Playing, or swipe left on any song.
 - **Recently Played** on Home (last 5), with its own `[ CLEAR ]` that doesn't touch the Library.
 - **Recent searches:** with the search box empty, Search lists the songs you played, queued, favourited or added to
@@ -196,7 +209,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
  Home   Search   Library   Settings
 ```
 
-- **Home** — source switch, recently played, trending (List / Details / grid views).
+- **Home** — online: trending, charts & Top 50, your languages and YouTube Music's feed; local: mixes and
+  rediscovery rows from your library.
 - **Search** — search YouTube Music or your device; hold a result for more options.
 - **Library** — **Playlists** (Favorites, Most Played, your playlists, import, local M3U), **Online** (played songs)
   and **Local** (device music: Tracks / Artists / Albums).
