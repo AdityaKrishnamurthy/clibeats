@@ -66,6 +66,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.selected
@@ -878,6 +880,8 @@ private fun FindSheet(
     onDismiss: () -> Unit,
 ) {
     var query by rememberSaveable(pick.songIndex, pick.playlistIndex) { mutableStateOf(pick.query) }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -902,7 +906,12 @@ private fun FindSheet(
                 singleLine = true,
                 label = { Text("Search YouTube Music") },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { onSearch(query) }),
+                keyboardActions =
+                    KeyboardActions(onSearch = {
+                        keyboard?.hide()
+                        focusManager.clearFocus()
+                        onSearch(query)
+                    }),
                 colors =
                     OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = CliBeatsAccent,

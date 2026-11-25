@@ -115,7 +115,12 @@ fun SearchScreen(
             modifier = Modifier.semantics { contentDescription = "Search music" },
             focusRequester = searchFocus,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+            // The search key closes the keyboard so the results can be seen (clearing focus alone left it open).
+            keyboardActions =
+                KeyboardActions(onSearch = {
+                    keyboard?.hide()
+                    focusManager.clearFocus()
+                }),
             trailingContent = {
                 if (query.isNotEmpty()) {
                     IconButton(
