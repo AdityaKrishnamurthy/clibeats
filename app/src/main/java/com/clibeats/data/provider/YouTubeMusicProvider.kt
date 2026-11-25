@@ -11,6 +11,7 @@
 
 package com.clibeats.data.provider
 
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.dto.BrowseRequest
 import com.clibeats.data.provider.dto.InnerTubeContext
@@ -57,6 +58,8 @@ class YouTubeMusicProvider
         private val poTokenGenerator: PoTokenGenerator,
         private val streamCacheManager: StreamCacheManager,
         private val newPipeExtractorResolver: NewPipeExtractorResolver,
+        /** Settings -> Audio Quality (High quality / Data saver); null in tests means high quality. */
+        private val appPreferences: AppPreferences? = null,
     ) : MusicProvider {
         override val providerId: String = "youtube_music"
         override val displayName: String = "YouTube Music"
@@ -190,7 +193,9 @@ class YouTubeMusicProvider
                 return ProviderResult.Success(cached.url)
             }
 
-            val highQuality = true
+            // Every path follows the Audio Quality setting (the fast path used to always pick the best stream,
+            // so Data saver was ignored).
+            val highQuality = appPreferences?.highQualityStreaming?.first() ?: true
 
             // 2. Fast path: direct InnerTube call with ANDROID_MUSIC (no PO token, 1.2s budget)
             val fast =
