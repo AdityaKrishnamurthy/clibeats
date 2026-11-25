@@ -9,11 +9,13 @@
 
 package com.clibeats.presentation.playlist
 
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,15 +29,20 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
+import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -51,9 +58,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -83,6 +94,8 @@ internal class SelectionActions(
     val download: (List<Track>) -> Unit,
     val addToPlaylist: (List<Track>) -> Unit,
     val queue: (List<Track>) -> Unit,
+    /** Right after the song playing now, in the order shown. */
+    val playNext: (List<Track>) -> Unit,
     val favorite: (List<Track>) -> Unit,
     /** The usual hold menu for one song (shown when exactly one is selected). */
     val more: (Track) -> Unit,
@@ -195,6 +208,10 @@ internal fun PlaylistDetailView(
                     selection.queue(selectedTracks)
                     selectedIds = emptySet()
                 },
+                onPlayNext = {
+                    selection.playNext(selectedTracks)
+                    selectedIds = emptySet()
+                },
                 onFavorite = {
                     selection.favorite(selectedTracks)
                     selectedIds = emptySet()
@@ -290,14 +307,7 @@ internal fun PlaylistDetailView(
                             )
                         },
                         onClick = { if (!isAnyDragging) play(track) },
-                        actions = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                DragHandle()
-                                onRemoveClick?.let { remove ->
-                                    RemoveButton(removeLabel, track, enabled = !isAnyDragging) { remove(track) }
-                                }
-                            }
-                        },
+                        actions = { DragHandle() },
                     )
                 }
             else ->
@@ -311,12 +321,7 @@ internal fun PlaylistDetailView(
                             track = track,
                             art = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
                             onClick = { play(track) },
-                            actions =
-                                onRemoveClick?.let { remove ->
-                                    {
-                                        RemoveButton(removeLabel, track, enabled = true) { remove(track) }
-                                    }
-                                },
+                            actions = null,
                         )
                     }
                 }
@@ -342,22 +347,6 @@ private fun fold(text: String): String =
         .replace(COMBINING_MARKS, "")
 
 private val COMBINING_MARKS = Regex("\\p{Mn}+")
-
-@Composable
-private fun RemoveButton(
-    removeLabel: String,
-    track: Track,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    IconButton(onClick = onClick, enabled = enabled) {
-        Icon(
-            imageVector = Icons.Outlined.Delete,
-            contentDescription = "$removeLabel: ${track.title}",
-            tint = CliBeatsTextSecondary,
-        )
-    }
-}
 
 @Composable
 private fun PlaylistSearchField(
@@ -475,6 +464,7 @@ private fun SelectionBar(
     onDownload: () -> Unit,
     onAddToPlaylist: () -> Unit,
     onQueue: () -> Unit,
+    onPlayNext: () -> Unit,
     onFavorite: () -> Unit,
     onRemove: (() -> Unit)?,
     onMore: (() -> Unit)?,
@@ -500,21 +490,46 @@ private fun SelectionBar(
             )
             BarAction(if (allSelected) "[ NONE ]" else "[ ALL ]", onClick = onSelectAll)
         }
+        // Icons only, so every action fits on one line; hold an icon to see what it does.
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            BarAction("[ ↓ DOWNLOAD ]", onClick = onDownload)
-            BarAction("[ + PLAYLIST ]", onClick = onAddToPlaylist)
-            BarAction("[ ≡ QUEUE ]", onClick = onQueue)
-            BarAction("[ ♥ ]", description = "Add to favorites", onClick = onFavorite)
-            onRemove?.let { BarAction("[ ✕ REMOVE ]", color = CliBeatsDestructive, onClick = it) }
-            onMore?.let { BarAction("[ ⋯ ]", description = "More options", onClick = it) }
+            BarIcon(Icons.AutoMirrored.Outlined.PlaylistPlay, "Play next", onClick = onPlayNext)
+            BarIcon(Icons.AutoMirrored.Outlined.QueueMusic, "Add to queue", onClick = onQueue)
+            BarIcon(Icons.Outlined.Download, "Download", onClick = onDownload)
+            BarIcon(Icons.AutoMirrored.Outlined.PlaylistAdd, "Add to playlist", onClick = onAddToPlaylist)
+            BarIcon(Icons.Outlined.FavoriteBorder, "Add to favorites", onClick = onFavorite)
+            onRemove?.let { BarIcon(Icons.Outlined.Delete, "Remove", tint = CliBeatsDestructive, onClick = it) }
+            onMore?.let { BarIcon(Icons.Outlined.MoreVert, "More options", onClick = it) }
         }
+    }
+}
+
+/** One selection action: an icon, with its name as a short toast when held. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun BarIcon(
+    icon: ImageVector,
+    label: String,
+    tint: Color = LocalAccentColor.current,
+    onClick: () -> Unit,
+) {
+    val context = LocalContext.current
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier =
+            Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .combinedClickable(
+                    onClickLabel = label,
+                    role = Role.Button,
+                    onLongClick = { Toast.makeText(context, label, Toast.LENGTH_SHORT).show() },
+                    onClick = onClick,
+                ),
+    ) {
+        Icon(imageVector = icon, contentDescription = label, tint = tint)
     }
 }
 
@@ -522,7 +537,7 @@ private fun SelectionBar(
 private fun BarAction(
     text: String,
     description: String? = null,
-    color: androidx.compose.ui.graphics.Color = LocalAccentColor.current,
+    color: Color = LocalAccentColor.current,
     onClick: () -> Unit,
 ) {
     Text(
