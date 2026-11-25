@@ -2,8 +2,13 @@
 
 package com.clibeats.presentation.home
 
+import com.clibeats.data.home.HomeFeedRepository
 import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.domain.model.HomeFeed
+import com.clibeats.domain.model.HomeItem
+import com.clibeats.domain.model.HomeMood
+import com.clibeats.domain.model.HomeShelf
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
@@ -20,6 +25,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -172,6 +178,57 @@ class HomeViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             verify(playbackRepository).playFrom(listOf(t2), 0, "Home")
+        }
+
+    @Test
+    fun `with the home feed, the first load runs on creation and shows the feed`() =
+        runTest {
+            // Like the app: the first load starts immediately while the ViewModel is being created.
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val feedRepository: HomeFeedRepository = mock()
+            val feed =
+                HomeFeed(
+                    moods = listOf(HomeMood("Relax", "relax")),
+                    shelves = listOf(HomeShelf("Quick picks", "", listOf(HomeItem.Song(fakeTrack())))),
+                )
+            whenever(feedRepository.feed(null)).thenReturn(feed)
+            val networkMonitor: NetworkMonitor = mock()
+            whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+
+            val vm =
+                HomeViewModel(
+                    providerRegistry = providerRegistry,
+                    appPreferences = appPreferences,
+                    networkMonitor = networkMonitor,
+                    homeFeedRepository = feedRepository,
+                )
+            advanceUntilIdle()
+
+            assertThat(vm.feed.value).isEqualTo(FeedState.Loaded(feed))
+            assertThat(vm.moods.value.map { it.title }).containsExactly("Relax")
+        }
+
+    @Test
+    fun `with no feed at all, Home falls back to Trending`() =
+        runTest {
+            Dispatchers.setMain(UnconfinedTestDispatcher(testScheduler))
+            val feedRepository: HomeFeedRepository = mock()
+            whenever(feedRepository.feed(null)).thenReturn(null)
+            whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(listOf(fakeTrack())))
+            val networkMonitor: NetworkMonitor = mock()
+            whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+
+            val vm =
+                HomeViewModel(
+                    providerRegistry = providerRegistry,
+                    appPreferences = appPreferences,
+                    networkMonitor = networkMonitor,
+                    homeFeedRepository = feedRepository,
+                )
+            advanceUntilIdle()
+
+            assertThat(vm.feed.value).isNull()
+            assertThat(vm.uiState.value).isEqualTo(HomeUiState.Success(listOf(fakeTrack())))
         }
 
     private fun fakeTrack(): Track =

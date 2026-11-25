@@ -180,20 +180,6 @@ class HomeViewModel
         private var shownProviderId: String? = null
         private var loadJob: Job? = null
 
-        init {
-            viewModelScope.launch {
-                activeProviderId.collect { id ->
-                    if (id == YOUTUBE_ID && homeFeedRepository != null) {
-                        shownProviderId = id
-                        showFeed(force = false)
-                    } else {
-                        _feed.value = null
-                        showTrending(id, force = false)
-                    }
-                }
-            }
-        }
-
         /** The reload button: fetches the home feed (or the active source's trending) again. */
         fun refreshTrending() {
             val id = shownProviderId ?: return
@@ -367,5 +353,21 @@ class HomeViewModel
                 result = provider.trending(TRENDING_LIMIT)
             }
             return result
+        }
+
+        // Last in the class on purpose: the first load runs right away (on creation), so every
+        // field it touches must already be set up.
+        init {
+            viewModelScope.launch {
+                activeProviderId.collect { id ->
+                    if (id == YOUTUBE_ID && homeFeedRepository != null) {
+                        shownProviderId = id
+                        showFeed(force = false)
+                    } else {
+                        _feed.value = null
+                        showTrending(id, force = false)
+                    }
+                }
+            }
         }
     }
