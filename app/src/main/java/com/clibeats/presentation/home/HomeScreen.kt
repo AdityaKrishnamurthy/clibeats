@@ -6,6 +6,9 @@
 
 package com.clibeats.presentation.home
 
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -39,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -100,6 +104,18 @@ fun HomeScreen(
     val opened by homeViewModel.opened.collectAsState()
     val localHome by homeViewModel.local.collectAsState()
     val languages by homeViewModel.languages.collectAsState()
+    val localSetup by homeViewModel.localSetup.collectAsState()
+    val context = LocalContext.current
+    // The same folder picker as Settings -> Local Music; read access is kept across reboots.
+    val pickMusicFolder =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri != null) {
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                homeViewModel.addLocalFolder(uri.toString())
+            }
+        }
     val languagesAsked by homeViewModel.languagesAsked.collectAsState()
     var pickLanguages by remember { mutableStateOf(false) }
     if (pickLanguages) {
@@ -233,7 +249,10 @@ fun HomeScreen(
                     actionEnabled = !busy,
                     actionDescription = "Refresh home",
                 )
-                localHome?.let { page ->
+                localHome?.takeIf { it.allSongs.isEmpty() }?.let {
+                    LocalSetupCard(setup = localSetup, onChooseFolder = { pickMusicFolder.launch(null) })
+                }
+                localHome?.takeIf { it.allSongs.isNotEmpty() }?.let { page ->
                     LocalQuickActions(
                         songCount = page.allSongs.size,
                         albumCount = page.albums.size,
@@ -251,12 +270,8 @@ fun HomeScreen(
                 actions = feedActions,
                 languagesLabel = if (!isLocalHome) languages.joinToString(", ") { it.label } else null,
                 suggestLanguages = !isLocalHome && !languagesAsked && state is FeedState.Loaded,
-                emptyText =
-                    if (localHome != null) {
-                        "No local music yet. Pick your music folder in Settings \u2192 Local Music."
-                    } else {
-                        "Nothing to show yet."
-                    },
+                // Local's empty library has its own set-up card above.
+                emptyText = if (localHome != null) null else "Nothing to show yet.",
             )
             return@LazyColumn
         }

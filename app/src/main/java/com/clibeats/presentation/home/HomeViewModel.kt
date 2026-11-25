@@ -8,6 +8,7 @@ import com.clibeats.data.home.HomeFeedRepository
 import com.clibeats.data.home.HomeLanguage
 import com.clibeats.data.home.LocalHome
 import com.clibeats.data.home.LocalHomeRepository
+import com.clibeats.data.home.LocalSetup
 import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.HomeFeed
@@ -329,6 +330,20 @@ class HomeViewModel
                             if (shownProviderId == LOCAL_ID) showLocal(reshuffle = false)
                         }
                     }
+            }
+        }
+
+        /** Folders and scan progress, for Local Home's set-up card while the library is empty. */
+        val localSetup: StateFlow<LocalSetup> =
+            (localHomeRepository?.setup ?: flowOf(LocalSetup()))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), LocalSetup())
+
+        /** A music folder picked on Local Home: saved and scanned; the page fills in when songs arrive. */
+        fun addLocalFolder(treeUri: String) {
+            val repo = localHomeRepository ?: return
+            viewModelScope.launch {
+                repo.addFolder(treeUri)
+                if (shownProviderId == LOCAL_ID) showLocal(reshuffle = false)
             }
         }
 

@@ -64,6 +64,7 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.clibeats.data.home.HomeLanguage
+import com.clibeats.data.home.LocalSetup
 import com.clibeats.domain.model.CollectionKind
 import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.HomeMood
@@ -104,8 +105,8 @@ internal fun LazyListScope.homeFeed(
     selectedMood: HomeMood?,
     playingTrackId: String?,
     actions: FeedActions,
-    /** Shown when the page has no rows at all (an empty local library). */
-    emptyText: String = "Nothing to show yet.",
+    /** Shown when the page has no rows at all; null shows nothing (the caller shows its own). */
+    emptyText: String? = "Nothing to show yet.",
     /** Online only: the picked languages ("Hindi, Kannada"; blank = all), or null to hide the chip. */
     languagesLabel: String? = null,
     /** Suggest picking languages (until it's answered once). */
@@ -123,7 +124,7 @@ internal fun LazyListScope.homeFeed(
                 FeedMessage("Couldn't load $mood. Check the connection or pick another.")
             }
         is FeedState.Loaded -> {
-            if (state.feed.shelves.isEmpty()) item(key = "feed_empty") { FeedMessage(emptyText) }
+            if (state.feed.shelves.isEmpty() && emptyText != null) item(key = "feed_empty") { FeedMessage(emptyText) }
             state.feed.shelves.forEachIndexed { index, shelf ->
                 item(key = "shelf_${index}_${shelf.title}") {
                     ShelfTitle(shelf)
@@ -500,6 +501,98 @@ internal fun LanguagePickerDialog(
             TextButton(onClick = onDismiss) { Text("Cancel", color = CliBeatsTextSecondary) }
         },
     )
+}
+
+/**
+ * Local Home with no songs: what to do next instead of empty buttons. No folder yet: choose one. Scanning:
+ * the progress. Scanned but nothing found (or the folder can't be read): pick another folder.
+ */
+@Composable
+internal fun LocalSetupCard(
+    setup: LocalSetup,
+    onChooseFolder: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    val scanning = setup.scanning
+    val copy = setupCopy(setup)
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .background(CliBeatsSurface)
+                .border(1.dp, accent, RoundedCornerShape(6.dp))
+                .padding(16.dp),
+    ) {
+        Text(copy.command, style = MaterialTheme.typography.labelSmall, color = accent)
+        Spacer(modifier = Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (scanning != null) {
+                CircularProgressIndicator(color = accent, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(10.dp))
+            }
+            Text(
+                text = copy.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+        }
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(copy.body, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
+        if (copy.button.isNotEmpty()) {
+            Text(
+                text = copy.button,
+                style = MaterialTheme.typography.labelLarge,
+                color = accent,
+                modifier = Modifier.padding(top = 8.dp).clickable(onClick = onChooseFolder).padding(vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** The set-up card's words for each state. */
+private data class SetupCopy(
+    val command: String,
+    val title: String,
+    val body: String,
+    /** Empty while scanning (nothing to tap). */
+    val button: String,
+)
+
+private fun setupCopy(setup: LocalSetup): SetupCopy {
+    val scanning = setup.scanning
+    return when {
+        scanning != null ->
+            SetupCopy(
+                "> local --scan",
+                "Scanning your music\u2026",
+                if (scanning.total > 0) "${scanning.processed} of ${scanning.total} files" else "Looking for songs",
+                "",
+            )
+        setup.failure != null ->
+            SetupCopy(
+                "> local --error",
+                "Couldn't read your music folder",
+                "${setup.failure} Choose the folder again to give CLIBeats access.",
+                "[ CHOOSE FOLDER AGAIN ]",
+            )
+        setup.folderCount > 0 ->
+            SetupCopy(
+                "> local --empty",
+                "No music found in your folder",
+                "CLIBeats looked for audio files (MP3, FLAC, M4A, OGG, WAV\u2026) in it and its subfolders " +
+                    "and found none. Pick the folder that has your songs.",
+                "[ CHOOSE ANOTHER FOLDER ]",
+            )
+        else ->
+            SetupCopy(
+                "> local --setup",
+                "No local music yet",
+                "Pick the folder with your music. CLIBeats reads the songs in it (and its subfolders), and " +
+                    "Home fills with mixes, albums and artists from your library. Works offline.",
+                "[ CHOOSE MUSIC FOLDER ]",
+            )
+    }
 }
 
 /** Local Home's two big buttons: the whole library shuffled, and a random album from start to end. */

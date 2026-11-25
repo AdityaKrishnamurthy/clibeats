@@ -81,10 +81,8 @@ enum class HomeLanguage(
     ;
 
     companion object {
-        private val PINNED = listOf(ENGLISH, HINDI, KANNADA)
-
-        /** The picker's order: English, Hindi and Kannada first, then the rest alphabetically. */
-        val ordered: List<HomeLanguage> = PINNED + entries.filterNot { it in PINNED }.sortedBy { it.label }
+        /** The picker's order: alphabetical by name. */
+        val ordered: List<HomeLanguage> = entries.sortedBy { it.label }
 
         /** Saved names back to languages (unknown names, e.g. from a newer version, are skipped). */
         fun fromNames(names: Set<String>): Set<HomeLanguage> = ordered.filterTo(LinkedHashSet()) { it.name in names }

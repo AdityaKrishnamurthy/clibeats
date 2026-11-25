@@ -80,13 +80,10 @@ class HomeLanguageFilterTest {
     }
 
     @Test
-    fun `picker lists English, Hindi and Kannada first, then the rest alphabetically`() {
-        val ordered = HomeLanguage.ordered
-        val pinned = listOf(HomeLanguage.ENGLISH, HomeLanguage.HINDI, HomeLanguage.KANNADA)
-        assertThat(ordered.take(3)).isEqualTo(pinned)
-        val rest = ordered.drop(3).map { it.label }
-        assertThat(rest).isEqualTo(rest.sorted())
-        assertThat(ordered).containsExactlyElementsIn(HomeLanguage.entries)
+    fun `picker lists every language alphabetically`() {
+        val labels = HomeLanguage.ordered.map { it.label }
+        assertThat(labels).isEqualTo(labels.sorted())
+        assertThat(HomeLanguage.ordered).containsExactlyElementsIn(HomeLanguage.entries)
     }
 
     @Test
