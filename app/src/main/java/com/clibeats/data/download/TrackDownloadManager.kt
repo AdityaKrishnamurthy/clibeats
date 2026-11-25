@@ -246,7 +246,13 @@ class TrackDownloadManager
             }
             // Keep the file and the record in step: an orphan file would never show in Downloads.
             try {
-                songDao.upsert(track.toEntity())
+                // Keep what's already stored for the song (local path, cache time, a cover the new copy lacks),
+                // so a download never changes how the song shows in playlists, backups and exports.
+                val stored = songDao.getById(track.id)
+                val entity = track.toEntity(stored?.localPath, stored?.cachedAt)
+                songDao.upsert(
+                    if (entity.artworkUrl.isNullOrBlank()) entity.copy(artworkUrl = stored?.artworkUrl) else entity,
+                )
                 downloadedTrackDao.insert(
                     DownloadedTrackEntity(
                         songId = track.id,
