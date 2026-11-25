@@ -41,7 +41,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 class ArtworkBitmapLoader(
     private val context: Context,
     private val imageLoader: ImageLoader,
-    private val onBetterArtwork: () -> Unit,
+    /** The sharp cover for this source arrived after a smaller one was handed out. */
+    private val onBetterArtwork: (source: String) -> Unit,
 ) : BitmapLoader {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val logo: Bitmap by lazy {
@@ -108,7 +109,7 @@ class ArtworkBitmapLoader(
                         synchronized(this@ArtworkBitmapLoader) {
                             if (lastSource == source) lastResult = Futures.immediateFuture(late)
                         }
-                        onBetterArtwork()
+                        onBetterArtwork(source)
                     }
                 }
                 return@launch

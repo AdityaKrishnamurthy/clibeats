@@ -84,9 +84,7 @@ class PlaybackService : MediaLibraryService() {
             MediaLibrarySession.Builder(this, previousFromHistory(player), LibraryCallback())
                 .setBitmapLoader(
                     // Cached covers with fallbacks; re-draw the notification when the high-res one arrives.
-                    ArtworkBitmapLoader(this, imageLoader) {
-                        scope.launch { librarySession?.let { onUpdateNotification(it) } }
-                    },
+                    ArtworkBitmapLoader(this, imageLoader) { source -> scope.launch { showSharpArtwork(source) } },
                 ).apply { sessionActivity()?.let(::setSessionActivity) }
                 .build()
         librarySession = session
@@ -96,6 +94,25 @@ class PlaybackService : MediaLibraryService() {
         // The app drives ExoPlayer directly (no MediaController), so register the session explicitly;
         // otherwise Media3 never posts the media notification.
         addSession(session)
+    }
+
+    /**
+     * The high-res cover landed after a smaller one was shown. The notification is simply redrawn, but the
+     * lock screen and the media card only reload artwork when the song's metadata changes, so the current
+     * item gets the same cover URL with a `#hq` marker. Same stream URI, so ExoPlayer updates it in place
+     * (no re-buffering); the loader then hands back the sharp cover it already holds.
+     */
+    private fun showSharpArtwork(source: String) {
+        val item = player.currentMediaItem
+        val metadata = item?.mediaMetadata
+        val artworkUri = metadata?.artworkUri
+        val sameSong = item != null && metadata?.extras?.getString(ArtworkBitmapLoader.ARTWORK_SOURCE_KEY) == source
+        if (sameSong && artworkUri != null && artworkUri.fragment != SHARP_ARTWORK) {
+            val sharpUri = artworkUri.buildUpon().fragment(SHARP_ARTWORK).build()
+            val sharp = metadata.buildUpon().setArtworkUri(sharpUri).build()
+            player.replaceMediaItem(player.currentMediaItemIndex, item.buildUpon().setMediaMetadata(sharp).build())
+        }
+        librarySession?.let { onUpdateNotification(it) }
     }
 
     // Every controller is accepted on purpose. A package allow-list breaks real controls: Samsung's lock
@@ -399,6 +416,7 @@ class PlaybackService : MediaLibraryService() {
     private companion object {
         const val TAG = "CLIBeatsSession"
         const val ROOT = "clibeats_root"
+        const val SHARP_ARTWORK = "hq"
         const val RECENT_ROOT = "clibeats_recent"
         const val REPEAT_ACTION = "clibeats.REPEAT"
         val REPEAT_COMMAND = SessionCommand(REPEAT_ACTION, Bundle.EMPTY)

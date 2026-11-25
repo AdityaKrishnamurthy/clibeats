@@ -69,6 +69,7 @@ import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiTextField
 import com.clibeats.presentation.component.artworkUrlFor
+import com.clibeats.presentation.layout.LockTabSwipe
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsSurface
@@ -145,6 +146,8 @@ internal fun PlaylistDetailView(
     LaunchedEffect(tracks) { selectedIds = selectedIds intersect tracks.mapTo(HashSet()) { it.id } }
     val selecting = selectedIds.isNotEmpty()
     BackHandler(enabled = selecting) { selectedIds = emptySet() }
+    // Selecting: a sideways swipe (e.g. over the action bar) must not flip to the next tab.
+    LockTabSwipe(selecting)
     val selectedTracks = ordered.filter { it.id in selectedIds }
     var confirmRemove by remember { mutableStateOf(false) }
 

@@ -18,6 +18,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +37,7 @@ import com.clibeats.data.link.IncomingLinks
 import com.clibeats.data.link.MusicLink
 import com.clibeats.presentation.home.HomeScreen
 import com.clibeats.presentation.importer.ImportScreen
+import com.clibeats.presentation.layout.LocalTabSwipeLock
 import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
@@ -203,6 +205,15 @@ private fun AppContent() {
     LaunchedEffect(Unit) { updateViewModel.onAppStart() }
     UpdatePrompt(viewModel = updateViewModel)
 
+    // A tab can hold the pager still while it is the one shown (e.g. while selecting songs in a playlist).
+    var swipeLockedPages by remember { mutableStateOf(emptySet<Int>()) }
+
+    fun lockSwipe(
+        page: Int,
+        locked: Boolean,
+    ) {
+        swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
+    }
     MainLayout(
         selectedDestination = tabs[pagerState.currentPage],
         onDestinationSelected = onTabClick,
@@ -213,27 +224,31 @@ private fun AppContent() {
                 state = pagerState,
                 key = { tabs[it].route },
                 modifier = Modifier.fillMaxSize(),
+                userScrollEnabled = pagerState.currentPage !in swipeLockedPages,
             ) { page ->
-                when (tabs[page]) {
-                    NavDestination.Home ->
-                        HomeScreen(
-                            toggleSourceRequested = toggleHomeSource,
-                            onToggleSourceHandled = { toggleHomeSource = false },
-                        )
-                    NavDestination.Search ->
-                        SearchScreen(
-                            focusRequested = focusSearch,
-                            onFocusHandled = { focusSearch = false },
-                            toggleSourceRequested = toggleSearchSource,
-                            onToggleSourceHandled = { toggleSearchSource = false },
-                        )
-                    NavDestination.Library ->
-                        LibraryScreen(
-                            toggleModeRequested = toggleLibraryMode,
-                            onToggleModeHandled = { toggleLibraryMode = false },
-                        )
-                    NavDestination.Settings -> SettingsScreen()
-                    else -> Unit
+                val setLocked: (Boolean) -> Unit = remember(page) { { locked -> lockSwipe(page, locked) } }
+                CompositionLocalProvider(LocalTabSwipeLock provides setLocked) {
+                    when (tabs[page]) {
+                        NavDestination.Home ->
+                            HomeScreen(
+                                toggleSourceRequested = toggleHomeSource,
+                                onToggleSourceHandled = { toggleHomeSource = false },
+                            )
+                        NavDestination.Search ->
+                            SearchScreen(
+                                focusRequested = focusSearch,
+                                onFocusHandled = { focusSearch = false },
+                                toggleSourceRequested = toggleSearchSource,
+                                onToggleSourceHandled = { toggleSearchSource = false },
+                            )
+                        NavDestination.Library ->
+                            LibraryScreen(
+                                toggleModeRequested = toggleLibraryMode,
+                                onToggleModeHandled = { toggleLibraryMode = false },
+                            )
+                        NavDestination.Settings -> SettingsScreen()
+                        else -> Unit
+                    }
                 }
             }
             if (showQueue) {
