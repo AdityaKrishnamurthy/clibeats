@@ -70,6 +70,7 @@ import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.ARTWORK_THUMB_PX
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableRow
@@ -301,60 +302,40 @@ fun PlaylistScreen(
     }
     // Clearing a whole list always asks first, so it can't happen by a stray tap.
     pendingClear?.let { target ->
-        AlertDialog(
-            onDismissRequest = { pendingClear = null },
-            modifier = Modifier.border(1.dp, CliBeatsAccent),
-            title = {
-                Text(
-                    when (target) {
-                        ClearTarget.FAVORITES -> "> clear --favorites"
-                        ClearTarget.MOST_PLAYED -> "> clear --most-played"
-                        ClearTarget.DOWNLOADED -> "> clear --downloaded"
-                    },
-                )
+        CliConfirmDialog(
+            command =
+                when (target) {
+                    ClearTarget.FAVORITES -> "clear --favorites"
+                    ClearTarget.MOST_PLAYED -> "clear --most-played"
+                    ClearTarget.DOWNLOADED -> "rm -r downloads/"
+                },
+            message =
+                when (target) {
+                    ClearTarget.FAVORITES -> "Remove every song from ♥ Favorites?"
+                    ClearTarget.MOST_PLAYED ->
+                        "Reset Most Played? It starts counting again from now. Your listening history is kept."
+                    ClearTarget.DOWNLOADED ->
+                        "Delete every downloaded song? The files are removed from your phone and the songs " +
+                            "stream again when played."
+                },
+            confirmLabel = "Clear all",
+            onConfirm = {
+                when (target) {
+                    ClearTarget.FAVORITES -> viewModel.clearFavorites()
+                    ClearTarget.MOST_PLAYED -> viewModel.clearMostPlayed()
+                    ClearTarget.DOWNLOADED -> viewModel.clearAllDownloaded()
+                }
             },
-            text = {
-                Text(
-                    when (target) {
-                        ClearTarget.FAVORITES -> "Remove every song from ♥ Favorites?"
-                        ClearTarget.MOST_PLAYED ->
-                            "Reset Most Played? It starts counting again from now. " +
-                                "Your listening history is kept."
-                        ClearTarget.DOWNLOADED ->
-                            "Delete all downloaded songs from offline storage? " +
-                                "Files will be removed from your device."
-                    },
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        when (target) {
-                            ClearTarget.FAVORITES -> viewModel.clearFavorites()
-                            ClearTarget.MOST_PLAYED -> viewModel.clearMostPlayed()
-                            ClearTarget.DOWNLOADED -> viewModel.clearAllDownloaded()
-                        }
-                        pendingClear = null
-                    },
-                ) { Text("Clear all", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { pendingClear = null }) { Text("Cancel") } },
-            containerColor = CliBeatsSurface,
+            onDismiss = { pendingClear = null },
         )
     }
     pendingDelete?.let { playlist ->
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("> rm \"${playlist.name}\"") },
-            text = { Text("Delete this playlist? The songs themselves are not deleted.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePlaylist(playlist.id)
-                    pendingDelete = null
-                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
-            },
-            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
-            containerColor = CliBeatsSurface,
+        CliConfirmDialog(
+            command = "rm \"${playlist.name}\"",
+            message = "Delete this playlist? The songs themselves are not deleted.",
+            confirmLabel = "Delete",
+            onConfirm = { viewModel.deletePlaylist(playlist.id) },
+            onDismiss = { pendingDelete = null },
         )
     }
     addToPlaylistTrack?.let { track ->

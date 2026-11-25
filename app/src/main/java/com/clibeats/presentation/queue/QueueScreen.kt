@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -44,6 +45,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -176,6 +178,16 @@ private fun SplitQueueView(
     val upcoming = if (currentIndex >= 0) tracks.drop(currentIndex + 1) else emptyList()
     // Shuffle reorders Up Next: start it again from the top instead of following the row that was visible.
     var shuffleCount by remember { mutableIntStateOf(0) }
+    var confirmClear by remember { mutableStateOf(false) }
+    if (confirmClear) {
+        CliConfirmDialog(
+            command = "clear --queue",
+            message = "Remove all ${upcoming.size} songs from Up Next? The playing song keeps playing.",
+            confirmLabel = "Clear",
+            onConfirm = viewModel::onClear,
+            onDismiss = { confirmClear = false },
+        )
+    }
 
     Column(
         modifier =
@@ -250,7 +262,7 @@ private fun SplitQueueView(
                             },
                         modifier =
                             Modifier
-                                .clickable(enabled = upcoming.isNotEmpty()) { viewModel.onClear() }
+                                .clickable(enabled = upcoming.isNotEmpty()) { confirmClear = true }
                                 .padding(horizontal = 6.dp, vertical = 4.dp),
                     )
                 }

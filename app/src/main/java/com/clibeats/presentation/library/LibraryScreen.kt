@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
 import com.clibeats.presentation.component.SongTableRow
@@ -100,6 +101,16 @@ fun LibraryScreen(
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
     }
     val tabs = listOf("Tracks", "Artists", "Albums")
+    var confirmClearHistory by remember { mutableStateOf(false) }
+    if (confirmClearHistory) {
+        CliConfirmDialog(
+            command = "clear --history",
+            message = "Clear the songs you've played online from this list? Favorites and playlists aren't touched.",
+            confirmLabel = "Clear",
+            onConfirm = viewModel::clearPlayedHistory,
+            onDismiss = { confirmClearHistory = false },
+        )
+    }
 
     Column(
         modifier =
@@ -117,7 +128,7 @@ fun LibraryScreen(
                 modifier =
                     Modifier
                         .align(Alignment.End)
-                        .clickable(role = Role.Button, onClick = viewModel::clearPlayedHistory)
+                        .clickable(role = Role.Button) { confirmClearHistory = true }
                         .padding(8.dp),
             )
         } else {
