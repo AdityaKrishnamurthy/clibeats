@@ -28,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,7 +127,11 @@ class TrackDownloadManager
                 .flowOn(Dispatchers.IO)
 
         init {
-            scope.launch { removeLeftovers() }
+            // Later, not during app start (or while something is being downloaded or removed right away).
+            scope.launch {
+                delay(LEFTOVER_CLEANUP_DELAY_MS)
+                removeLeftovers()
+            }
         }
 
         /**
@@ -654,6 +659,7 @@ class TrackDownloadManager
             const val RANGE_ATTEMPTS = 3
             const val SNIFF_BYTES = 12
             const val LEFTOVER_AGE_MS = 60_000L
+            const val LEFTOVER_CLEANUP_DELAY_MS = 30_000L
         }
     }
 
