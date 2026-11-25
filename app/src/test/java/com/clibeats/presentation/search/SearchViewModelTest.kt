@@ -50,6 +50,7 @@ class SearchViewModelTest {
         whenever(providerRegistry.defaultProvider()).thenReturn(musicProvider)
         whenever(providerRegistry.providers).thenReturn(listOf(musicProvider))
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("audius"))
+        whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(false))
 
         viewModel = SearchViewModel(providerRegistry, appPreferences, playbackRepository)
     }
@@ -153,5 +154,15 @@ class SearchViewModelTest {
             viewModel.rememberPick(track)
             testDispatcher.scheduler.advanceUntilIdle()
             verify(appPreferences, times(1)).addRecentSearchTrack(track)
+        }
+
+    @Test
+    fun `onPlay replaces queue with tapped track when autoQueueRelated is false`() =
+        runTest {
+            val t1 = Track("1", "Song 1", "Artist", "Album", 180_000L, null, null, "youtube_music")
+            val t2 = Track("2", "Song 2", "Artist", "Album", 180_000L, null, null, "youtube_music")
+            viewModel.onPlay(listOf(t1, t2), 1)
+            testDispatcher.scheduler.advanceUntilIdle()
+            verify(playbackRepository).setQueue(listOf(t2), 0)
         }
 }

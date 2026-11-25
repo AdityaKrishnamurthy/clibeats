@@ -119,7 +119,8 @@ class LibraryViewModel
                 if (autoQueue) {
                     playbackRepository.setQueue(tracks, index)
                 } else {
-                    playbackRepository.playTrack(track)
+                    // Replace queue with just this song so autoplay re-seeds from the new context.
+                    playbackRepository.setQueue(listOf(track), 0)
                 }
             }
         }

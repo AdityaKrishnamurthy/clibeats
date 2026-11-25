@@ -1,4 +1,4 @@
-@file:Suppress("ktlint:standard:function-naming")
+@file:Suppress("ktlint:standard:function-naming", "ForbiddenImport")
 
 package com.clibeats.presentation.component
 
@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -22,6 +23,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -39,12 +41,14 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.clibeats.data.download.DownloadStatus
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.LocalAccentColor
 
 /**
  * The menu that opens when you hold a song: play next, add to queue, add to a playlist, add to favorites.
@@ -118,18 +122,45 @@ fun SongActionsSheet(
                     track.streamUrl?.startsWith("content://") == true
             if (!isLocal) {
                 val downloadedIds by actions.downloadedTrackIds.collectAsState()
+                val downloads by actions.downloads.collectAsState()
+                val downloadStatus = downloads[track.id]
                 val isDownloaded = track.id in downloadedIds
-                if (isDownloaded) {
-                    SheetAction(Icons.Outlined.Delete, "Remove download") {
-                        actions.removeDownload(track)
-                        onPicked(track)
-                        onDismiss()
+                when {
+                    downloadStatus is DownloadStatus.Downloading -> {
+                        val accent = LocalAccentColor.current
+                        val pct = downloadStatus.progressPercent
+                        val label = if (pct > 0) "Downloading... $pct%" else "Downloading..."
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            SheetAction(Icons.Outlined.FileDownload, label) {}
+                            if (pct > 0) {
+                                LinearProgressIndicator(
+                                    progress = { pct / PROGRESS_PERCENT },
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp),
+                                    color = accent,
+                                    trackColor = CliBeatsDivider,
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).height(2.dp),
+                                    color = accent,
+                                    trackColor = CliBeatsDivider,
+                                )
+                            }
+                        }
                     }
-                } else {
-                    SheetAction(Icons.Outlined.FileDownload, "Download for offline") {
-                        actions.download(track)
-                        onPicked(track)
-                        onDismiss()
+                    isDownloaded -> {
+                        SheetAction(Icons.Outlined.Delete, "Remove download") {
+                            actions.removeDownload(track)
+                            onPicked(track)
+                            onDismiss()
+                        }
+                    }
+                    else -> {
+                        SheetAction(Icons.Outlined.FileDownload, "Download for offline") {
+                            actions.download(track)
+                            onPicked(track)
+                            onDismiss()
+                        }
                     }
                 }
             }
@@ -157,3 +188,5 @@ private fun SheetAction(
         Text(text = label, style = MaterialTheme.typography.bodyLarge, color = CliBeatsTextPrimary)
     }
 }
+
+private const val PROGRESS_PERCENT = 100f

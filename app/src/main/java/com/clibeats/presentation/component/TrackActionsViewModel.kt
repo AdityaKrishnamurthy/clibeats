@@ -4,6 +4,7 @@ package com.clibeats.presentation.component
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.download.DownloadStatus
 import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
@@ -27,6 +28,7 @@ class TrackActionsViewModel
         private val notices: Notices,
     ) : ViewModel() {
         val downloadedTrackIds: StateFlow<Set<String>> = downloadManager.downloadedTrackIds
+        val downloads: StateFlow<Map<String, DownloadStatus>> = downloadManager.downloads
 
         fun favorite(track: Track) {
             viewModelScope.launch {

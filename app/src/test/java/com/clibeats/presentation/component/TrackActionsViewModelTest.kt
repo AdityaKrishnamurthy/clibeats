@@ -38,6 +38,7 @@ class TrackActionsViewModelTest {
     fun setup() {
         Dispatchers.setMain(dispatcher)
         whenever(downloadManager.downloadedTrackIds).thenReturn(MutableStateFlow(emptySet()))
+        whenever(downloadManager.downloads).thenReturn(MutableStateFlow(emptyMap()))
         whenever(downloadManager.getDownloadedTracks()).thenReturn(flowOf(emptyList()))
         viewModel = TrackActionsViewModel(library, playback, downloadManager, notices)
     }

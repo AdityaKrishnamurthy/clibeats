@@ -8,6 +8,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
+import com.clibeats.domain.repository.PlaybackRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -51,6 +52,7 @@ class HomeViewModelTest {
         whenever(providerRegistry.providers).thenReturn(listOf(musicProvider))
         whenever(appPreferences.activeProviderId).thenReturn(flowOf("youtube_music"))
         whenever(appPreferences.homeView).thenReturn(flowOf(null))
+        whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(false))
         // Trending loads as soon as the ViewModel starts; tests that care stub their own result.
         runBlocking { whenever(musicProvider.trending(any())).thenReturn(ProviderResult.Success(emptyList())) }
 
@@ -147,6 +149,28 @@ class HomeViewModelTest {
             testDispatcher.scheduler.advanceUntilIdle()
 
             assertThat(viewModel.activeProviderName.value).isEqualTo("YouTube Music")
+        }
+
+    @Test
+    fun `playFromList replaces queue with single track when autoQueueRelated is false`() =
+        runTest {
+            val playbackRepository: PlaybackRepository = mock()
+            val networkMonitor: NetworkMonitor = mock()
+            whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+            val vm =
+                HomeViewModel(
+                    providerRegistry = providerRegistry,
+                    appPreferences = appPreferences,
+                    networkMonitor = networkMonitor,
+                    playbackRepository = playbackRepository,
+                )
+            val t1 = fakeTrack()
+            val t2 = t1.copy(id = "audius:xyz", title = "Second")
+
+            vm.playFromList(listOf(t1, t2), 1)
+            testDispatcher.scheduler.advanceUntilIdle()
+
+            verify(playbackRepository).setQueue(listOf(t2), 0)
         }
 
     private fun fakeTrack(): Track =

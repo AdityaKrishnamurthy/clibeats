@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport")
+@file:Suppress("ForbiddenImport", "LargeClass")
 
 package com.clibeats.data.repository
 
@@ -6,13 +6,18 @@ import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SongDao
 import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.data.local.mapper.toEntity
+import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.provider.MusicProvider
+import com.clibeats.domain.provider.ProviderRegistry
+import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,6 +30,7 @@ import org.junit.After
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.doSuspendableAnswer
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.never
@@ -371,5 +377,48 @@ class PlaybackRepositoryImplTest {
 
             verify(songDao).insertAllIfAbsent(listOf(local.toEntity()))
             verify(songDao).upsertAll(listOf(online.toEntity()))
+        }
+
+    @Test
+    fun `autoplay cancels stale seed and seeds from new track`() =
+        runTest(testDispatcher) {
+            val provider: MusicProvider = mock()
+            val registry: ProviderRegistry = mock()
+            val networkMonitor: NetworkMonitor = mock()
+            whenever(registry.getProvider(any())).thenReturn(provider)
+            whenever(registry.defaultProvider()).thenReturn(provider)
+            whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
+            whenever(appPreferences.autoplayEnabled).thenReturn(flowOf(true))
+
+            val jp = track("jp1")
+            val jpRelated = track("jp_rel")
+            val kn = track("kn1")
+            val knRelated = track("kn_rel")
+            val jpGate = CompletableDeferred<ProviderResult<List<Track>>>()
+            whenever(provider.relatedTracks("jp1")).doSuspendableAnswer { jpGate.await() }
+            whenever(provider.relatedTracks("kn1")).thenReturn(ProviderResult.Success(listOf(knRelated)))
+
+            val repo =
+                PlaybackRepositoryImpl(
+                    playerAdapter = playerAdapter,
+                    streamResolver = streamResolver,
+                    queueDao = queueDao,
+                    songDao = songDao,
+                    appPreferences = appPreferences,
+                    ioDispatcher = testDispatcher,
+                    providerRegistry = registry,
+                    networkMonitor = networkMonitor,
+                )
+
+            queueFlow.value = listOf(jp)
+            nowPlaying(jp)
+            // User switches to a Kannada song before JP related tracks arrive.
+            queueFlow.value = listOf(kn)
+            nowPlaying(kn)
+            jpGate.complete(ProviderResult.Success(listOf(jpRelated)))
+
+            verify(playerAdapter, never()).addAllToQueue(listOf(jpRelated))
+            verify(playerAdapter).addAllToQueue(listOf(knRelated))
+            assertThat(repo.playbackState.value.currentTrack).isEqualTo(kn)
         }
 }
