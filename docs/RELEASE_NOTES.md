@@ -11,6 +11,11 @@
   (Downloaded plays only finished downloads). Empty playlists don't show it.
 - Tapping the cover or name still opens the playlist as before.
 
+## Settings
+
+- **Storage and Cache:** Downloads is laid out like Artwork and Songs: its size and song count, a framed
+  **↓ MANAGE** button, `[ CLEAR ALL ]` on the right, and a short note.
+
 ---
 
 ## v2.6.0

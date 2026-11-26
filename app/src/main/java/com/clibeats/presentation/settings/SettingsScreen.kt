@@ -482,39 +482,12 @@ fun SettingsScreen(
                     onSelect = viewModel::setSongCacheMb,
                     onClear = { confirmClearSongs = true },
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val songs = downloadedItems.size
-                    Text(
-                        text = downloadsLabel(downloadedBytes, songs),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "[ MANAGE ]",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent,
-                        modifier =
-                            Modifier
-                                .clickable(role = Role.Button) { showManageDownloads = true }
-                                .padding(horizontal = 6.dp, vertical = 8.dp),
-                    )
-                    if (downloadedItems.isNotEmpty()) {
-                        Text(
-                            text = "[ CLEAR ALL ]",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier =
-                                Modifier
-                                    .semantics { contentDescription = "Delete all downloaded songs" }
-                                    .clickable(role = Role.Button) { confirmClearDownloads = true }
-                                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                        )
-                    }
-                }
+                DownloadsRow(
+                    usedBytes = downloadedBytes,
+                    songs = downloadedItems.size,
+                    onManage = { showManageDownloads = true },
+                    onClearAll = { confirmClearDownloads = true },
+                )
             }
         }
 
@@ -686,6 +659,56 @@ private fun CacheRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** Offline downloads, laid out like [CacheRow]: a title line, a framed button and a note. */
+@Suppress("FunctionNaming")
+@Composable
+private fun DownloadsRow(
+    usedBytes: Long,
+    songs: Int,
+    onManage: () -> Unit,
+    onClearAll: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = downloadsLabel(usedBytes, songs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (songs > 0) {
+                Text(
+                    text = "[ CLEAR ALL ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier =
+                        Modifier
+                            .semantics { contentDescription = "Delete all downloaded songs" }
+                            .clickable(role = Role.Button, onClick = onClearAll)
+                            .padding(8.dp),
+                )
+            }
+        }
+        Text(
+            text = "↓ MANAGE",
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+            modifier =
+                Modifier
+                    .border(1.dp, accent)
+                    .semantics { contentDescription = "Manage downloaded songs" }
+                    .clickable(role = Role.Button, onClick = onManage)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+        Text(
+            text = if (songs > 0) "saved for offline · no size limit" else "nothing downloaded yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
