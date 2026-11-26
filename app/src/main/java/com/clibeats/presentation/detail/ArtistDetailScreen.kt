@@ -4,17 +4,11 @@ package com.clibeats.presentation.detail
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,128 +20,131 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.SongActionsSheet
-import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackActionsViewModel
-import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.navigation.AppRoute
-import com.clibeats.presentation.search.formatDuration
+import com.clibeats.presentation.playlist.PlaylistDetailView
+import com.clibeats.presentation.playlist.SelectionActions
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
-import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
-@Suppress("LongMethod")
+/** Artist tracks screen using the same TUI detail view as Library's OpenedGroupView. */
 @Composable
 fun ArtistDetailScreen(
     route: AppRoute.ArtistDetail,
+    onBack: () -> Unit = {},
     viewModel: EntityDetailViewModel = hiltViewModel(),
 ) {
     LaunchedEffect(route.artistName, route.browseId, route.providerId) {
         viewModel.loadArtist(route.artistName, route.browseId, route.providerId)
     }
+    EntityDetailContent(
+        fallbackTitle = route.artistName,
+        fallbackSubtitle = { "Artist · ${it.size} tracks" },
+        emptyText = "No tracks found for ${route.artistName}.",
+        onBack = onBack,
+        viewModel = viewModel,
+    )
+}
 
+@Composable
+internal fun EntityDetailContent(
+    fallbackTitle: String,
+    fallbackSubtitle: (List<Track>) -> String,
+    emptyText: String,
+    onBack: () -> Unit,
+    viewModel: EntityDetailViewModel,
+) {
     val trackActions: TrackActionsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloads by trackActions.downloads.collectAsStateWithLifecycle()
     val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
     var actionTrack by remember { mutableStateOf<Track?>(null) }
+    var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
 
-    Column(
-        modifier = Modifier.fillMaxSize().background(CliBeatsBackground),
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().background(CliBeatsSurface).padding(16.dp),
-        ) {
-            Text(
-                text = "ARTIST: ${route.artistName.uppercase()}",
-                style = MaterialTheme.typography.titleMedium,
-                color = CliBeatsTextPrimary,
+    actionTrack?.let { SongActionsSheet(track = it, onDismiss = { actionTrack = null }) }
+    bulkAddTracks?.let { AddToPlaylistDialog(tracks = it, onDismiss = { bulkAddTracks = null }) }
+
+    val selection =
+        remember(trackActions) {
+            SelectionActions(
+                download = trackActions::downloadAll,
+                addToPlaylist = { bulkAddTracks = it },
+                queue = trackActions::addAllToQueue,
+                playNext = trackActions::playAllNext,
+                favorite = trackActions::favoriteAll,
+                more = { actionTrack = it },
             )
-            (state as? EntityDetailUiState.Success)?.subtitle?.let { sub ->
-                Text(
-                    text = sub,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                )
-            }
         }
 
+    Column(modifier = Modifier.fillMaxSize().background(CliBeatsBackground)) {
         when (val current = state) {
-            is EntityDetailUiState.Loading -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            is EntityDetailUiState.Loading ->
+                DetailStateScaffold(title = fallbackTitle, onBack = onBack) {
                     CircularProgressIndicator(color = CliBeatsAccent)
                 }
-            }
-            is EntityDetailUiState.Error -> {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(text = current.message, color = CliBeatsTextSecondary)
-                }
-            }
-            is EntityDetailUiState.Success -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+            is EntityDetailUiState.Error ->
+                DetailStateScaffold(title = fallbackTitle, onBack = onBack) {
                     Text(
-                        text = "[ PLAY ALL ]",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CliBeatsAccent,
-                        modifier =
-                            Modifier
-                                .clickable { viewModel.playAll(current.tracks, source = route.artistName) }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "[ SHUFFLE ]",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CliBeatsAccent,
-                        modifier =
-                            Modifier
-                                .clickable { viewModel.shuffleAll(current.tracks, route.artistName) }
-                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                        text = current.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = CliBeatsTextSecondary,
                     )
                 }
-
-                if (current.tracks.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = "> No tracks found for ${route.artistName}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = CliBeatsTextSecondary,
-                        )
-                    }
-                } else {
-                    LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        itemsIndexed(current.tracks, key = { idx, t -> "${idx}_${t.id}" }) { index, track ->
-                            SongTableRow(
-                                trackTitle = track.title,
-                                artist = track.artist,
-                                duration = formatDuration(track.durationMs),
-                                index = index + 1,
-                                isDownloaded = track.id in downloadedIds,
-                                isNowPlaying = track.id == playingId,
-                                artworkContent = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
-                                onClick = { viewModel.playAll(current.tracks, index, route.artistName) },
-                                onSwipeRight = { trackActions.addToQueue(track) },
-                                onSwipeLeft = { trackActions.favorite(track) },
-                                onLongPress = { actionTrack = track },
-                            )
-                        }
-                    }
-                }
-            }
+            is EntityDetailUiState.Success ->
+                PlaylistDetailView(
+                    title = current.title,
+                    subtitle = current.subtitle ?: fallbackSubtitle(current.tracks),
+                    tracks = current.tracks,
+                    emptyText = emptyText,
+                    onBackClick = onBack,
+                    onTrackClick = { list, index -> viewModel.playAll(list, index, current.title) },
+                    onRemoveClick = null,
+                    removeLabel = "",
+                    onSwipeRight = trackActions::addToQueue,
+                    onSwipeLeft = trackActions::favorite,
+                    selection = selection,
+                    coverUrl = current.tracks.firstOrNull { !it.artworkUrl.isNullOrBlank() }?.artworkUrl,
+                    downloadedIds = downloadedIds,
+                    downloads = downloads,
+                    playingTrackId = playingId,
+                    playAll = true,
+                )
         }
     }
+}
 
-    actionTrack?.let { track ->
-        SongActionsSheet(track = track, onDismiss = { actionTrack = null })
+@Composable
+internal fun DetailStateScaffold(
+    title: String,
+    onBack: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Text(
+                text = "< Back",
+                style = MaterialTheme.typography.labelLarge,
+                color = CliBeatsAccent,
+                modifier = Modifier.clickable(role = Role.Button, onClick = onBack).padding(vertical = 4.dp),
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.headlineSmall,
+                color = CliBeatsTextPrimary,
+            )
+        }
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            content()
+        }
     }
 }
