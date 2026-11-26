@@ -4,6 +4,7 @@ package com.clibeats.di
 
 import android.content.Context
 import com.clibeats.BuildConfig
+import com.clibeats.data.lyrics.LrcLibApi
 import com.clibeats.data.network.NetworkMonitor
 import com.clibeats.data.provider.api.InnerTubeApi
 import com.clibeats.data.provider.api.InnerTubeHeaderInterceptor
@@ -83,6 +84,19 @@ object NetworkModule {
             .create(InnerTubeApi::class.java)
 
     const val INNERTUBE_OKHTTP_QUALIFIER = "innertube_okhttp_client"
+
+    @Provides
+    @Singleton
+    fun provideLrcLibApi(
+        okHttpClient: OkHttpClient,
+        json: Json,
+    ): LrcLibApi =
+        Retrofit.Builder()
+            .baseUrl(LrcLibApi.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+            .create(LrcLibApi::class.java)
 
     @Provides
     @Singleton
