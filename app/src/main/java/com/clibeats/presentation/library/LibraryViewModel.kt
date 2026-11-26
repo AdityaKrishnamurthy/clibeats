@@ -77,6 +77,18 @@ class LibraryViewModel
             viewModelScope.launch { appPreferences?.setLibraryGroupView(mode.name) }
         }
 
+        private val _tab = MutableStateFlow(TAB_TRACKS)
+
+        /**
+         * Tracks (0), Artists (1) or Albums (2). Kept here, not in the screen, so it's still Artists after
+         * opening an artist and coming back.
+         */
+        val tab: StateFlow<Int> = _tab.asStateFlow()
+
+        fun setTab(index: Int) {
+            _tab.value = index
+        }
+
         private val _opened = MutableStateFlow<OpenedGroup?>(null)
 
         /** The artist or album open over the list; null when none is. */
@@ -143,6 +155,23 @@ class LibraryViewModel
             if (tracks.isNotEmpty()) playbackRepository.playFrom(tracks, index, source)
         }
 
+        /**
+         * Back (or tapping the Library tab again), one step at a time: an open artist / album → its list;
+         * Artists / Albums → Tracks. False when there's nothing to step back from here.
+         */
+        fun stepBack(): Boolean =
+            when {
+                _opened.value != null -> {
+                    _opened.value = null
+                    true
+                }
+                _mode.value != LibraryMode.PLAYLISTS && _tab.value != TAB_TRACKS -> {
+                    _tab.value = TAB_TRACKS
+                    true
+                }
+                else -> false
+            }
+
         @Suppress("UnusedParameter")
         fun onTrackClick(
             track: Track,
@@ -159,5 +188,9 @@ class LibraryViewModel
                     playbackRepository.playFrom(tracks, index, "Library")
                 }
             }
+        }
+
+        companion object {
+            const val TAB_TRACKS = 0
         }
     }

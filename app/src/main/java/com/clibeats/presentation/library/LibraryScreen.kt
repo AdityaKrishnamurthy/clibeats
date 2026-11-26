@@ -29,10 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,8 +78,8 @@ fun LibraryScreen(
     val opened by viewModel.opened.collectAsState()
     LaunchedEffect(toggleModeRequested) {
         if (toggleModeRequested) {
-            if (opened != null) {
-                viewModel.open(null)
+            if (viewModel.stepBack()) {
+                // Closed an artist / album, or went from Artists / Albums back to Tracks.
             } else if (mode == LibraryMode.PLAYLISTS && playlistViewModel.isPlaylistOpen) {
                 playlistViewModel.selectPlaylist(null)
             } else {
@@ -104,7 +102,9 @@ fun LibraryScreen(
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
     val sort by viewModel.sort.collectAsState()
     val groupView by viewModel.groupView.collectAsState()
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val selectedTabIndex by viewModel.tab.collectAsState()
+    // Android back on Artists / Albums goes to Tracks first (an open artist / album has its own back).
+    BackHandler(enabled = selectedTabIndex != LibraryViewModel.TAB_TRACKS) { viewModel.stepBack() }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -178,7 +178,7 @@ fun LibraryScreen(
                                 Modifier
                                     .weight(1f)
                                     .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
-                                    .clickable(role = Role.Tab) { selectedTabIndex = index }
+                                    .clickable(role = Role.Tab) { viewModel.setTab(index) }
                                     .padding(vertical = 8.dp),
                         )
                     }
