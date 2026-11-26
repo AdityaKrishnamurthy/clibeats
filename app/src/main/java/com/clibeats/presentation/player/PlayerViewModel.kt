@@ -59,7 +59,7 @@ sealed interface LyricsState {
     ) : LyricsState
 }
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "TooManyFunctions")
 @HiltViewModel
 class PlayerViewModel
     @Inject
@@ -263,6 +263,21 @@ class PlayerViewModel
                     delay(TOAST_MS)
                     _hint.value = null
                 }
+        }
+
+        /** The exact position right now, for lyrics (main thread). */
+        fun livePositionMs(): Long = playbackRepository.livePositionMs()
+
+        private val _lyricsOpen = MutableStateFlow(false)
+
+        /**
+         * Whether Now Playing shows lyrics instead of the big cover. Kept here, not in the screen, so closing the
+         * player and opening it again from the mini player comes back to the lyrics.
+         */
+        val lyricsOpen: StateFlow<Boolean> = _lyricsOpen.asStateFlow()
+
+        fun setLyricsOpen(open: Boolean) {
+            _lyricsOpen.value = open
         }
 
         fun seekTo(positionMs: Long) {

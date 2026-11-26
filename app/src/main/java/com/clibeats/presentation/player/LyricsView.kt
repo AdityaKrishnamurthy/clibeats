@@ -65,8 +65,8 @@ import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
-import com.clibeats.presentation.theme.InterFamily
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.presentation.theme.PoppinsFamily
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 
@@ -78,12 +78,15 @@ import kotlinx.coroutines.flow.filter
  *   again. Tap a line to jump there.
  * - Plain lyrics are shown as text to scroll.
  */
+@Suppress("LongParameterList")
 @Composable
 internal fun LyricsPanel(
     state: LyricsState,
     playback: PlaybackState,
     isLocalSong: Boolean,
     onSeek: (Long) -> Unit,
+    /** The player's exact position now (read every frame). */
+    livePosition: () -> Long,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier.fillMaxSize()) {
@@ -101,7 +104,7 @@ internal fun LyricsPanel(
             is LyricsState.Loaded ->
                 when (val lyrics = state.lyrics) {
                     is Lyrics.Synced -> {
-                        val position = rememberPlaybackPosition(playback)
+                        val position = rememberPlaybackPosition(playback, livePosition)
                         SyncedLyrics(lyrics, position, onSeek)
                     }
                     is Lyrics.Plain -> PlainLyrics(lyrics.text)
@@ -118,26 +121,25 @@ private fun LyricsMessage(text: String) {
 }
 
 /**
- * The playback position, moving every frame between the player's half-second updates so syllables fill
- * smoothly. Never steps back a few milliseconds when an update lands slightly behind.
+ * The playback position, read from the player's own clock on every frame. It's exact at all times, including
+ * right after tapping a line (the player reports the new spot at once), so syllables never fill twice.
  */
 @Composable
-private fun rememberPlaybackPosition(playback: PlaybackState): State<Long> {
+private fun rememberPlaybackPosition(
+    playback: PlaybackState,
+    livePosition: () -> Long,
+): State<Long> {
     val position = remember { mutableLongStateOf(playback.positionMs) }
     val trackId = playback.currentTrack?.id
-    LaunchedEffect(trackId) { position.longValue = playback.positionMs }
-    LaunchedEffect(playback.positionMs, playback.isPlaying, trackId) {
-        val reported = playback.positionMs
-        val current = position.longValue
-        val base =
-            if (playback.isPlaying && reported < current && current - reported < JITTER_MS) current else reported
-        position.longValue = base
+    LaunchedEffect(trackId, playback.isPlaying) {
+        position.longValue = livePosition()
         if (!playback.isPlaying) return@LaunchedEffect
-        val startNanos = withFrameNanos { it }
         while (true) {
-            withFrameNanos { now -> position.longValue = base + (now - startNanos) / 1_000_000 }
+            withFrameNanos { position.longValue = livePosition() }
         }
     }
+    // Paused: still follow seeks (the waveform, a tapped line).
+    LaunchedEffect(playback.positionMs) { if (!playback.isPlaying) position.longValue = livePosition() }
     return position
 }
 
@@ -252,11 +254,10 @@ private fun activeIndex(
 private val lyricStyle: TextStyle
     @Composable get() =
         MaterialTheme.typography.headlineSmall.copy(
-            fontFamily = InterFamily,
+            fontFamily = PoppinsFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 28.sp,
             lineHeight = 36.sp,
-            letterSpacing = (-0.2).sp,
         )
 
 @Suppress("LongParameterList")
@@ -412,7 +413,7 @@ private fun PlainLyrics(text: String) {
                 text = verse.trim(),
                 style =
                     MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = InterFamily,
+                        fontFamily = PoppinsFamily,
                         fontWeight = FontWeight.SemiBold,
                         fontSize = 20.sp,
                         lineHeight = 30.sp,
@@ -442,7 +443,6 @@ private fun Modifier.fadingEdges(): Modifier =
 /** 1 for the lines next to the current one, a little less further away. */
 private fun distanceFade(distance: Int): Float = if (distance <= 1) 1f else maxOf(0.45f, 1f - 0.18f * (distance - 1))
 
-private const val JITTER_MS = 300L
 private const val FOLLOW_SCROLL_MS = 520
 private const val INTRO_MIN_MS = 4_000L
 private const val FOLLOW_PAUSE_MS = 3_000L

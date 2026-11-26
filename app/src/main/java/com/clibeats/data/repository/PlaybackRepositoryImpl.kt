@@ -451,6 +451,8 @@ class PlaybackRepositoryImpl
 
         override fun seekTo(positionMs: Long) = playerAdapter.seekTo(positionMs)
 
+        override fun livePositionMs(): Long = playerAdapter.currentPositionMs()
+
         override fun skipToIndex(index: Int) = playerAdapter.skipToIndex(index)
 
         /**

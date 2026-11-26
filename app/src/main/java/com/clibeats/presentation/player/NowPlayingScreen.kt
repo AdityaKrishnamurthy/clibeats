@@ -65,7 +65,6 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -217,8 +216,8 @@ fun NowPlayingScreen(
     // The finger moves this value directly; the snap animation runs only after letting go, so the two never
     // fight (which used to leave it stuck halfway).
     val lyricsState by viewModel.lyrics.collectAsState()
-    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
-    var lyricsProgress by remember { mutableFloatStateOf(if (lyricsOpen) 1f else 0f) }
+    val lyricsOpen by viewModel.lyricsOpen.collectAsState()
+    var lyricsProgress by remember { mutableFloatStateOf(if (viewModel.lyricsOpen.value) 1f else 0f) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     var swiping by remember { mutableStateOf(false) }
     val showArtwork by remember { derivedStateOf { lyricsProgress < 1f || swiping } }
@@ -231,7 +230,7 @@ fun NowPlayingScreen(
         /** How fast the progress was moving when the finger let go (per second). */
         progressVelocity: Float = 0f,
     ) {
-        lyricsOpen = open
+        viewModel.setLyricsOpen(open)
         settleJob?.cancel()
         settleJob =
             scope.launch {
@@ -374,6 +373,7 @@ fun NowPlayingScreen(
                             playback = state,
                             isLocalSong = track?.providerId == "local",
                             onSeek = viewModel::seekTo,
+                            livePosition = viewModel::livePositionMs,
                             modifier =
                                 Modifier.graphicsLayer {
                                     val p = lyricsProgress
