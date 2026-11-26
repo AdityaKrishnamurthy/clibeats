@@ -29,8 +29,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
 import androidx.compose.foundation.lazy.grid.LazyGridScope
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -125,6 +127,8 @@ internal fun PlaylistBrowser(
     onDeleteClick: (Playlist) -> Unit,
     onPlayPlaylist: (Playlist) -> Unit = {},
     onPlayPinned: (String) -> Unit = {},
+    /** Owned by the screen, so the list is where you left it after opening a playlist and coming back. */
+    gridState: LazyGridState = rememberLazyGridState(),
 ) {
     val (local, app) = state.playlists.partition { it.isLocalFilePlaylist() }
     val pinned =
@@ -196,6 +200,7 @@ internal fun PlaylistBrowser(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(viewMode.columns),
+        state = gridState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(GRID_GAP_DP.dp),

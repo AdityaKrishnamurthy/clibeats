@@ -19,9 +19,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -108,6 +110,9 @@ fun SearchScreen(
     val recentSearches by viewModel.recentSearches.collectAsState()
     val playlists by viewModel.playlistResults.collectAsState()
     val opened by viewModel.opened.collectAsState()
+    // Here (above the early return), so the results are where you left them after opening a playlist.
+    val resultsListState = rememberLazyListState()
+    val playlistRowState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     var confirmClearRecent by remember { mutableStateOf(false) }
     if (confirmClearRecent) {
@@ -211,6 +216,8 @@ fun SearchScreen(
                             tracks = currentState.tracks,
                             playlists = playlists,
                             onPlaylistClick = viewModel::openPlaylist,
+                            listState = resultsListState,
+                            playlistRowState = playlistRowState,
                             downloadedIds = downloadedIds,
                             playingTrackId = playingId,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
@@ -370,6 +377,8 @@ private fun SearchResultsList(
     tracks: List<Track>,
     playlists: List<HomeItem.Collection> = emptyList(),
     onPlaylistClick: (HomeItem.Collection) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
+    playlistRowState: LazyListState = rememberLazyListState(),
     downloadedIds: Set<String> = emptySet(),
     playingTrackId: String? = null,
     onTrackClick: (Int) -> Unit,
@@ -379,9 +388,9 @@ private fun SearchResultsList(
     onAddToPlaylist: (Track) -> Unit,
     onMore: (Track) -> Unit,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         if (playlists.isNotEmpty()) {
-            item(key = "playlists") { PlaylistResultsRow(playlists, onPlaylistClick) }
+            item(key = "playlists") { PlaylistResultsRow(playlists, onPlaylistClick, playlistRowState) }
         }
         if (tracks.isNotEmpty()) {
             item {
@@ -456,6 +465,7 @@ internal fun formatDuration(durationMs: Long): String {
 private fun PlaylistResultsRow(
     playlists: List<HomeItem.Collection>,
     onClick: (HomeItem.Collection) -> Unit,
+    rowState: LazyListState,
 ) {
     val accent = LocalAccentColor.current
     Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
@@ -466,6 +476,7 @@ private fun PlaylistResultsRow(
             modifier = Modifier.padding(vertical = 6.dp),
         )
         LazyRow(
+            state = rowState,
             // Swiping the row sideways scrolls the cards instead of flipping to the next tab.
             modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

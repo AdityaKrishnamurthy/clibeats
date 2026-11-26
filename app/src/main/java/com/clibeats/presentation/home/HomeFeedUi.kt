@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -82,6 +83,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** What Home's feed rows do when tapped or held. */
+@Suppress("LongParameterList") // one bundle of callbacks, all named at the call site
 internal class FeedActions(
     /** A song in a row: the row's name, its songs and the tapped one. */
     val playSong: (String, List<Track>, Int) -> Unit,
@@ -92,6 +94,11 @@ internal class FeedActions(
     val editLanguages: () -> Unit = {},
     /** "Not now" on the language suggestion: keep every language. */
     val skipLanguages: () -> Unit = {},
+    /**
+     * The scroll state of the row named so, owned by Home: opening a card and coming back leaves each row
+     * scrolled where it was. Null: each row keeps its own (reset when it leaves the screen).
+     */
+    val rowState: ((String) -> LazyListState)? = null,
 )
 
 /**
@@ -224,7 +231,7 @@ private fun SongShelf(
         val columnWidth = if (songs.size > SONGS_PER_COLUMN) maxWidth * COLUMN_WIDTH_FRACTION else maxWidth
         val columns = songs.withIndex().chunked(SONGS_PER_COLUMN)
         LazyRow(
-            state = rememberLazyListState(),
+            state = actions.rowState?.invoke(row) ?: rememberLazyListState(),
             modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -296,6 +303,7 @@ private fun CardShelf(
 ) {
     val songs = shelf.songs
     LazyRow(
+        state = actions.rowState?.invoke(shelf.title) ?: rememberLazyListState(),
         modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

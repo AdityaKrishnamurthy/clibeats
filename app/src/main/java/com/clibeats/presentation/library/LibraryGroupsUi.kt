@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
@@ -130,9 +131,12 @@ internal fun GroupBrowser(
     onViewModeChange: (PlaylistViewMode) -> Unit,
     sort: GroupSort,
     onSortChange: (GroupSort) -> Unit,
+    /** Owned by the Library, so the grid is where you left it after opening an artist or album. */
+    gridState: LazyGridState,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(viewMode.columns),
+        state = gridState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(GRID_GAP),

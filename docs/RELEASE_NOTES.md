@@ -55,6 +55,12 @@
 - **PLAYING FROM** is softened toward white (black on Light) until it reads clearly, instead of the raw cover
   colour (a hot-pink cover made it hard to read).
 
+## Lists keep their place
+
+- Coming back from a playlist, artist, album or Home card lands where you were: the Playlists grid (e.g. down
+  at Local playlists), the Library's Tracks, Artists and Albums, Search results and its playlist row, and each
+  sideways row on Home.
+
 ## Settings
 
 - **Storage and Cache:** Downloads is laid out like Artwork and Songs: its size and song count, a framed

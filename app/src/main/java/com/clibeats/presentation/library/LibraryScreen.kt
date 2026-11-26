@@ -21,7 +21,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -76,6 +79,11 @@ fun LibraryScreen(
     // Tapping the Library tab while already on it: inside a playlist, back to the playlist list first;
     // otherwise the next section (Playlists → Online → Local).
     val opened by viewModel.opened.collectAsState()
+    // Scroll positions live here (above the early returns), so opening an artist / album and coming back,
+    // or switching between Tracks, Artists and Albums, keeps each list where it was.
+    val tracksListState = rememberLazyListState()
+    val artistsGridState = rememberLazyGridState()
+    val albumsGridState = rememberLazyGridState()
     LaunchedEffect(toggleModeRequested) {
         if (toggleModeRequested) {
             if (viewModel.stepBack()) {
@@ -218,6 +226,7 @@ fun LibraryScreen(
                             0 ->
                                 TracksList(
                                     tracks = currentState.tracks,
+                                    listState = tracksListState,
                                     downloadedIds = downloadedIds,
                                     playingTrackId = playingId,
                                     onTrackClick = { track, index ->
@@ -241,6 +250,7 @@ fun LibraryScreen(
                                     onViewModeChange = viewModel::setGroupView,
                                     sort = sort,
                                     onSortChange = viewModel::setSort,
+                                    gridState = artistsGridState,
                                 )
                             2 ->
                                 GroupBrowser(
@@ -256,6 +266,7 @@ fun LibraryScreen(
                                     onViewModeChange = viewModel::setGroupView,
                                     sort = sort,
                                     onSortChange = viewModel::setSort,
+                                    gridState = albumsGridState,
                                 )
                         }
                     }
@@ -269,6 +280,7 @@ fun LibraryScreen(
 @Composable
 private fun TracksList(
     tracks: List<Track>,
+    listState: LazyListState,
     downloadedIds: Set<String> = emptySet(),
     playingTrackId: String? = null,
     onTrackClick: (Track, Int) -> Unit,
@@ -276,7 +288,7 @@ private fun TracksList(
     onLongPress: (Track) -> Unit,
     onSwipeLeft: (Track) -> Unit,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
             SongTableHeader()
         }
