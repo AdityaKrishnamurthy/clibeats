@@ -221,7 +221,10 @@ fun NowPlayingScreen(
     val showPronunciation by viewModel.showPronunciation.collectAsStateWithLifecycle()
     val extrasLoading by viewModel.extrasLoading.collectAsStateWithLifecycle()
     val lyricsOpen by viewModel.lyricsOpen.collectAsStateWithLifecycle()
-    var lyricsProgress by remember { mutableFloatStateOf(if (viewModel.lyricsOpen.value) 1f else 0f) }
+    // Opening Now Playing: back on the lyrics if they were open for this same song, otherwise on the cover.
+    var lyricsProgress by remember { mutableFloatStateOf(if (viewModel.lyricsOpenOnEntry()) 1f else 0f) }
+    // Reading along when the next song starts: its lyrics come up too.
+    LaunchedEffect(track?.id) { if (viewModel.lyricsOpen.value) viewModel.setLyricsOpen(true) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     var swiping by remember { mutableStateOf(false) }
     val showArtwork by remember { derivedStateOf { lyricsProgress < 1f || swiping } }
@@ -555,7 +558,7 @@ fun NowPlayingScreen(
                         }
                     }
                     IconButton(onClick = { settleLyrics(!lyricsOpen) }, enabled = track != null) {
-                        val hasLyrics = lyricsState is LyricsState.Loaded
+                        val hasLyrics = lyricsState != LyricsState.None && lyricsState != LyricsState.Offline
                         Icon(
                             Icons.Outlined.Lyrics,
                             contentDescription = if (lyricsOpen) "Hide lyrics" else "Show lyrics",

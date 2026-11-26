@@ -9,6 +9,7 @@
 
 package com.clibeats.presentation.player
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -125,7 +126,8 @@ internal fun LyricsPanel(
         if (state is LyricsState.Loaded) LyricsToolbar(state, extras)
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state) {
-                LyricsState.Loading -> if (!isLocalSong) LyricsMessage("Searching for lyrics…", busy = true)
+                LyricsState.Idle, LyricsState.Loading ->
+                    if (!isLocalSong) LyricsMessage("Searching for lyrics…", busy = true)
                 LyricsState.None ->
                     LyricsMessage(
                         if (isLocalSong) {
@@ -416,7 +418,7 @@ private val lyricStyle: TextStyle
             lineHeight = 36.sp,
         )
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 private fun LyricLineText(
     line: LyricLine,
@@ -485,6 +487,7 @@ private fun LyricLineText(
             alpha = if (isActive) SUB_ACTIVE_ALPHA else SUB_ALPHA * distanceFade(distance),
             // Syllable sync: the pronunciation fills along with the line, at the same pace.
             sung = if (isActive && line.words.isNotEmpty()) ({ sungFraction(line, position.value) }) else null,
+            active = isActive,
         )
     }
 }
@@ -499,6 +502,8 @@ private fun SubLines(
     translation: String?,
     alpha: Float,
     sung: (() -> Float)? = null,
+    /** The line being sung: its translation turns white (whole line, no word-by-word fill). */
+    active: Boolean = false,
 ) {
     val shown = pronunciation?.takeIf { it.isNotBlank() }
     val hasPronunciation = shown != null
@@ -515,10 +520,29 @@ private fun SubLines(
         Text(
             text = translation,
             style = translationStyle,
-            color = CliBeatsTextSecondary.copy(alpha = alpha),
+            color = translationColor(active, alpha),
             modifier = Modifier.padding(top = if (hasPronunciation) 2.dp else SUB_TOP_GAP),
         )
     }
+}
+
+@Composable
+private fun translationColor(
+    active: Boolean,
+    alpha: Float,
+): Color {
+    val target =
+        if (active) {
+            CliBeatsTextPrimary.copy(alpha = TRANSLATION_ACTIVE_ALPHA)
+        } else {
+            CliBeatsTextSecondary.copy(alpha = alpha)
+        }
+    val color by animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(LINE_FADE_MS),
+        label = "translationColor",
+    )
+    return color
 }
 
 /** The pronunciation of the line being sung: dim, with the sung part bright (same idea as the line itself). */
@@ -726,6 +750,7 @@ private fun distanceFade(distance: Int): Float = if (distance <= 1) 1f else maxO
 
 private const val FOLLOW_SCROLL_MS = 520
 private const val SUB_ALPHA = 0.5f
+private const val TRANSLATION_ACTIVE_ALPHA = 0.95f
 private const val SUB_DIM_ALPHA = 0.4f
 private val SUB_TOP_GAP = 6.dp
 private val LINE_GAP_WITH_EXTRAS = 26.dp

@@ -53,6 +53,9 @@ sealed interface SleepTimer {
 
 /** The current song's lyrics, for the Now Playing lyrics view. */
 sealed interface LyricsState {
+    /** Not looked up yet: lyrics haven't been opened for this song. */
+    data object Idle : LyricsState
+
     /** Being read from the file, or searched for online. */
     data object Loading : LyricsState
 
@@ -120,19 +123,29 @@ class PlayerViewModel
                 },
             )
 
+        /** The song whose lyrics have been asked for (opened), so they're looked up. */
+        private val lyricsRequestedFor = MutableStateFlow<String?>(null)
+
         /** The playing song's lyrics (local file, saved, or found online), before any translation. */
         @Suppress("OPT_IN_USAGE")
         private val baseLyrics =
             playbackState
                 .map { it.currentTrack }
                 .distinctUntilChanged { a, b -> a?.id == b?.id && a?.streamUrl == b?.streamUrl }
-                .transformLatest { track ->
-                    if (track == null) {
-                        emit(null to LyricsState.None)
-                        return@transformLatest
-                    }
-                    emit(track to LyricsState.Loading)
-                    emit(track to loadLyrics(track))
+                .flatMapLatest { track ->
+                    if (track == null) return@flatMapLatest flowOf<Pair<Track?, LyricsState>>(null to LyricsState.None)
+                    // Looked up only once lyrics are opened for this song (saves data on songs nobody reads).
+                    lyricsRequestedFor
+                        .map { it == track.id }
+                        .distinctUntilChanged()
+                        .transformLatest<Boolean, Pair<Track?, LyricsState>> { wanted ->
+                            if (!wanted) {
+                                emit(track to LyricsState.Idle)
+                                return@transformLatest
+                            }
+                            emit(track to LyricsState.Loading)
+                            emit(track to loadLyrics(track))
+                        }
                 }
 
         @Suppress("ReturnCount")
@@ -387,6 +400,9 @@ class PlayerViewModel
 
         private val _lyricsOpen = MutableStateFlow(false)
 
+        /** The song lyrics were last opened for (so reopening Now Playing on it comes back to them). */
+        private var lyricsOpenFor: String? = null
+
         /**
          * Whether Now Playing shows lyrics instead of the big cover. Kept here, not in the screen, so closing the
          * player and opening it again from the mini player comes back to the lyrics.
@@ -394,7 +410,20 @@ class PlayerViewModel
         val lyricsOpen: StateFlow<Boolean> = _lyricsOpen.asStateFlow()
 
         fun setLyricsOpen(open: Boolean) {
+            val id = playbackState.value.currentTrack?.id
             _lyricsOpen.value = open
+            lyricsOpenFor = if (open) id else null
+            if (open && id != null) lyricsRequestedFor.value = id
+        }
+
+        /**
+         * Opening Now Playing: lyrics come back only if they were open for this same song; for any other song
+         * it opens on the cover (and its lyrics aren't looked up until asked for).
+         */
+        fun lyricsOpenOnEntry(): Boolean {
+            val same = _lyricsOpen.value && lyricsOpenFor == playbackState.value.currentTrack?.id
+            if (!same) setLyricsOpen(false)
+            return same
         }
 
         fun seekTo(positionMs: Long) {

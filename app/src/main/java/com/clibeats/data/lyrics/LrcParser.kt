@@ -20,7 +20,7 @@ object LrcParser {
     /** Null when [raw] has nothing to show (blank, or only header tags). */
     fun parse(raw: String?): Lyrics? {
         if (raw.isNullOrBlank()) return null
-        val lines = raw.removePrefix("﻿").replace("\r\n", "\n").replace('\r', '\n').split('\n')
+        val lines = raw.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n').split('\n')
         var offsetMs = 0L
         val timed = mutableListOf<Pending>()
         val plain = mutableListOf<String>()
