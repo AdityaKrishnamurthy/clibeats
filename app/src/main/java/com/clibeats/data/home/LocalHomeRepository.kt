@@ -79,6 +79,30 @@ class LocalHomeRepository
                 buildLocalHome(songs, recentlyAdded, plays, System.currentTimeMillis(), zone, seed)
             }
 
+        /**
+         * Your rows for the online Home (mixes, jump back in, top artists, forgotten gems, on repeat, albums to
+         * revisit), made from the songs you've played online. Empty rows are left out; nothing before any plays.
+         */
+        suspend fun buildOnline(reshuffle: Int = 0): LocalHome =
+            withContext(Dispatchers.Default) {
+                val songs = songRepository.getPlayedOnlineTracksAsFlow(0L).first()
+                val plays =
+                    historyRepository.getRecentHistoryAsFlow(HISTORY_LIMIT).first()
+                        .map { Play(it.songId, it.playedAt) }
+                val zone = ZoneId.systemDefault()
+                val seed = LocalDate.now(zone).toEpochDay() * SEED_STEP + reshuffle
+                buildLocalHome(
+                    songs = songs,
+                    recentlyAdded = emptyList(),
+                    plays = plays,
+                    now = System.currentTimeMillis(),
+                    zone = zone,
+                    seed = seed,
+                    idPrefix = ONLINE_PREFIX,
+                    online = true,
+                )
+            }
+
         /** Emits the number of local songs whenever a scan changes it. */
         fun libraryChanges(): Flow<Int> = songRepository.getLocalTrackCountAsFlow().distinctUntilChanged()
 
@@ -86,9 +110,12 @@ class LocalHomeRepository
         private fun com.clibeats.domain.model.Track.withFileUri() =
             if (streamUrl != null && streamUrl.startsWith("/")) copy(streamUrl = "file://$streamUrl") else this
 
-        private companion object {
+        companion object {
+            /** Card ids of the online Home's own rows ("you:mix:time", ...). */
+            const val ONLINE_PREFIX = "you"
+
             /** Enough plays for a few years of listening; older ones barely change the page. */
-            const val HISTORY_LIMIT = 20_000
-            const val SEED_STEP = 1_000L
+            private const val HISTORY_LIMIT = 20_000
+            private const val SEED_STEP = 1_000L
         }
     }

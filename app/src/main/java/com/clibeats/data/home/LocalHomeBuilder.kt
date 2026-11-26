@@ -43,6 +43,9 @@ data class LocalHome(
  * - Forgotten gems: songs played a lot, but not for a month.
  * - Never played (or Discover your library, when nothing has been played yet).
  * - Albums to revisit: albums not played for two months.
+ *
+ * The online Home uses the same rows for the songs you've played online ([online] = true): card ids start with
+ * [idPrefix], and the rows about files on the phone (Recently added, Never played) are left out.
  */
 @Suppress("LongParameterList")
 fun buildLocalHome(
@@ -52,8 +55,10 @@ fun buildLocalHome(
     now: Long,
     zone: ZoneId,
     seed: Long,
+    idPrefix: String = "local",
+    online: Boolean = false,
 ): LocalHome {
-    val library = LocalLibrary(songs, plays, Random(seed))
+    val library = LocalLibrary(songs, plays, Random(seed), idPrefix)
     val collections = LinkedHashMap<String, List<Track>>()
     val shelves = mutableListOf<HomeShelf>()
 
@@ -79,10 +84,14 @@ fun buildLocalHome(
     val mixes = listOfNotNull(library.timeOfDayMix(now, zone)) + library.artistMixes()
     cards("Mixes for you", "MADE FROM WHAT YOU PLAY", mixes)
     cards("Jump back in", "", library.recentAlbums())
-    songRow("Recently added", "NEW IN YOUR LIBRARY", recentlyAdded.filter { it.id in library.byId }.take(ROW_SONGS))
+    if (!online) {
+        songRow("Recently added", "NEW IN YOUR LIBRARY", recentlyAdded.filter { it.id in library.byId }.take(ROW_SONGS))
+    }
     cards("Your top artists", "", library.topArtists())
     songRow("Forgotten gems", "YOU USED TO LOVE THESE", library.forgottenGems(now))
-    if (library.hasHistory) {
+    if (online) {
+        songRow("On repeat", "YOUR MOST PLAYED LATELY", library.onRepeat(now))
+    } else if (library.hasHistory) {
         songRow("Never played", "GIVE THESE A CHANCE", library.neverPlayed())
     } else {
         songRow("Discover your library", "", library.neverPlayed())
@@ -107,6 +116,7 @@ private class LocalLibrary(
     songs: List<Track>,
     allPlays: List<Play>,
     private val random: Random,
+    private val idPrefix: String,
 ) {
     val byId: Map<String, Track> = songs.associateBy { it.id }
 
@@ -156,7 +166,7 @@ private class LocalLibrary(
         if (picked.size < MIN_MIX_SONGS) return null
         val tracks = picked.shuffled(random)
         val name = "${partOfDay(minute)} mix"
-        val id = "local:mix:time"
+        val id = "$idPrefix:mix:time"
         return Triple(id, tracks, card(id, name, "What you play around this time · ${tracks.size} songs", tracks))
     }
 
@@ -176,7 +186,7 @@ private class LocalLibrary(
             val tracks = (core + extra).distinctBy { it.id }.shuffled(random)
             if (tracks.size < MIN_ARTIST_MIX_SONGS) return@mapNotNull null
             val names = (listOf(artist) + companions).mapNotNull { artistNames[it] }.filter { it.isNotBlank() }
-            val id = "local:mix:artist:$artist"
+            val id = "$idPrefix:mix:artist:$artist"
             Triple(id, tracks, card(id, "Mix: ${artistNames[artist]}", "Mix · ${names.joinToString(", ")}", tracks))
         }
 
@@ -203,7 +213,7 @@ private class LocalLibrary(
         rankedArtists().take(CARD_ROW_SIZE).map { artist ->
             val tracks = songsByArtist[artist].orEmpty().sortedWith(albumThenTrack)
             val plays = artistPlays[artist] ?: 0
-            val id = "local:artist:$artist"
+            val id = "$idPrefix:artist:$artist"
             val cover =
                 tracks.sortedByDescending { playCount[it.id] ?: 0 }.firstOrNull { it.artworkUrl != null }?.artworkUrl
             val subtitle = if (plays > 0) "${tracks.size} songs · $plays plays" else "${tracks.size} songs"
@@ -235,12 +245,24 @@ private class LocalLibrary(
             .take(ROW_SONGS)
             .mapNotNull { byId[it.key] }
 
+    /** Most played in the last four weeks. */
+    fun onRepeat(now: Long): List<Track> =
+        plays
+            .filter { now - it.playedAt <= ON_REPEAT_MS }
+            .groupingBy { it.songId }
+            .eachCount()
+            .entries
+            .filter { it.value >= ON_REPEAT_MIN_PLAYS }
+            .sortedByDescending { it.value }
+            .take(ROW_SONGS)
+            .mapNotNull { byId[it.key] }
+
     fun neverPlayed(): List<Track> = byId.values.filter { it.id !in playCount }.shuffled(random).take(ROW_SONGS)
 
     // ── Helpers ──
 
     private fun albumCard(album: Album): Triple<String, List<Track>, HomeItem.Collection> {
-        val id = "local:album:${album.key}"
+        val id = "$idPrefix:album:${album.key}"
         val subtitle = listOf(album.artist, "${album.tracks.size} songs").filter { it.isNotBlank() }.joinToString(" · ")
         val cover = album.tracks.firstOrNull { it.artworkUrl != null }?.artworkUrl
         return Triple(id, album.tracks, HomeItem.Collection(id, album.title, subtitle, cover, CollectionKind.ALBUM))
@@ -333,6 +355,8 @@ private const val SESSION_GAP_MS = 30L * 60 * 1000
 private const val GEM_AFTER_MS = 30 * DAY_MS
 private const val REVISIT_AFTER_MS = 60 * DAY_MS
 private const val GEM_MIN_PLAYS = 3
+private const val ON_REPEAT_MS = 28 * DAY_MS
+private const val ON_REPEAT_MIN_PLAYS = 2
 private const val MIX_SONGS = 40
 private const val MIN_MIX_SONGS = 8
 private const val ARTIST_MIXES = 6

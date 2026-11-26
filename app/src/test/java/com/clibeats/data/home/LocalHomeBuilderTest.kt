@@ -171,4 +171,25 @@ class LocalHomeBuilderTest {
         assertThat(partOfDay(19 * 60)).isEqualTo("Evening")
         assertThat(partOfDay(2 * 60)).isEqualTo("Late night")
     }
+
+    @Test
+    fun `online rows use their own ids, skip file-only rows, and add On repeat`() {
+        val songs = (1..12).map { song("o$it", if (it <= 6) "Artist A" else "Artist B", album = "Album ${it % 2}") }
+        val plays = songs.flatMap { s -> (1..3).map { n -> at(s, n * day) } } + songs.take(4).map { at(it, 2 * day) }
+        val home =
+            buildLocalHome(songs, songs, plays, now, zone, seed = 42, idPrefix = "you", online = true)
+
+        val titles = home.shelves.map { it.title }
+        assertThat(titles).containsAtLeast("Mixes for you", "Your top artists", "On repeat")
+        assertThat(titles).containsNoneOf("Recently added", "Never played", "Discover your library")
+        assertThat(home.collections.keys.all { it.startsWith("you:") }).isTrue()
+        assertThat(home.shelf("On repeat")!!.items).isNotEmpty()
+    }
+
+    @Test
+    fun `online rows are empty before anything was played`() {
+        val home =
+            buildLocalHome(emptyList(), emptyList(), emptyList(), now, zone, seed = 1, idPrefix = "you", online = true)
+        assertThat(home.shelves).isEmpty()
+    }
 }

@@ -25,6 +25,14 @@
 - Local search is unchanged (songs on the phone only).
 - Search results show two buttons per song, **Play next** and **Add to playlist**; swipe right to queue.
 
+## Home (online): your own rows
+
+- After YouTube Music's rows, the online Home ends with rows made from what **you** play online, like the
+  Local Home: **Mixes for you** (a mix for this time of day and one per top artist, with the artists you play
+  alongside them), **Jump back in**, **Your top artists**, **Forgotten gems**, **On repeat** (your most played
+  in the last four weeks) and **Albums to revisit**. Rows with nothing in them are left out.
+- Cards open in the playlist view with ▶ PLAY / SHUFFLE / + SAVE. `[ ↻ REFRESH ]` reshuffles the mixes.
+
 ## Library: Artists and Albums
 
 - **Grid, list or details** (the same four views as Playlists, remembered), with covers: artists round, albums

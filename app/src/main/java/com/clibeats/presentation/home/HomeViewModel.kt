@@ -269,6 +269,8 @@ class HomeViewModel
                         result = repo.feed(params, picked)
                     }
                     _isRefreshing.value = false
+                    // The full page (not a mood) ends with your own rows, made from what you've played online.
+                    result = withYourRows(result, mood = params, reshuffle = force)
                     when {
                         result != null -> {
                             if (params == null && result.moods.isNotEmpty()) _moods.value = result.moods
@@ -285,6 +287,24 @@ class HomeViewModel
                         }
                     }
                 }
+        }
+
+        /** Songs behind the online Home's own cards (mixes, albums, artists), by card id. */
+        private var yourCollections: Map<String, List<Track>> = emptyMap()
+        private var yourReshuffles = 0
+
+        /** [feed] with your rows after YouTube Music's (Refresh reshuffles the mixes); a mood's page as it is. */
+        private suspend fun withYourRows(
+            feed: HomeFeed?,
+            mood: String?,
+            reshuffle: Boolean,
+        ): HomeFeed? {
+            val repo = localHomeRepository
+            if (feed == null || mood != null || repo == null) return feed
+            if (reshuffle) yourReshuffles++
+            val page = runCatching { repo.buildOnline(yourReshuffles) }.getOrNull()
+            if (page != null) yourCollections = page.collections
+            return page?.let { feed.copy(shelves = feed.shelves + it.shelves) } ?: feed
         }
 
         // ── Local Home ──
@@ -380,7 +400,7 @@ class HomeViewModel
 
         @Suppress("ReturnCount")
         fun openCollection(item: HomeItem.Collection) {
-            _local.value?.collections?.get(item.browseId)?.let { tracks ->
+            (_local.value?.collections?.get(item.browseId) ?: yourCollections[item.browseId])?.let { tracks ->
                 openJob?.cancel()
                 _opened.value = OpenedCollection(item, tracks = tracks)
                 return
