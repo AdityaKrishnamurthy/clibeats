@@ -17,6 +17,9 @@ interface QueueDao {
     @Query("SELECT * FROM queue_items ORDER BY position ASC")
     fun getQueueItemsAsFlow(): Flow<List<QueueEntity>>
 
+    @Query("SELECT * FROM queue_items ORDER BY position ASC")
+    suspend fun getQueueItems(): List<QueueEntity>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertQueueItems(items: List<QueueEntity>)
 

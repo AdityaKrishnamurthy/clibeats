@@ -8,7 +8,6 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.clibeats.data.local.dao.CacheIndexDao
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.data.local.dao.HistoryDao
 import com.clibeats.data.local.dao.LikedSongDao
@@ -18,7 +17,6 @@ import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SavedAlbumDao
 import com.clibeats.data.local.dao.SavedArtistDao
 import com.clibeats.data.local.dao.SongDao
-import com.clibeats.data.local.entity.CacheIndexEntity
 import com.clibeats.data.local.entity.DownloadedTrackEntity
 import com.clibeats.data.local.entity.HistoryEntity
 import com.clibeats.data.local.entity.LikedSongEntity
@@ -36,7 +34,6 @@ import com.clibeats.data.local.entity.SongEntity
         PlaylistEntity::class,
         PlaylistSongCrossRef::class,
         HistoryEntity::class,
-        CacheIndexEntity::class,
         QueueEntity::class,
         LikedSongEntity::class,
         SavedAlbumEntity::class,
@@ -44,7 +41,7 @@ import com.clibeats.data.local.entity.SongEntity
         DownloadedTrackEntity::class,
         LyricsCacheEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 @TypeConverters(CliBeatsTypeConverters::class)
@@ -54,8 +51,6 @@ abstract class CliBeatsDatabase : RoomDatabase() {
     abstract fun playlistDao(): PlaylistDao
 
     abstract fun historyDao(): HistoryDao
-
-    abstract fun cacheIndexDao(): CacheIndexDao
 
     abstract fun queueDao(): QueueDao
 
@@ -148,6 +143,16 @@ abstract class CliBeatsDatabase : RoomDatabase() {
                     )
                     db.execSQL(
                         "CREATE INDEX IF NOT EXISTS `index_history_song_id` ON `history` (`song_id`)",
+                    )
+                }
+            }
+
+        val MIGRATION_4_5 =
+            object : Migration(4, 5) {
+                override fun migrate(db: SupportSQLiteDatabase) {
+                    db.execSQL("DROP TABLE IF EXISTS `cache_index`")
+                    db.execSQL(
+                        "ALTER TABLE `queue_items` ADD COLUMN `is_radio` INTEGER NOT NULL DEFAULT 0",
                     )
                 }
             }

@@ -30,6 +30,7 @@ object DatabaseModule {
             CliBeatsDatabase.MIGRATION_1_2,
             CliBeatsDatabase.MIGRATION_2_3,
             CliBeatsDatabase.MIGRATION_3_4,
+            CliBeatsDatabase.MIGRATION_4_5,
         ).build()
 
     @Provides
@@ -43,10 +44,6 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideHistoryDao(db: CliBeatsDatabase) = db.historyDao()
-
-    @Provides
-    @Singleton
-    fun provideCacheIndexDao(db: CliBeatsDatabase) = db.cacheIndexDao()
 
     @Provides
     @Singleton
