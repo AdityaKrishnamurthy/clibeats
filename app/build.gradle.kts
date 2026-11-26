@@ -21,8 +21,8 @@ android {
         minSdk = 26
         targetSdk = 34
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20601").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.6.1").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20700").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.7.0").get()
     }
 
     // Release signing from env (set by .github/workflows/release.yml). A release APK signed with

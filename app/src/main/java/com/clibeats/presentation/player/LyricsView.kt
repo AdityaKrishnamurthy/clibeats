@@ -8,10 +8,11 @@
 
 package com.clibeats.presentation.player
 
-import android.os.Build
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -41,7 +42,6 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
@@ -65,6 +65,7 @@ import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.presentation.theme.InterFamily
 import com.clibeats.presentation.theme.LocalAccentColor
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -175,13 +176,12 @@ private fun SyncedLyrics(
         if (!following || active < 0) return@LaunchedEffect
         autoScrolling = true
         try {
-            listState.animateScrollToItem(active)
+            glideTo(listState, active)
         } finally {
             autoScrolling = false
         }
     }
     val accent = LocalAccentColor.current
-    val blurAllowed = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
     BoxWithConstraints(modifier = Modifier.fillMaxSize().fadingEdges()) {
         val topPad = maxHeight * ACTIVE_LINE_AT
         LazyColumn(
@@ -191,8 +191,8 @@ private fun SyncedLyrics(
             verticalArrangement = Arrangement.spacedBy(LINE_GAP),
         ) {
             itemsIndexed(lines, key = { i, line -> "$i@${line.startMs}" }) { index, line ->
+                // Lines further from the current one fade a little more (cheap, unlike a blur).
                 val distance = if (active < 0) index + 1 else kotlin.math.abs(index - active)
-                val blur = if (blurAllowed && following && distance >= 2) minOf(distance - 1, 3) * 1.2f else 0f
                 if (line.text.isBlank()) {
                     BreakDots(line, isActive = index == active, position = position, accent = accent)
                 } else {
@@ -201,12 +201,31 @@ private fun SyncedLyrics(
                         isActive = index == active,
                         isPast = active >= 0 && index < active,
                         position = position,
-                        blurDp = blur,
+                        distance = if (following) distance else 1,
                         onClick = { onSeek(line.startMs) },
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * Brings line [index] to the reading spot. On screen: an eased scroll by the exact distance. Off screen (after a
+ * seek or your own scrolling): jump close first, then glide.
+ */
+private suspend fun glideTo(
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    index: Int,
+) {
+    if (listState.layoutInfo.visibleItemsInfo.none { it.index == index }) {
+        listState.scrollToItem((index - 1).coerceAtLeast(0))
+    }
+    val target = listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == index }
+    if (target == null) {
+        listState.animateScrollToItem(index)
+    } else {
+        listState.animateScrollBy(target.offset.toFloat(), tween(FOLLOW_SCROLL_MS, easing = FastOutSlowInEasing))
     }
 }
 
@@ -233,9 +252,11 @@ private fun activeIndex(
 private val lyricStyle: TextStyle
     @Composable get() =
         MaterialTheme.typography.headlineSmall.copy(
+            fontFamily = InterFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = 25.sp,
-            lineHeight = 33.sp,
+            fontSize = 28.sp,
+            lineHeight = 36.sp,
+            letterSpacing = (-0.2).sp,
         )
 
 @Suppress("LongParameterList")
@@ -245,7 +266,7 @@ private fun LyricLineText(
     isActive: Boolean,
     isPast: Boolean,
     position: State<Long>,
-    blurDp: Float,
+    distance: Int,
     onClick: () -> Unit,
 ) {
     val bright = CliBeatsTextPrimary
@@ -254,8 +275,8 @@ private fun LyricLineText(
             when {
                 isActive && line.words.isEmpty() -> 1f
                 isActive -> DIM_ACTIVE_ALPHA
-                isPast -> DIM_PAST_ALPHA
-                else -> DIM_ALPHA
+                isPast -> DIM_PAST_ALPHA * distanceFade(distance)
+                else -> DIM_ALPHA * distanceFade(distance)
             },
         animationSpec = tween(LINE_FADE_MS),
         label = "lineAlpha",
@@ -270,8 +291,7 @@ private fun LyricLineText(
                     scaleX = scale
                     scaleY = scale
                     transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f)
-                }.then(if (blurDp > 0f) Modifier.blur(blurDp.dp) else Modifier)
-                .clickable(
+                }.clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     role = Role.Button,
@@ -283,30 +303,44 @@ private fun LyricLineText(
         Text(text = line.text, style = style, color = bright.copy(alpha = dimAlpha))
         // Syllable sync: the same text in full colour, shown only over the part already sung.
         if (isActive && line.words.isNotEmpty()) {
-            var layout by remember(line) { mutableStateOf<TextLayoutResult?>(null) }
+            // Each character's box is measured once per layout; every frame only picks which are sung.
+            var boxes by remember(line) { mutableStateOf<List<Rect>>(emptyList()) }
+            val path = remember { Path() }
             Text(
                 text = line.text,
                 style = style,
                 color = bright,
-                onTextLayout = { layout = it },
+                onTextLayout = { boxes = characterBoxes(it) },
                 modifier =
                     Modifier.drawWithContent {
-                        val result = layout ?: return@drawWithContent
-                        clipPath(sungPath(line, result, position.value)) { this@drawWithContent.drawContent() }
+                        if (boxes.isEmpty()) return@drawWithContent
+                        sungPath(path, line, boxes, position.value)
+                        clipPath(path) { this@drawWithContent.drawContent() }
                     },
             )
         }
     }
 }
 
-/** The area of [line]'s text sung by [positionMs]: whole syllables, and the current one up to how far it's got. */
+/** Each character's box, as tall as its text line (so ascenders and descenders are covered). */
+private fun characterBoxes(layout: TextLayoutResult): List<Rect> =
+    List(layout.layoutInput.text.length) { at ->
+        val box = layout.getBoundingBox(at)
+        val lineIndex = layout.getLineForOffset(at)
+        Rect(box.left, layout.getLineTop(lineIndex), box.right, layout.getLineBottom(lineIndex))
+    }
+
+/**
+ * Sets [path] to the part of [line] sung by [positionMs]: whole syllables, and the current one up to how far
+ * it has got (each of its characters takes an equal share of its time).
+ */
 private fun sungPath(
+    path: Path,
     line: LyricLine,
-    layout: TextLayoutResult,
+    boxes: List<Rect>,
     positionMs: Long,
-): Path {
-    val path = Path()
-    val length = layout.layoutInput.text.length
+) {
+    path.reset()
     var offset = 0
     for (word in line.words) {
         val chars = word.text.length
@@ -317,24 +351,15 @@ private fun sungPath(
             } else {
                 (positionMs - word.startMs).toFloat() / (word.endMs - word.startMs)
             }
-        // Each character of the syllable takes its share of the syllable's time.
         for (i in 0 until chars) {
-            val at = offset + i
-            if (at >= length) break
+            val box = boxes.getOrNull(offset + i) ?: break
             val charStart = i.toFloat() / chars
-            val charEnd = (i + 1).toFloat() / chars
             if (progress <= charStart) break
-            val box = layout.getBoundingBox(at)
-            val filled = ((progress - charStart) / (charEnd - charStart)).coerceIn(0f, 1f)
-            // Line height, not glyph height, so ascenders and descenders are covered.
-            val lineIndex = layout.getLineForOffset(at)
-            val top = layout.getLineTop(lineIndex)
-            val bottom = layout.getLineBottom(lineIndex)
-            path.addRect(Rect(box.left, top, box.left + box.width * filled, bottom))
+            val filled = ((progress - charStart) * chars).coerceIn(0f, 1f)
+            path.addRect(Rect(box.left, box.top, box.left + box.width * filled, box.bottom))
         }
         offset += chars
     }
-    return path
 }
 
 /** An instrumental break: three dots that fill as the break goes on, while it's the current line. */
@@ -385,7 +410,13 @@ private fun PlainLyrics(text: String) {
         itemsIndexed(verses) { _, verse ->
             Text(
                 text = verse.trim(),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold, lineHeight = 26.sp),
+                style =
+                    MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = InterFamily,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 20.sp,
+                        lineHeight = 30.sp,
+                    ),
                 color = CliBeatsTextPrimary.copy(alpha = 0.92f),
             )
         }
@@ -408,7 +439,11 @@ private fun Modifier.fadingEdges(): Modifier =
         )
     }
 
+/** 1 for the lines next to the current one, a little less further away. */
+private fun distanceFade(distance: Int): Float = if (distance <= 1) 1f else maxOf(0.45f, 1f - 0.18f * (distance - 1))
+
 private const val JITTER_MS = 300L
+private const val FOLLOW_SCROLL_MS = 520
 private const val INTRO_MIN_MS = 4_000L
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val ACTIVE_LINE_AT = 0.28f

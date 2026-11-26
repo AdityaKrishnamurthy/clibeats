@@ -9,6 +9,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -60,6 +61,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -107,6 +109,7 @@ import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** Full-screen player opened from the bottom PlayerBar. Collects state itself (ticks stay local). */
@@ -211,102 +214,94 @@ fun NowPlayingScreen(
     var showPlaylistDialog by remember { mutableStateOf(false) }
 
     // ── Lyrics: 0 = the big cover, 1 = lyrics (the cover shrinks into a row above the controls) ──
-    // Follows the finger while dragged, then snaps to the nearer side (or the way it was flung).
+    // The finger moves this value directly; the snap animation runs only after letting go, so the two never
+    // fight (which used to leave it stuck halfway).
     val lyricsState by viewModel.lyrics.collectAsState()
     var lyricsOpen by rememberSaveable { mutableStateOf(false) }
-    val lyricsProgress = remember { Animatable(if (lyricsOpen) 1f else 0f) }
-    val showArtwork by remember { derivedStateOf { lyricsProgress.value < 1f } }
-    val showLyrics by remember { derivedStateOf { lyricsProgress.value > 0f } }
-    val compactHeader by remember { derivedStateOf { lyricsProgress.value >= COMPACT_AT } }
-
-    fun settleLyrics(open: Boolean) {
-        lyricsOpen = open
-        scope.launch {
-            lyricsProgress.animateTo(
-                if (open) 1f else 0f,
-                spring(dampingRatio = LYRICS_SPRING_DAMPING, stiffness = Spring.StiffnessMediumLow),
-            )
-        }
-    }
-    BackHandler(enabled = lyricsOpen) { settleLyrics(false) }
+    var lyricsProgress by remember { mutableFloatStateOf(if (lyricsOpen) 1f else 0f) }
+    var settleJob by remember { mutableStateOf<Job?>(null) }
+    var swiping by remember { mutableStateOf(false) }
+    val showArtwork by remember { derivedStateOf { lyricsProgress < 1f || swiping } }
+    val showLyrics by remember { derivedStateOf { lyricsProgress > 0f } }
+    val compactHeader by remember { derivedStateOf { lyricsProgress >= COMPACT_AT } }
     val lyricsDragPx = with(LocalDensity.current) { LYRICS_DRAG_DP.dp.toPx() }
 
-    fun dragLyrics(dy: Float) {
-        scope.launch { lyricsProgress.snapTo((lyricsProgress.value - dy / lyricsDragPx).coerceIn(0f, 1f)) }
+    fun settleLyrics(
+        open: Boolean,
+        /** How fast the progress was moving when the finger let go (per second). */
+        progressVelocity: Float = 0f,
+    ) {
+        lyricsOpen = open
+        settleJob?.cancel()
+        settleJob =
+            scope.launch {
+                animate(
+                    initialValue = lyricsProgress,
+                    targetValue = if (open) 1f else 0f,
+                    initialVelocity = progressVelocity,
+                    animationSpec = spring(dampingRatio = LYRICS_SPRING_DAMPING, stiffness = Spring.StiffnessMediumLow),
+                ) { value, _ -> lyricsProgress = value }
+            }
     }
+    BackHandler(enabled = lyricsOpen) { settleLyrics(false) }
 
-    fun releaseLyrics(velocity: Float) {
-        settleLyrics(
-            when {
-                velocity < -LYRICS_FLING_PX_S -> true
-                velocity > LYRICS_FLING_PX_S -> false
-                else -> lyricsProgress.value > COMPACT_AT
-            },
-        )
-    }
-
-    // The small row (lyrics open): drag it down to bring the cover back, up to keep the lyrics.
-    val compactRowDrag =
+    // One swipe for the cover and the title area, with or without lyrics open:
+    // - up switches between the cover and the lyrics, following the finger;
+    // - down closes the player, as before.
+    // It lives on parts of the screen that stay put while the header changes, so a drag is never cut off.
+    val swipe =
         Modifier.pointerInput(Unit) {
             val tracker = VelocityTracker()
             var total = 0f
+            var toggling: Boolean? = null
+            var startedOpen = false
             detectVerticalDragGestures(
                 onDragStart = {
                     tracker.resetTracking()
                     total = 0f
-                    scope.launch { lyricsProgress.stop() }
-                },
-                onDragEnd = { releaseLyrics(tracker.calculateVelocity().y) },
-                onDragCancel = { releaseLyrics(0f) },
-                onVerticalDrag = { change, dy ->
-                    change.consume()
-                    total += dy
-                    tracker.addPosition(change.uptimeMillis, Offset(0f, total))
-                    dragLyrics(dy)
-                },
-            )
-        }
-
-    // The big cover: drag up to pull the lyrics in; drag down to close the player, as before.
-    val artworkDrag =
-        Modifier.pointerInput(Unit) {
-            val tracker = VelocityTracker()
-            var total = 0f
-            var towardLyrics: Boolean? = null
-            detectVerticalDragGestures(
-                onDragStart = {
-                    tracker.resetTracking()
-                    total = 0f
-                    towardLyrics = null
+                    toggling = null
+                    startedOpen = lyricsOpen
+                    settleJob?.cancel()
+                    swiping = true
                 },
                 onDragEnd = {
+                    swiping = false
                     val velocity = tracker.calculateVelocity().y
-                    when (towardLyrics) {
-                        true -> releaseLyrics(velocity)
-                        else ->
+                    when (toggling) {
+                        true -> {
+                            val moved = if (startedOpen) 1f - lyricsProgress else lyricsProgress
+                            val switch =
+                                velocity < -LYRICS_FLING_PX_S || (moved > COMPACT_AT && velocity <= LYRICS_FLING_PX_S)
+                            // Up moves the progress toward the other side: up from the cover raises it, up from
+                            // the lyrics lowers it.
+                            val progressVelocity = -velocity / lyricsDragPx * (if (startedOpen) -1f else 1f)
+                            settleLyrics(if (switch) !startedOpen else startedOpen, progressVelocity)
+                        }
+                        false ->
                             if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
                                 onClose()
                             } else {
                                 scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
                             }
+                        null -> settleLyrics(lyricsOpen)
                     }
                 },
                 onDragCancel = {
-                    if (towardLyrics == true) {
-                        releaseLyrics(0f)
-                    } else {
-                        scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
-                    }
+                    swiping = false
+                    settleLyrics(lyricsOpen)
+                    scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
                 },
                 onVerticalDrag = { change, dy ->
                     change.consume()
                     total += dy
                     tracker.addPosition(change.uptimeMillis, Offset(0f, total))
-                    if (towardLyrics == null) towardLyrics = dy < 0
-                    if (towardLyrics == true) {
-                        dragLyrics(dy)
+                    if (toggling == null) toggling = dy < 0
+                    if (toggling == true) {
+                        // How far up the finger has gone, as a share of the full switch.
+                        val moved = (-total / lyricsDragPx).coerceIn(0f, 1f)
+                        lyricsProgress = if (startedOpen) 1f - moved else moved
                     } else {
-                        scope.launch { dragOffset.snapTo((dragOffset.value + dy).coerceAtLeast(0f)) }
+                        scope.launch { dragOffset.snapTo(total.coerceAtLeast(0f)) }
                     }
                 },
             )
@@ -381,7 +376,7 @@ fun NowPlayingScreen(
                             onSeek = viewModel::seekTo,
                             modifier =
                                 Modifier.graphicsLayer {
-                                    val p = lyricsProgress.value
+                                    val p = lyricsProgress
                                     alpha = ((p - LYRICS_FADE_FROM) / (1f - LYRICS_FADE_FROM)).coerceIn(0f, 1f)
                                     translationY = (1f - p) * -LYRICS_SLIDE_DP.dp.toPx()
                                 },
@@ -395,7 +390,7 @@ fun NowPlayingScreen(
                                     .aspectRatio(1f, matchHeightConstraintsFirst = true)
                                     // Opening lyrics: the cover sinks toward its small spot above the controls.
                                     .graphicsLayer {
-                                        val p = lyricsProgress.value
+                                        val p = lyricsProgress
                                         alpha = (1f - p * ART_FADE_SPEED).coerceIn(0f, 1f)
                                         val scale = 1f - (1f - ART_MIN_SCALE) * p
                                         scaleX = scale
@@ -404,7 +399,7 @@ fun NowPlayingScreen(
                                     }.clip(RoundedCornerShape(8.dp))
                                     .background(MaterialTheme.colorScheme.surfaceVariant)
                                     .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
-                                    .then(artworkDrag)
+                                    .then(swipe)
                                     .then(closeAction)
                                     .semantics { contentDescription = artworkDescription },
                         ) {
@@ -432,7 +427,7 @@ fun NowPlayingScreen(
                 Spacer(Modifier.height(20.dp))
 
                 // ── Where it's playing from, then title / artist / quality (a small row while lyrics are open) ──
-                Box(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                Box(modifier = Modifier.fillMaxWidth().animateContentSize().then(swipe)) {
                     if (compactHeader) {
                         CompactNowPlaying(
                             title = track?.title ?: "Nothing playing",
@@ -442,15 +437,15 @@ fun NowPlayingScreen(
                             thumbUrl = thumbUrl,
                             onClick = { settleLyrics(false) },
                             modifier =
-                                Modifier.then(compactRowDrag).graphicsLayer {
-                                    alpha = ((lyricsProgress.value - COMPACT_AT) / (1f - COMPACT_AT)).coerceIn(0f, 1f)
+                                Modifier.graphicsLayer {
+                                    alpha = ((lyricsProgress - COMPACT_AT) / (1f - COMPACT_AT)).coerceIn(0f, 1f)
                                 },
                         )
                     } else {
                         Column(
                             modifier =
                                 Modifier.fillMaxWidth().graphicsLayer {
-                                    alpha = (1f - lyricsProgress.value / COMPACT_AT).coerceIn(0f, 1f)
+                                    alpha = (1f - lyricsProgress / COMPACT_AT).coerceIn(0f, 1f)
                                 },
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
@@ -612,7 +607,7 @@ fun NowPlayingScreen(
 
 /**
  * Now Playing while lyrics are open: a small cover, title, artist and quality in one row, with a handle above
- * it. Drag it down (or tap it) to bring the big cover back.
+ * it. Swipe up (or tap it) to bring the big cover back; swipe down to close the player.
  */
 @Suppress("FunctionNaming", "LongParameterList")
 @Composable
