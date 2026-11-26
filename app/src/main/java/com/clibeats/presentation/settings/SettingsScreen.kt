@@ -20,6 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -111,8 +113,8 @@ private fun trimZeros(number: String): String = if ('.' in number) number.trimEn
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
-private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
-private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
+private val ARTWORK_CACHE_OPTIONS = listOf(128, 256, 512, 1024)
+private val SONG_CACHE_OPTIONS = listOf(512, 1024, 1536, 2048, 2560, 3072)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
@@ -472,7 +474,6 @@ fun SettingsScreen(
                     selectedMb = artworkCacheMb,
                     onSelect = viewModel::setArtworkCacheMb,
                     onClear = { confirmClearArtwork = true },
-                    note = "new limit applies on next app start",
                 )
                 CacheRow(
                     label = "SONGS",
@@ -605,6 +606,7 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Suppress("FunctionNaming", "LongParameterList")
 @Composable
 private fun CacheRow(
@@ -636,7 +638,11 @@ private fun CacheRow(
                         .padding(8.dp),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Wraps to a second line when the sizes don't fit (Songs has six).
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             options.forEach { mb ->
                 val isSelected = mb == selectedMb
                 Text(

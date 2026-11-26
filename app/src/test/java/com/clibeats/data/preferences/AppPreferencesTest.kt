@@ -47,8 +47,19 @@ class AppPreferencesTest {
     @Test
     fun setCacheMaxMb_roundTripsThroughDataStore() =
         runTest {
-            appPreferences.setCacheMaxMb(256)
+            appPreferences.setCacheMaxMb(1536)
 
-            assertEquals(256, appPreferences.cacheMaxMb.first())
+            assertEquals(1536, appPreferences.cacheMaxMb.first())
+        }
+
+    @Test
+    fun cacheLimits_belowTheSmallestOptionAreRaised() =
+        runTest {
+            // 256 MB (songs) and 64 MB (artwork) were options once.
+            appPreferences.setCacheMaxMb(256)
+            appPreferences.setArtworkCacheMb(64)
+
+            assertEquals(512, appPreferences.cacheMaxMb.first())
+            assertEquals(128, appPreferences.artworkCacheMb.first())
         }
 }

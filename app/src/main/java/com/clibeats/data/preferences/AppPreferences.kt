@@ -214,9 +214,10 @@ class AppPreferences
                 prefs[Keys.ACTIVE_PROVIDER_ID]
             }
 
+        /** Song cache limit in MB: 512 at least (256 was an option once; it's raised to 512). */
         val cacheMaxMb: Flow<Int> =
             dataStore.data.map { prefs ->
-                prefs[Keys.CACHE_MAX_MB] ?: 512
+                (prefs[Keys.CACHE_MAX_MB] ?: DEFAULT_SONG_CACHE_MB).coerceAtLeast(DEFAULT_SONG_CACHE_MB)
             }
 
         val highQualityStreaming: Flow<Boolean> =
@@ -224,15 +225,18 @@ class AppPreferences
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
             }
 
+        /** Artwork cache limit in MB: 128 at least (64 was an option once; it's raised to 128). */
         val artworkCacheMb: Flow<Int> =
-            dataStore.data.map { prefs -> prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB }
+            dataStore.data.map { prefs ->
+                (prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB).coerceAtLeast(DEFAULT_ARTWORK_CACHE_MB)
+            }
 
         /** False until the first-run onboarding is finished (new installs only). */
         val onboardingDone: Flow<Boolean> =
             dataStore.data.map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
 
         suspend fun setArtworkCacheMb(mb: Int) {
-            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb }
+            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb.coerceAtLeast(DEFAULT_ARTWORK_CACHE_MB) }
         }
 
         suspend fun setOnboardingDone() {
@@ -294,7 +298,7 @@ class AppPreferences
         }
 
         suspend fun setCacheMaxMb(maxMb: Int) {
-            dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb }
+            dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb.coerceAtLeast(DEFAULT_SONG_CACHE_MB) }
         }
 
         suspend fun setAutoQueueRelated(enabled: Boolean) {
@@ -374,6 +378,7 @@ class AppPreferences
     }
 
 private const val DEFAULT_ARTWORK_CACHE_MB = 128
+private const val DEFAULT_SONG_CACHE_MB = 512
 
 /** Stored download id meaning "no update download in progress or kept". */
 const val NO_DOWNLOAD = -1L

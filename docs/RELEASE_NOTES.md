@@ -59,6 +59,9 @@
 
 - **Storage and Cache:** Downloads is laid out like Artwork and Songs: its size and song count, a framed
   **↓ MANAGE** button, `[ CLEAR ALL ]` on the right, and a short note.
+- Cache sizes: **Artwork** 128 MB (default), 256 MB, 512 MB, 1 GB; **Songs** 512 MB (default), 1, 1.5, 2, 2.5,
+  3 GB. A smaller size saved before (64 MB artwork, 256 MB songs) is raised to the new smallest one. A new artwork
+  limit applies right away.
 
 ---
 
