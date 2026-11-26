@@ -445,7 +445,7 @@ fun NowPlayingScreen(
                         CompactNowPlaying(
                             title = track?.title ?: "Nothing playing",
                             artist = track?.artist.orEmpty(),
-                            quality = qualityLine(state),
+                            quality = compactQualityLine(state),
                             qualityColor = statsColor,
                             thumbUrl = thumbUrl,
                             onClick = { settleLyrics(false) },
@@ -912,6 +912,33 @@ internal fun qualityLine(state: PlaybackState): String {
             state.sampleRateHz?.let {
                     hz ->
                 if (hz % 1000 == 0) "${hz / 1000} kHz" else String.format(java.util.Locale.US, "%.1f kHz", hz / 1000f)
+            },
+            state.bitDepth?.let { "$it-bit" },
+        )
+    return if (parts.isEmpty()) source else "$source ${parts.joinToString(" · ")}"
+}
+
+/**
+ * The same, short enough for the small row above the controls while lyrics are open:
+ * `[ONLINE] OPUS 160k · 48kHz`, `[LOCAL] FLAC 1076k · 44.1kHz · 24-bit`, `[DOWNLOADED] OPUS 160k · 48kHz`.
+ */
+internal fun compactQualityLine(state: PlaybackState): String {
+    val providerId = state.currentTrack?.providerId ?: return ""
+    val source =
+        when {
+            providerId == "local" -> "[LOCAL]"
+            state.fromDownload -> "[DOWNLOADED]"
+            else -> "[ONLINE]"
+        }
+    val format =
+        listOfNotNull(state.codec, state.bitrateKbps?.takeIf { it > 0 }?.let { "${it}k" })
+            .joinToString(" ")
+            .ifBlank { null }
+    val parts =
+        listOfNotNull(
+            format,
+            state.sampleRateHz?.let { hz ->
+                if (hz % 1000 == 0) "${hz / 1000}kHz" else String.format(java.util.Locale.US, "%.1fkHz", hz / 1000f)
             },
             state.bitDepth?.let { "$it-bit" },
         )
