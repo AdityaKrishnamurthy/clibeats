@@ -1,9 +1,10 @@
-# CLIBeats v2.7.1 — Release Notes
+# CLIBeats v2.8.0 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.7.1.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.0.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 6 MB
 
-Lyrics, redone: syllable by syllable, for your own files and for YouTube Music, with translations and
-pronunciations.
+Lyrics, done properly: syllable by syllable for your own files and for YouTube Music, with translations and
+pronunciations. This replaces the LRCLIB-only lyrics from v2.7.0.
 
 ## Lyrics
 
@@ -11,8 +12,7 @@ pronunciations.
   up line by line; songs with only the words show them as text. The line being sung stays in view; scroll yourself
   and it waits a few seconds before following again. Tap a line to jump there.
 - **Swipe between cover and lyrics.** Swipe up on the cover (or tap the lyrics button) and the cover shrinks into a
-  small row above the controls; swipe up on that row to bring it back, swipe down to close Now Playing. Lyrics stay
-  open when you reopen the player from the mini player.
+  small row above the controls; swipe up on that row to bring it back, swipe down to close Now Playing.
 - **Your own files.** Local songs read their lyrics from the file itself (FLAC, Opus/Ogg, MP3 and M4A tags) or from a
   `.lrc` file with the same name beside the song. Local songs are never searched for online.
 - **YouTube Music songs.** Lyrics are looked up from several sources at once — LyricsPlus, BetterLyrics, LRCLIB,
@@ -22,7 +22,8 @@ pronunciations.
   the download finishes, so they show without a connection.
 - **文A Translate and abc Pronunciation.** Two buttons at the top of the lyrics: the meaning of each line in your
   phone's language, and how non-Latin lines (Japanese, Hindi, Korean, Kannada…) are pronounced, in Latin letters.
-  On syllable-synced songs the pronunciation fills in along with the line. Both can be on together and are
+  On syllable-synced songs the pronunciation fills in along with the line, and the sung line's translation turns
+  white. Both can be on together and are
   remembered; a song's translations are saved, so switching back and forth is instant.
 - **A clearer typeface.** Lyrics use Poppins, big and rounded, for every language.
 - **Loaded only when you open them.** Now Playing opens on the cover for a new song and looks lyrics up only when you
@@ -32,6 +33,8 @@ pronunciations.
 
 ## Fixes
 
+- **A tidier small player row.** With lyrics open, the quality line above the controls is shortened
+  (`[ONLINE] OPUS 160k · 48kHz`) so it no longer runs off the edge.
 - **Download notifications.** Two songs downloading at once each keep their own notification, and progress updates
   only when the percentage changes.
 
