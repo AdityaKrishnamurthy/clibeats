@@ -75,13 +75,11 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.clibeats.data.download.DownloadStatus
 import com.clibeats.domain.model.Track
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiTextField
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.layout.LockTabSwipe
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsDestructive
@@ -90,9 +88,11 @@ import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 
 /** What can be done with the songs picked in a playlist's selection mode. */
-internal class SelectionActions(
+class SelectionActions(
     val download: (List<Track>) -> Unit,
     val addToPlaylist: (List<Track>) -> Unit,
     val queue: (List<Track>) -> Unit,
@@ -115,7 +115,7 @@ internal class SelectionActions(
 @OptIn(ExperimentalLayoutApi::class)
 @Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
-internal fun PlaylistDetailView(
+fun PlaylistDetailView(
     title: String,
     subtitle: String,
     tracks: List<Track>,

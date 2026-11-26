@@ -91,13 +91,7 @@ fun SongTableRow(
     status: String? = null,
 ) {
     val accent = LocalAccentColor.current
-    val semanticsDescription =
-        buildString {
-            append("$trackTitle by $artist")
-            if (isNowPlaying) append(", playing now")
-            if (selected == true) append(", selected")
-            status?.let { append(", $it") }
-        }
+    val semanticsDescription = songRowSemantics(trackTitle, artist, isNowPlaying, selected, status)
     val rowHeight = if (large) LARGE_ROW_DP.dp else 48.dp
     val rowBackground = when {
         selected == true -> accent.copy(alpha = SELECTED_ALPHA)
@@ -333,3 +327,17 @@ private const val LARGE_ART_DP = 52
 private const val SELECTED_ALPHA = 0.18f
 private const val PLAYING_ALPHA = 0.10f
 private const val DIMMED_ALPHA = 0.4f
+
+internal fun songRowSemantics(
+    trackTitle: String,
+    artist: String,
+    isNowPlaying: Boolean = false,
+    selected: Boolean? = null,
+    status: String? = null,
+): String =
+    buildString {
+        append("$trackTitle by $artist")
+        if (isNowPlaying) append(", playing now")
+        if (selected == true) append(", selected")
+        status?.let { append(", $it") }
+    }

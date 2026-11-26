@@ -33,6 +33,7 @@ import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.BluetoothAudio
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -51,11 +52,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,16 +83,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
-import com.clibeats.presentation.component.ARTWORK_FULL_PX
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.HintedControl
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.layout.playingFromLabel
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -99,6 +98,9 @@ import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.util.ARTWORK_FULL_PX
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 import kotlinx.coroutines.launch
 
 /** Full-screen player opened from the bottom PlayerBar. Collects state itself (ticks stay local). */
@@ -109,11 +111,14 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
 ) {
-    val state by viewModel.playbackState.collectAsState()
-    val hint by viewModel.hint.collectAsState()
-    val sleepTimer by viewModel.sleepTimer.collectAsState()
-    val isLiked by viewModel.isCurrentLiked.collectAsState()
-    val audioOutput = viewModel.audioOutput?.collectAsState()?.value
+    val state by viewModel.playbackMetadata.collectAsStateWithLifecycle()
+    val positionState = viewModel.positionMs.collectAsStateWithLifecycle()
+    val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+    val hint by viewModel.hint.collectAsStateWithLifecycle()
+    val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
+    val isLiked by viewModel.isCurrentLiked.collectAsStateWithLifecycle()
+    val audioOutput = viewModel.audioOutput?.collectAsStateWithLifecycle()?.value
+    var showLyrics by rememberSaveable { mutableStateOf(false) }
     // Coming back from the system output switcher: show the device that was picked. The switcher is a
     // system pop-up over this screen (no pause/resume), so also re-check when this window gets focus back.
     LifecycleResumeEffect(Unit) {
@@ -263,34 +268,43 @@ fun NowPlayingScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                // Height first: on short screens the cover shrinks instead of spilling over the title.
-                                .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
-                                .then(dragToDismiss)
-                                .then(closeAction)
-                                .semantics { contentDescription = artworkDescription },
-                    ) {
-                        if (thumbUrl != null) {
-                            AsyncImage(
-                                model = thumbUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        if (artUrl != null && artUrl != thumbUrl) {
-                            AsyncImage(
-                                model = hiResRequest,
-                                onError = { if (!artFallback) artFallback = true },
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                    if (showLyrics) {
+                        LyricsPanel(
+                            lyrics = lyrics,
+                            positionMsProvider = { positionState.value },
+                            onSeekTo = viewModel::seekTo,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    } else {
+                        Box(
+                            modifier =
+                                Modifier
+                                    // Height first so on short screens the cover shrinks cleanly.
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
+                                    .then(dragToDismiss)
+                                    .then(closeAction)
+                                    .semantics { contentDescription = artworkDescription },
+                        ) {
+                            if (thumbUrl != null) {
+                                AsyncImage(
+                                    model = thumbUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            if (artUrl != null && artUrl != thumbUrl) {
+                                AsyncImage(
+                                    model = hiResRequest,
+                                    onError = { if (!artFallback) artFallback = true },
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                     }
                 }
@@ -343,7 +357,7 @@ fun NowPlayingScreen(
                 // ── Waveform seek: scrub without interrupting playback, snaps back to "now"; controls on top ──
                 WaveformScrubber(
                     trackKey = track?.id,
-                    positionMs = state.positionMs,
+                    positionMsProvider = { positionState.value },
                     durationMs = state.durationMs,
                     onSeek = viewModel::seekTo,
                 ) {
@@ -383,6 +397,13 @@ fun NowPlayingScreen(
                         if (sleepLabel != null) {
                             Text(" $sleepLabel", style = MaterialTheme.typography.labelSmall, color = CliBeatsAccent)
                         }
+                    }
+                    IconButton(onClick = { showLyrics = !showLyrics }, enabled = track != null) {
+                        Icon(
+                            imageVector = Icons.Outlined.Lyrics,
+                            contentDescription = if (showLyrics) "Show artwork" else "Show synced lyrics",
+                            tint = if (showLyrics) CliBeatsAccent else CliBeatsTextSecondary,
+                        )
                     }
                     IconButton(onClick = onOpenQueue) {
                         Icon(Icons.AutoMirrored.Outlined.QueueMusic, "Open queue", tint = CliBeatsTextSecondary)

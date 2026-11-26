@@ -72,6 +72,7 @@ class AppPreferences
             val UPDATE_DOWNLOAD_ID = longPreferencesKey("update_download_id")
             val UPDATE_DOWNLOAD_VERSION = stringPreferencesKey("update_download_version")
             val UPDATE_DOWNLOAD_SHA256 = stringPreferencesKey("update_download_sha256")
+            val MIRROR_BACKUPS_TO_DOWNLOADS = booleanPreferencesKey("mirror_backups_to_downloads")
         }
 
         /** Home "Recently played" only shows plays after this time ([ CLEAR ] on Home moves it). */
@@ -374,6 +375,14 @@ class AppPreferences
 
         suspend fun setPlaylistView(name: String) {
             dataStore.edit { it[Keys.PLAYLIST_VIEW] = name }
+        }
+
+        /** Whether daily library backups are also mirrored to shared Download/CLIBeats/Playlists/. */
+        val mirrorBackupsToDownloads: Flow<Boolean> =
+            dataStore.data.map { prefs -> prefs[Keys.MIRROR_BACKUPS_TO_DOWNLOADS] ?: true }
+
+        suspend fun setMirrorBackupsToDownloads(enabled: Boolean) {
+            dataStore.edit { it[Keys.MIRROR_BACKUPS_TO_DOWNLOADS] = enabled }
         }
 
         suspend fun saveQueueMetadata(

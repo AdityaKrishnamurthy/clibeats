@@ -354,7 +354,7 @@ class PlaylistImporter
         ): NotificationCompat.Builder {
             ensureChannel()
             val open =
-                context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
+                context.packageManager?.getLaunchIntentForPackage(context.packageName)?.let {
                     PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
                 }
             return NotificationCompat.Builder(context, CHANNEL_ID)

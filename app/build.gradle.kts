@@ -10,19 +10,25 @@ plugins {
     alias(libs.plugins.ktlint)
     alias(libs.plugins.paparazzi)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kover)
 }
 
 android {
     namespace = "com.clibeats"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.clibeats"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20601").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.6.1").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20700").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.7.0").get()
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    sourceSets {
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
     }
 
     // Release signing from env (set by .github/workflows/release.yml). A release APK signed with
@@ -120,6 +126,8 @@ tasks.withType<Test>().configureEach {
 dependencies {
     implementation(libs.core.ktx)
     implementation(libs.lifecycle.runtime.ktx)
+    implementation(libs.lifecycle.runtime.compose)
+    implementation(libs.work.runtime.ktx)
     implementation(libs.activity.compose)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -159,6 +167,7 @@ dependencies {
     testImplementation(libs.mockito.core)
     testImplementation(libs.media3.test.utils)
     testImplementation(libs.okhttp.mockwebserver)
+    testImplementation(libs.work.testing)
     testImplementation(libs.compose.ui.test.junit4)
     debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.espresso.core)

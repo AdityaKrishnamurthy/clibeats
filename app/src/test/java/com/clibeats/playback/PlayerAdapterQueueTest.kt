@@ -252,4 +252,20 @@ class PlayerAdapterQueueTest {
 
         assertThat(adapter.queueFlow.value.map { it.id }).containsExactly("a", "b", "c").inOrder()
     }
+
+    @Test
+    fun restoreQueue_withRadioIds_preservesRadioBoundaryForAddToQueue() {
+        adapter.restoreQueue(
+            tracks = listOf(track("mine"), track("r1"), track("r2"), track("r3")),
+            startIndex = 1,
+            radioIds = setOf("r1", "r2", "r3"),
+        )
+        whenever(exoPlayer.currentMediaItemIndex).thenReturn(1)
+
+        adapter.addToQueue(track("next1"))
+
+        assertThat(adapter.queueFlow.value.map { it.id })
+            .containsExactly("mine", "r1", "next1", "r2", "r3").inOrder()
+        verify(exoPlayer).addMediaItem(eq(2), any())
+    }
 }

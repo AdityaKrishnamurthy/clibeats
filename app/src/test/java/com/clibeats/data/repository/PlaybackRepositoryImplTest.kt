@@ -4,6 +4,7 @@ package com.clibeats.data.repository
 
 import com.clibeats.data.local.dao.QueueDao
 import com.clibeats.data.local.dao.SongDao
+import com.clibeats.data.local.entity.QueueEntity
 import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.data.local.mapper.toEntity
 import com.clibeats.data.network.NetworkMonitor
@@ -14,6 +15,7 @@ import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
+import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.playback.PlayerAdapter
 import com.clibeats.playback.StreamResolver
 import com.google.common.truth.Truth.assertThat
@@ -46,6 +48,9 @@ class PlaybackRepositoryImplTest {
     private lateinit var queueDao: QueueDao
     private lateinit var songDao: SongDao
     private lateinit var appPreferences: AppPreferences
+    private lateinit var historyRepository: HistoryRepository
+    private lateinit var providerRegistry: ProviderRegistry
+    private lateinit var networkMonitor: NetworkMonitor
     private lateinit var repository: PlaybackRepositoryImpl
 
     private val queueFlow = MutableStateFlow<List<Track>>(emptyList())
@@ -70,8 +75,13 @@ class PlaybackRepositoryImplTest {
         queueDao = mock()
         songDao = mock()
         appPreferences = mock()
+        historyRepository = mock()
+        providerRegistry = mock()
+        networkMonitor = mock()
+        whenever(networkMonitor.isOnline).thenReturn(MutableStateFlow(true))
 
         whenever(playerAdapter.queueFlow).thenReturn(queueFlow)
+        whenever(playerAdapter.radioTrackIds).thenReturn(MutableStateFlow(emptySet()))
         whenever(playerAdapter.playbackState).thenReturn(playbackStateFlow)
 
         whenever(appPreferences.lastQueueIndex).thenReturn(flowOf(0))
@@ -79,16 +89,24 @@ class PlaybackRepositoryImplTest {
         whenever(appPreferences.savedRepeatMode).thenReturn(flowOf("OFF"))
         whenever(appPreferences.savedShuffleEnabled).thenReturn(flowOf(false))
 
-        repository =
-            PlaybackRepositoryImpl(
-                playerAdapter,
-                streamResolver,
-                queueDao,
-                songDao,
-                appPreferences,
-                testDispatcher,
-            )
+        repository = createRepository()
     }
+
+    private fun createRepository(
+        registry: ProviderRegistry = providerRegistry,
+        monitor: NetworkMonitor = networkMonitor,
+    ): PlaybackRepositoryImpl =
+        PlaybackRepositoryImpl(
+            playerAdapter = playerAdapter,
+            streamResolver = streamResolver,
+            queuePersistence = QueuePersistenceCoordinator(queueDao, songDao, appPreferences),
+            radioAutoplay = RadioAutoplayCoordinator(appPreferences, historyRepository, registry, monitor),
+            songDao = songDao,
+            historyRepository = historyRepository,
+            imageLoader = dagger.Lazy { mock() },
+            appContext = mock(),
+            ioDispatcher = testDispatcher,
+        )
 
     @After
     fun tearDown() {
@@ -138,15 +156,9 @@ class PlaybackRepositoryImplTest {
                     providerId = "ytmusic",
                 )
             whenever(queueDao.getQueueSongs()).thenReturn(listOf(entity))
+            whenever(queueDao.getQueueItems()).thenReturn(listOf(QueueEntity(0, "s1", isRadio = true)))
 
-            PlaybackRepositoryImpl(
-                playerAdapter,
-                streamResolver,
-                queueDao,
-                songDao,
-                appPreferences,
-                testDispatcher,
-            )
+            createRepository()
 
             verify(playerAdapter).restoreQueue(
                 tracks = any(),
@@ -154,6 +166,7 @@ class PlaybackRepositoryImplTest {
                 positionMs = eq(0L),
                 repeatMode = eq(RepeatMode.OFF),
                 shuffleEnabled = eq(false),
+                radioIds = eq(setOf("s1")),
             )
         }
 
@@ -175,7 +188,7 @@ class PlaybackRepositoryImplTest {
             whenever(appPreferences.lastQueueIndex).thenReturn(flowOf(1))
             whenever(appPreferences.lastPlaybackPosition).thenReturn(flowOf(42_000L))
 
-            PlaybackRepositoryImpl(playerAdapter, streamResolver, queueDao, songDao, appPreferences, testDispatcher)
+            createRepository()
 
             verify(playerAdapter).restoreQueue(
                 tracks = any(),
@@ -183,6 +196,7 @@ class PlaybackRepositoryImplTest {
                 positionMs = eq(42_000L),
                 repeatMode = eq(RepeatMode.OFF),
                 shuffleEnabled = eq(false),
+                radioIds = eq(emptySet()),
             )
             // The player's empty initial state must never be saved over the real queue / song / position.
             verify(appPreferences, never()).saveQueueMetadata(any(), any(), any(), any())
@@ -398,17 +412,7 @@ class PlaybackRepositoryImplTest {
             whenever(provider.relatedTracks(eq("jp1"), any())).doSuspendableAnswer { jpGate.await() }
             whenever(provider.relatedTracks(eq("kn1"), any())).thenReturn(ProviderResult.Success(listOf(knRelated)))
 
-            val repo =
-                PlaybackRepositoryImpl(
-                    playerAdapter = playerAdapter,
-                    streamResolver = streamResolver,
-                    queueDao = queueDao,
-                    songDao = songDao,
-                    appPreferences = appPreferences,
-                    ioDispatcher = testDispatcher,
-                    providerRegistry = registry,
-                    networkMonitor = networkMonitor,
-                )
+            val repo = createRepository(registry = registry, monitor = networkMonitor)
 
             queueFlow.value = listOf(jp)
             nowPlaying(jp)

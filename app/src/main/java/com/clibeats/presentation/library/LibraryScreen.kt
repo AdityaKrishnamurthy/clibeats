@@ -30,7 +30,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.CliConfirmDialog
@@ -70,15 +70,15 @@ fun LibraryScreen(
     onToggleModeHandled: () -> Unit = {},
 ) {
     val trackActions: TrackActionsViewModel = hiltViewModel()
-    val state by viewModel.uiState.collectAsState()
-    val mode by viewModel.mode.collectAsState()
-    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
-    val playingId by trackActions.playingTrackId.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val mode by viewModel.mode.collectAsStateWithLifecycle()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
     // Same instance PlaylistScreen uses below (same owner), so we can see whether a playlist is open.
     val playlistViewModel: PlaylistViewModel = hiltViewModel()
     // Tapping the Library tab while already on it: inside a playlist, back to the playlist list first;
     // otherwise the next section (Playlists → Online → Local).
-    val opened by viewModel.opened.collectAsState()
+    val opened by viewModel.opened.collectAsStateWithLifecycle()
     // Scroll positions live here (above the early returns), so opening an artist / album and coming back,
     // or switching between Tracks, Artists and Albums, keeps each list where it was.
     val tracksListState = rememberLazyListState()
@@ -107,10 +107,10 @@ fun LibraryScreen(
     }
     // An artist or album opened from the list shows its songs (Play, Shuffle, Find, select) under the switch.
     if (OpenedGroupView(opened, state, viewModel, trackActions, mode)) return
-    val localFolderChosen by viewModel.localFolderChosen.collectAsState()
-    val sort by viewModel.sort.collectAsState()
-    val groupView by viewModel.groupView.collectAsState()
-    val selectedTabIndex by viewModel.tab.collectAsState()
+    val localFolderChosen by viewModel.localFolderChosen.collectAsStateWithLifecycle()
+    val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val groupView by viewModel.groupView.collectAsStateWithLifecycle()
+    val selectedTabIndex by viewModel.tab.collectAsStateWithLifecycle()
     // Android back on Artists / Albums goes to Tracks first (an open artist / album has its own back).
     BackHandler(enabled = selectedTabIndex != LibraryViewModel.TAB_TRACKS) { viewModel.stepBack() }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
@@ -384,9 +384,9 @@ private fun OpenedGroupView(
         return false
     }
     BackHandler { viewModel.open(null) }
-    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
-    val downloads by trackActions.downloads.collectAsState()
-    val playingId by trackActions.playingTrackId.collectAsState()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloads by trackActions.downloads.collectAsStateWithLifecycle()
+    val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
     var menuTrack by remember { mutableStateOf<Track?>(null) }
     var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
     menuTrack?.let { SongActionsSheet(track = it, onDismiss = { menuTrack = null }) }

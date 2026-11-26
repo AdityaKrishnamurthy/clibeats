@@ -24,6 +24,13 @@ interface SongRepository {
 
     suspend fun getTrackById(id: String): Track?
 
+    suspend fun getTracksByArtist(artistName: String): List<Track> = emptyList()
+
+    suspend fun getTracksByAlbum(
+        albumName: String,
+        artistName: String = "",
+    ): List<Track> = emptyList()
+
     suspend fun upsertTrack(track: Track)
 
     suspend fun upsertTracks(tracks: List<Track>)

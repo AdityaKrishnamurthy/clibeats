@@ -47,6 +47,12 @@ jobs:
       - name: Run Unit Tests
         run: ./gradlew testDebugUnitTest
 
+      - name: Verify Paparazzi Snapshots
+        run: ./gradlew verifyPaparazziDebug
+
+      - name: Verify Release Build
+        run: ./gradlew assembleRelease -PallowDebugSigning=true
+
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -56,3 +62,4 @@ jobs:
             app/build/reports/tests/
             app/build/reports/detekt/
             app/build/reports/lint-results-debug.html
+            app/build/reports/paparazzi/

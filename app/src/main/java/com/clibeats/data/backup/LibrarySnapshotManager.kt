@@ -11,8 +11,10 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import com.clibeats.data.playlist.PlaylistExchangeManager
+import com.clibeats.data.preferences.AppPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -37,6 +39,7 @@ class LibrarySnapshotManager
     constructor(
         @ApplicationContext private val context: Context,
         private val exchange: PlaylistExchangeManager,
+        private val appPreferences: AppPreferences,
     ) {
         private val mutex = Mutex()
 
@@ -71,7 +74,9 @@ class LibrarySnapshotManager
                         if (latest.isFile) latest.copyTo(previousFile, overwrite = true)
                     }
                     exchange.exportToFile(latest).getOrThrow()
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                        appPreferences.mirrorBackupsToDownloads.first()
+                    ) {
                         // Best effort: the internal copy is already safe.
                         runCatching { writePublicCopy(latest) }
                     }

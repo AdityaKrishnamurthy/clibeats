@@ -17,7 +17,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
@@ -95,7 +95,7 @@ fun AddToPlaylistDialog(
     onDismiss: () -> Unit,
     viewModel: AddToPlaylistViewModel = hiltViewModel(),
 ) {
-    val playlists by viewModel.appPlaylists.collectAsState()
+    val playlists by viewModel.appPlaylists.collectAsStateWithLifecycle()
     var creating by remember { mutableStateOf(false) }
     var newName by remember { mutableStateOf("") }
 

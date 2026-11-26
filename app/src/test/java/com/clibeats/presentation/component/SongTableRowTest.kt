@@ -5,9 +5,34 @@ import org.junit.Test
 
 class SongTableRowTest {
     @Test
-    fun `SongTableRow component definition test`() {
-        val componentPackage = "com.clibeats.presentation.component.SongTableRowKt"
-        val clazz = Class.forName(componentPackage)
-        assertThat(clazz).isNotNull()
+    fun `songRowSemantics formats title and artist by default`() {
+        assertThat(songRowSemantics(trackTitle = "Midnight City", artist = "M83"))
+            .isEqualTo("Midnight City by M83")
+    }
+
+    @Test
+    fun `songRowSemantics appends now playing, selection, and status when present`() {
+        val description =
+            songRowSemantics(
+                trackTitle = "Intro",
+                artist = "The xx",
+                isNowPlaying = true,
+                selected = true,
+                status = "42%",
+            )
+        assertThat(description).isEqualTo("Intro by The xx, playing now, selected, 42%")
+    }
+
+    @Test
+    fun `songRowSemantics omits unselected flag`() {
+        val description =
+            songRowSemantics(
+                trackTitle = "Intro",
+                artist = "The xx",
+                isNowPlaying = false,
+                selected = false,
+                status = null,
+            )
+        assertThat(description).isEqualTo("Intro by The xx")
     }
 }

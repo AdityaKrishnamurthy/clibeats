@@ -14,7 +14,6 @@ import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.playback.DeferredDataSourceFactory
@@ -55,7 +54,6 @@ object PlaybackModule {
         audioAttributes: AudioAttributes,
         okHttpClient: OkHttpClient,
         streamResolver: dagger.Lazy<StreamResolver>,
-        cacheManager: dagger.Lazy<CacheManager>,
         mediaCaches: dagger.Lazy<MediaCaches>,
         downloadedTrackDao: dagger.Lazy<DownloadedTrackDao>,
     ): ExoPlayer {
@@ -77,7 +75,7 @@ object PlaybackModule {
         val resolvingFactory =
             ResolvingDataSource.Factory(
                 DefaultDataSource.Factory(context, httpFactory),
-                TrackUriResolver(streamResolver, cacheManager, downloadedTrackDao),
+                TrackUriResolver(streamResolver, downloadedTrackDao),
             )
         // Remote audio goes through the song cache. The cache key is the stable placeholder/track URI,
         // so a cached song replays without re-resolving (or any network). Local files skip the cache.

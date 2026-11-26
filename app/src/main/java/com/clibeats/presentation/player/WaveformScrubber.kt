@@ -50,14 +50,13 @@ import kotlin.random.Random
 @Composable
 fun WaveformScrubber(
     trackKey: String?,
-    positionMs: Long,
+    positionMsProvider: () -> Long,
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val accent = CliBeatsAccent
-    // Played bars in the text colour (white on dark themes), the rest dimmed; the accent marks only the scrub.
     val playedColor = CliBeatsTextPrimary.copy(alpha = PLAYED_BAR_ALPHA)
     val idle = CliBeatsTextSecondary.copy(alpha = IDLE_BAR_ALPHA)
     val liveMarker = CliBeatsTextPrimary.copy(alpha = LIVE_MARKER_ALPHA)
@@ -65,8 +64,7 @@ fun WaveformScrubber(
     val haptics = LocalHapticFeedback.current
     val snapPx = with(LocalDensity.current) { SNAP_DP.dp.toPx() }
 
-    val live = if (durationMs > 0) (positionMs.toFloat() / durationMs).coerceIn(0f, 1f) else 0f
-    val currentLive by rememberUpdatedState(live)
+    val currentPositionProvider by rememberUpdatedState(positionMsProvider)
     val currentDuration by rememberUpdatedState(durationMs)
     var fingerFraction by remember { mutableStateOf<Float?>(null) }
     var snapped by remember { mutableStateOf(false) }
@@ -78,9 +76,14 @@ fun WaveformScrubber(
                 .height(WAVEFORM_HEIGHT_DP.dp)
                 .semantics { contentDescription = "Seek: drag across the waveform" }
                 .pointerInput(trackKey) {
+                    fun liveFractionNow(): Float {
+                        val d = currentDuration
+                        return if (d > 0) (currentPositionProvider().toFloat() / d).coerceIn(0f, 1f) else 0f
+                    }
+
                     fun update(x: Float) {
                         val raw = (x / size.width).coerceIn(0f, 1f)
-                        val nowSnapped = abs(raw - currentLive) * size.width < snapPx
+                        val nowSnapped = abs(raw - liveFractionNow()) * size.width < snapPx
                         if (nowSnapped && !snapped) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                         snapped = nowSnapped
                         fingerFraction = raw
@@ -111,8 +114,14 @@ fun WaveformScrubber(
                     )
                 },
     ) {
-        val scrub = fingerFraction?.let { if (snapped) live else it }
         Canvas(modifier = Modifier.fillMaxSize()) {
+            val live =
+                if (currentDuration > 0) {
+                    (currentPositionProvider().toFloat() / currentDuration).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+            val scrub = fingerFraction?.let { if (snapped) live else it }
             val step = size.width / bars.size
             val barWidth = step * BAR_FILL
             val maxHeight = size.height * BAR_MAX_HEIGHT
@@ -135,7 +144,6 @@ fun WaveformScrubber(
                 )
             }
             if (scrub != null) {
-                // Where playback is now (keeps moving) and where the finger is.
                 drawLine(liveMarker, Offset(live * size.width, 0f), Offset(live * size.width, size.height), 1.dp.toPx())
                 drawLine(accent, Offset(scrub * size.width, 0f), Offset(scrub * size.width, size.height), 2.dp.toPx())
             }
@@ -143,14 +151,34 @@ fun WaveformScrubber(
 
         content()
 
-        val shownMs = ((scrub ?: live) * durationMs).toLong()
-        TimeChip(
-            text = if (scrub != null && snapped) "${formatTime(shownMs)} ·now" else formatTime(shownMs),
-            highlighted = scrub != null,
+        WaveformPositionChip(
+            positionMsProvider = positionMsProvider,
+            durationMs = durationMs,
+            fingerFraction = fingerFraction,
+            snapped = snapped,
             modifier = Modifier.align(Alignment.BottomStart),
         )
         TimeChip(text = formatTime(durationMs), highlighted = false, modifier = Modifier.align(Alignment.BottomEnd))
     }
+}
+
+@Suppress("FunctionNaming")
+@Composable
+private fun WaveformPositionChip(
+    positionMsProvider: () -> Long,
+    durationMs: Long,
+    fingerFraction: Float?,
+    snapped: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val live = if (durationMs > 0) (positionMsProvider().toFloat() / durationMs).coerceIn(0f, 1f) else 0f
+    val scrub = fingerFraction?.let { if (snapped) live else it }
+    val shownMs = ((scrub ?: live) * durationMs).toLong()
+    TimeChip(
+        text = if (scrub != null && snapped) "${formatTime(shownMs)} ·now" else formatTime(shownMs),
+        highlighted = scrub != null,
+        modifier = modifier,
+    )
 }
 
 @Suppress("FunctionNaming")

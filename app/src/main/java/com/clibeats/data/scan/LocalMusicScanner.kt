@@ -20,6 +20,7 @@ import com.clibeats.data.local.entity.SongEntity
 import com.clibeats.domain.provider.ProviderId
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -29,9 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
@@ -136,37 +135,44 @@ class LocalMusicScanner
                                 ScanStatus.Failed("Scan found no songs. Your library was left unchanged.")
                             return@withLock existing.size
                         }
-                        // Tag reads are the slow part and independent per file: run a few at once.
+                        // Pass 1: publish discovered audio files immediately so the library updates at once.
+                        val placeholders =
+                            pairs.mapNotNull { (treeUri, doc) ->
+                                val id = ProviderId.composite(LOCAL, doc.documentId)
+                                if (existing[id] != null) return@mapNotNull null
+                                val uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, doc.documentId)
+                                fallbackEntity(doc, id, uri).copy(cachedAt = RETRY_NEXT_SCAN)
+                            }
+                        placeholders.chunked(DB_CHUNK).forEach { songDao.insertAllIfAbsent(it) }
+
+                        // Pass 2: read tags & embedded artwork in parallel on a bounded IO dispatcher.
                         val done = AtomicInteger(0)
-                        val gate = Semaphore(PARALLEL_READS)
+
+                        @OptIn(ExperimentalCoroutinesApi::class)
+                        val metadataDispatcher = Dispatchers.IO.limitedParallelism(PARALLEL_READS)
                         val found: List<SongEntity> =
                             coroutineScope {
                                 pairs.map { (treeUri, doc) ->
-                                    async {
-                                        gate.withPermit {
-                                            currentCoroutineContext().ensureActive()
-                                            val id = ProviderId.composite(LOCAL, doc.documentId)
-                                            val previous = existing[id]
-                                            // cached_at = file last-modified; unchanged files skip tag reads, unless
-                                            // forced, or the cover went missing / sits in the old folder. A failed
-                                            // read is stored with cached_at 0, so it is always retried.
-                                            val unchanged =
-                                                !force &&
-                                                    previous?.cachedAt == doc.lastModified &&
-                                                    doc.lastModified != 0L &&
-                                                    hasUsableArtwork(previous)
-                                            val entity =
-                                                if (previous != null && unchanged) {
-                                                    previous
-                                                } else {
-                                                    readTags(treeUri, doc, id, previous)
-                                                }
-                                            val n = done.incrementAndGet()
-                                            if (n % PROGRESS_EVERY == 0 || n == pairs.size) {
-                                                _status.value = ScanStatus.Scanning(n, pairs.size)
+                                    async(metadataDispatcher) {
+                                        currentCoroutineContext().ensureActive()
+                                        val id = ProviderId.composite(LOCAL, doc.documentId)
+                                        val previous = existing[id]
+                                        val unchanged =
+                                            !force &&
+                                                previous?.cachedAt == doc.lastModified &&
+                                                doc.lastModified != 0L &&
+                                                hasUsableArtwork(previous)
+                                        val entity =
+                                            if (previous != null && unchanged) {
+                                                previous
+                                            } else {
+                                                readTags(treeUri, doc, id, previous)
                                             }
-                                            entity
+                                        val n = done.incrementAndGet()
+                                        if (n % PROGRESS_EVERY == 0 || n == pairs.size) {
+                                            _status.value = ScanStatus.Scanning(n, pairs.size)
                                         }
+                                        entity
                                     }
                                 }.awaitAll()
                             }

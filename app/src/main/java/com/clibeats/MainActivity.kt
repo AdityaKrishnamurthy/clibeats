@@ -21,27 +21,31 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.link.IncomingLinks
 import com.clibeats.data.link.MusicLink
+import com.clibeats.presentation.detail.AlbumDetailScreen
+import com.clibeats.presentation.detail.ArtistDetailScreen
 import com.clibeats.presentation.home.HomeScreen
 import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.layout.LocalTabSwipeLock
 import com.clibeats.presentation.layout.MainLayout
-import com.clibeats.presentation.layout.NavDestination
 import com.clibeats.presentation.library.LibraryScreen
 import com.clibeats.presentation.link.LinkViewModel
+import com.clibeats.presentation.navigation.AppRoute
+import com.clibeats.presentation.navigation.AppRouter
+import com.clibeats.presentation.navigation.LocalAppNavigator
+import com.clibeats.presentation.navigation.MainTab
 import com.clibeats.presentation.onboarding.OnboardingScreen
 import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
@@ -64,16 +68,14 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Only a fresh start: after rotation the link was already handled.
         if (savedInstanceState == null) handleLink(intent)
         enableEdgeToEdge()
         setContent {
             val themeViewModel: ThemeViewModel = hiltViewModel()
-            val themeState by themeViewModel.themeState.collectAsState()
-            val onboardingDone by themeViewModel.onboardingDone.collectAsState()
+            val themeState by themeViewModel.themeState.collectAsStateWithLifecycle()
+            val onboardingDone by themeViewModel.onboardingDone.collectAsStateWithLifecycle()
             val isLight = themeState.mode == CliBeatsThemeMode.LIGHT
 
-            // Status/nav bar icons must contrast with the app theme, not the system theme.
             DisposableEffect(isLight) {
                 val transparent = android.graphics.Color.TRANSPARENT
                 val style =
@@ -101,7 +103,6 @@ class MainActivity : ComponentActivity() {
         handleLink(intent)
     }
 
-    /** A YouTube Music, YouTube or Spotify link opened with CLIBeats, or shared to it. */
     private fun handleLink(intent: Intent?) {
         val text =
             when (intent?.action) {
@@ -121,17 +122,15 @@ class MainActivity : ComponentActivity() {
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 private fun AppContent() {
-    val tabs = NavDestination.mainTabs
-    // Saveable page: tab survives rotation/process death.
-    var savedPage by rememberSaveable { mutableIntStateOf(0) }
-    val pagerState = rememberPagerState(initialPage = savedPage) { tabs.size }
+    val router = remember { AppRouter() }
+    val tabs = MainTab.entries
+    val pagerState = rememberPagerState(initialPage = router.activeTab.ordinal) { tabs.size }
+    val stateHolder = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
-    LaunchedEffect(pagerState.currentPage) { savedPage = pagerState.currentPage }
 
-    val navigate: (NavDestination) -> Unit = { destination ->
-        val target = tabs.indexOf(destination).coerceAtLeast(0)
-        scope.launch {
-            // Neighbours slide; far jumps snap so we don't compose every page in between.
+    LaunchedEffect(router.activeTab) {
+        val target = router.activeTab.ordinal
+        if (pagerState.currentPage != target) {
             if (abs(target - pagerState.currentPage) == 1) {
                 pagerState.animateScrollToPage(target)
             } else {
@@ -139,37 +138,24 @@ private fun AppContent() {
             }
         }
     }
-    BackHandler(enabled = pagerState.currentPage != 0) { navigate(NavDestination.Home) }
-    // Queue isn't a tab: it opens full screen over the tabs (mini player / Now Playing) and back closes it.
-    var showQueue by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = showQueue) { showQueue = false }
+    LaunchedEffect(pagerState.settledPage) {
+        val settledTab = tabs[pagerState.settledPage]
+        if (settledTab != router.activeTab && router.currentRoute != AppRoute.Queue) {
+            router.selectTab(settledTab)
+        }
+    }
 
-    // Re-tapping the tab you're on: Home / Search = switch Online <-> Local (double-tap Search = search box),
-    // Library = next section (Playlists → Online → Local).
     var focusSearch by remember { mutableStateOf(false) }
     var toggleSearchSource by remember { mutableStateOf(false) }
-    // Search tab: one tap (when already on Search) switches the source after a short wait, which a second
-    // tap cancels to open the search box instead, so a double-tap never flips the source first.
     var lastSearchTapAt by remember { mutableLongStateOf(0L) }
     var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
-    val onTabClick: (NavDestination) -> Unit = tabClick@{ destination ->
-        if (destination == NavDestination.Queue) {
-            // The queue button toggles: a second tap closes the queue and shows the tab underneath again.
-            showQueue = !showQueue
-            return@tabClick
-        }
-        showQueue = false
-        if (destination == tabs[pagerState.currentPage]) {
-            when (destination) {
-                NavDestination.Home -> toggleHomeSource = true
-                NavDestination.Search -> Unit // handled below (single vs double tap)
-                NavDestination.Library -> toggleLibraryMode = true
-                else -> Unit
-            }
-        }
-        if (destination == NavDestination.Search) {
+
+    val onTabSelected: (MainTab) -> Unit = { tab ->
+        val wasAtRoot = router.activeTab == tab && router.isAtTabRoot(tab)
+        val reTapAtRoot = router.selectTab(tab)
+        if (tab == MainTab.SEARCH) {
             val now = SystemClock.uptimeMillis()
             val doubleTap = now - lastSearchTapAt < DOUBLE_TAP_MS
             lastSearchTapAt = now
@@ -177,20 +163,24 @@ private fun AppContent() {
             pendingSearchToggle = null
             when {
                 doubleTap -> focusSearch = true
-                tabs[pagerState.currentPage] == NavDestination.Search ->
+                wasAtRoot ->
                     pendingSearchToggle =
                         scope.launch {
                             delay(DOUBLE_TAP_MS)
                             toggleSearchSource = true
                         }
             }
+        } else if (reTapAtRoot) {
+            when (tab) {
+                MainTab.HOME -> toggleHomeSource = true
+                MainTab.LIBRARY -> toggleLibraryMode = true
+                MainTab.SEARCH, MainTab.SETTINGS -> Unit
+            }
         }
-        navigate(destination)
     }
 
-    // Opened links: messages as toasts; a Spotify playlist or album opens the import over the tabs.
     val linkViewModel: LinkViewModel = hiltViewModel()
-    val showLinkImport by linkViewModel.showImport.collectAsState()
+    val showLinkImport by linkViewModel.showImport.collectAsStateWithLifecycle()
     val context = LocalContext.current
     LaunchedEffect(Unit) {
         linkViewModel.messages.collect { message ->
@@ -198,14 +188,14 @@ private fun AppContent() {
             Toast.makeText(context, message, length).show()
         }
     }
-    BackHandler(enabled = showLinkImport) { linkViewModel.closeImport() }
 
-    // In-app updater: check GitHub on launch (at most once per chosen interval) and show the pop-up.
     val updateViewModel: UpdateViewModel = hiltViewModel()
     LaunchedEffect(Unit) { updateViewModel.onAppStart() }
     UpdatePrompt(viewModel = updateViewModel)
 
-    // A tab can hold the pager still while it is the one shown (e.g. while selecting songs in a playlist).
+    BackHandler(enabled = !showLinkImport && router.canGoBack) { router.popBack() }
+    BackHandler(enabled = showLinkImport) { linkViewModel.closeImport() }
+
     var swipeLockedPages by remember { mutableStateOf(emptySet<Int>()) }
 
     fun lockSwipe(
@@ -214,51 +204,64 @@ private fun AppContent() {
     ) {
         swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
     }
-    MainLayout(
-        selectedDestination = tabs[pagerState.currentPage],
-        onDestinationSelected = onTabClick,
-    ) {
-        // Swipe left/right between tabs in bottom-bar order.
-        Box(modifier = Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                key = { tabs[it].route },
-                modifier = Modifier.fillMaxSize(),
-                userScrollEnabled = pagerState.currentPage !in swipeLockedPages,
-            ) { page ->
-                val setLocked: (Boolean) -> Unit = remember(page) { { locked -> lockSwipe(page, locked) } }
-                CompositionLocalProvider(LocalTabSwipeLock provides setLocked) {
-                    when (tabs[page]) {
-                        NavDestination.Home ->
-                            HomeScreen(
-                                toggleSourceRequested = toggleHomeSource,
-                                onToggleSourceHandled = { toggleHomeSource = false },
-                            )
-                        NavDestination.Search ->
-                            SearchScreen(
-                                focusRequested = focusSearch,
-                                onFocusHandled = { focusSearch = false },
-                                toggleSourceRequested = toggleSearchSource,
-                                onToggleSourceHandled = { toggleSearchSource = false },
-                            )
-                        NavDestination.Library ->
-                            LibraryScreen(
-                                toggleModeRequested = toggleLibraryMode,
-                                onToggleModeHandled = { toggleLibraryMode = false },
-                            )
-                        NavDestination.Settings -> SettingsScreen()
-                        else -> Unit
+
+    CompositionLocalProvider(LocalAppNavigator provides { next -> router.navigate(next) }) {
+        MainLayout(
+            activeTab = router.activeTab,
+            onTabSelected = onTabSelected,
+            onQueueClick = {
+                if (router.currentRoute == AppRoute.Queue) router.popBack() else router.navigate(AppRoute.Queue)
+            },
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                HorizontalPager(
+                    state = pagerState,
+                    key = { tabs[it].route.key },
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = pagerState.currentPage !in swipeLockedPages,
+                ) { page ->
+                    val tab = tabs[page]
+                    val tabRoute = router.topRoute(tab)
+                    val setLocked: (Boolean) -> Unit = remember(page) { { locked -> lockSwipe(page, locked) } }
+                    CompositionLocalProvider(LocalTabSwipeLock provides setLocked) {
+                        stateHolder.SaveableStateProvider(tabRoute.key) {
+                            when (tabRoute) {
+                                AppRoute.Home ->
+                                    HomeScreen(
+                                        toggleSourceRequested = toggleHomeSource,
+                                        onToggleSourceHandled = { toggleHomeSource = false },
+                                    )
+                                AppRoute.Search ->
+                                    SearchScreen(
+                                        focusRequested = focusSearch,
+                                        onFocusHandled = { focusSearch = false },
+                                        toggleSourceRequested = toggleSearchSource,
+                                        onToggleSourceHandled = { toggleSearchSource = false },
+                                    )
+                                AppRoute.Library ->
+                                    LibraryScreen(
+                                        toggleModeRequested = toggleLibraryMode,
+                                        onToggleModeHandled = { toggleLibraryMode = false },
+                                    )
+                                AppRoute.Settings -> SettingsScreen()
+                                is AppRoute.ArtistDetail ->
+                                    ArtistDetailScreen(route = tabRoute, onBack = { router.popBack() })
+                                is AppRoute.AlbumDetail ->
+                                    AlbumDetailScreen(route = tabRoute, onBack = { router.popBack() })
+                                AppRoute.Queue -> Unit
+                            }
+                        }
                     }
                 }
-            }
-            if (showQueue) {
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    QueueScreen(onClose = { showQueue = false })
+                if (router.currentRoute == AppRoute.Queue) {
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        QueueScreen(onClose = { router.popBack() })
+                    }
                 }
-            }
-            if (showLinkImport) {
-                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                    ImportScreen(onClose = linkViewModel::closeImport)
+                if (showLinkImport) {
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        ImportScreen(onClose = linkViewModel::closeImport)
+                    }
                 }
             }
         }
