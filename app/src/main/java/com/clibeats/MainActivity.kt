@@ -14,6 +14,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -36,6 +38,7 @@ import com.clibeats.presentation.detail.AlbumDetailScreen
 import com.clibeats.presentation.detail.ArtistDetailScreen
 import com.clibeats.presentation.home.HomeScreen
 import com.clibeats.presentation.importer.ImportScreen
+import com.clibeats.presentation.layout.LocalTabSwipeLock
 import com.clibeats.presentation.layout.MainLayout
 import com.clibeats.presentation.library.LibraryScreen
 import com.clibeats.presentation.link.LinkViewModel
@@ -44,7 +47,6 @@ import com.clibeats.presentation.navigation.AppRouter
 import com.clibeats.presentation.navigation.LocalAppNavigator
 import com.clibeats.presentation.navigation.MainTab
 import com.clibeats.presentation.onboarding.OnboardingScreen
-import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.queue.QueueScreen
 import com.clibeats.presentation.search.SearchScreen
 import com.clibeats.presentation.settings.SettingsScreen
@@ -58,6 +60,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import kotlin.math.abs
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -120,8 +123,27 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun AppContent() {
     val router = remember { AppRouter() }
+    val tabs = MainTab.entries
+    val pagerState = rememberPagerState(initialPage = router.activeTab.ordinal) { tabs.size }
     val stateHolder = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
+
+    LaunchedEffect(router.activeTab) {
+        val target = router.activeTab.ordinal
+        if (pagerState.currentPage != target) {
+            if (abs(target - pagerState.currentPage) == 1) {
+                pagerState.animateScrollToPage(target)
+            } else {
+                pagerState.scrollToPage(target)
+            }
+        }
+    }
+    LaunchedEffect(pagerState.settledPage) {
+        val settledTab = tabs[pagerState.settledPage]
+        if (settledTab != router.activeTab && router.currentRoute != AppRoute.Queue) {
+            router.selectTab(settledTab)
+        }
+    }
 
     var focusSearch by remember { mutableStateOf(false) }
     var toggleSearchSource by remember { mutableStateOf(false) }
@@ -129,7 +151,6 @@ private fun AppContent() {
     var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
-    var showPlaylistsGrid by remember { mutableStateOf(false) }
 
     val onTabSelected: (MainTab) -> Unit = { tab ->
         val wasAtRoot = router.activeTab == tab && router.isAtTabRoot(tab)
@@ -153,8 +174,7 @@ private fun AppContent() {
             when (tab) {
                 MainTab.HOME -> toggleHomeSource = true
                 MainTab.LIBRARY -> toggleLibraryMode = true
-                MainTab.PLAYLISTS -> showPlaylistsGrid = true
-                MainTab.SEARCH -> Unit
+                MainTab.SEARCH, MainTab.SETTINGS -> Unit
             }
         }
     }
@@ -176,50 +196,66 @@ private fun AppContent() {
     BackHandler(enabled = !showLinkImport && router.canGoBack) { router.popBack() }
     BackHandler(enabled = showLinkImport) { linkViewModel.closeImport() }
 
-    val route = router.currentRoute
+    var swipeLockedPages by remember { mutableStateOf(emptySet<Int>()) }
+
+    fun lockSwipe(
+        page: Int,
+        locked: Boolean,
+    ) {
+        swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
+    }
+
     CompositionLocalProvider(LocalAppNavigator provides { next -> router.navigate(next) }) {
         MainLayout(
             activeTab = router.activeTab,
-            breadcrumb = route.breadcrumb,
-            canGoBack = router.canGoBack,
-            onBack = { router.popBack() },
             onTabSelected = onTabSelected,
             onQueueClick = {
                 if (router.currentRoute == AppRoute.Queue) router.popBack() else router.navigate(AppRoute.Queue)
             },
-            onSettingsClick = {
-                if (router.currentRoute == AppRoute.Settings) router.popBack() else router.navigate(AppRoute.Settings)
-            },
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                stateHolder.SaveableStateProvider(route.key) {
-                    when (route) {
-                        AppRoute.Home ->
-                            HomeScreen(
-                                toggleSourceRequested = toggleHomeSource,
-                                onToggleSourceHandled = { toggleHomeSource = false },
-                            )
-                        AppRoute.Search ->
-                            SearchScreen(
-                                focusRequested = focusSearch,
-                                onFocusHandled = { focusSearch = false },
-                                toggleSourceRequested = toggleSearchSource,
-                                onToggleSourceHandled = { toggleSearchSource = false },
-                            )
-                        AppRoute.Library ->
-                            LibraryScreen(
-                                toggleModeRequested = toggleLibraryMode,
-                                onToggleModeHandled = { toggleLibraryMode = false },
-                            )
-                        AppRoute.Playlists, is AppRoute.PlaylistDetail ->
-                            PlaylistScreen(
-                                showGridRequested = showPlaylistsGrid,
-                                onShowGridHandled = { showPlaylistsGrid = false },
-                            )
-                        is AppRoute.ArtistDetail -> ArtistDetailScreen(route)
-                        is AppRoute.AlbumDetail -> AlbumDetailScreen(route)
-                        AppRoute.Queue -> QueueScreen(onClose = { router.popBack() })
-                        AppRoute.Settings -> SettingsScreen()
+                HorizontalPager(
+                    state = pagerState,
+                    key = { tabs[it].route.key },
+                    modifier = Modifier.fillMaxSize(),
+                    userScrollEnabled = pagerState.currentPage !in swipeLockedPages,
+                ) { page ->
+                    val tab = tabs[page]
+                    val tabRoute = router.topRoute(tab)
+                    val setLocked: (Boolean) -> Unit = remember(page) { { locked -> lockSwipe(page, locked) } }
+                    CompositionLocalProvider(LocalTabSwipeLock provides setLocked) {
+                        stateHolder.SaveableStateProvider(tabRoute.key) {
+                            when (tabRoute) {
+                                AppRoute.Home ->
+                                    HomeScreen(
+                                        toggleSourceRequested = toggleHomeSource,
+                                        onToggleSourceHandled = { toggleHomeSource = false },
+                                    )
+                                AppRoute.Search ->
+                                    SearchScreen(
+                                        focusRequested = focusSearch,
+                                        onFocusHandled = { focusSearch = false },
+                                        toggleSourceRequested = toggleSearchSource,
+                                        onToggleSourceHandled = { toggleSearchSource = false },
+                                    )
+                                AppRoute.Library ->
+                                    LibraryScreen(
+                                        toggleModeRequested = toggleLibraryMode,
+                                        onToggleModeHandled = { toggleLibraryMode = false },
+                                    )
+                                AppRoute.Settings -> SettingsScreen()
+                                is AppRoute.ArtistDetail ->
+                                    ArtistDetailScreen(route = tabRoute, onBack = { router.popBack() })
+                                is AppRoute.AlbumDetail ->
+                                    AlbumDetailScreen(route = tabRoute, onBack = { router.popBack() })
+                                AppRoute.Queue -> Unit
+                            }
+                        }
+                    }
+                }
+                if (router.currentRoute == AppRoute.Queue) {
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        QueueScreen(onClose = { router.popBack() })
                     }
                 }
                 if (showLinkImport) {
