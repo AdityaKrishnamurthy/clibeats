@@ -23,6 +23,9 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsSurface
+import com.clibeats.util.ARTWORK_FULL_PX
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 
 /**
  * Reusable track artwork component using Coil.

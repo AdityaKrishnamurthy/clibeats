@@ -7,7 +7,6 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.local.dao.DownloadedTrackDao
 import com.clibeats.domain.model.Track
 import kotlinx.coroutines.runBlocking
@@ -21,13 +20,11 @@ import java.io.IOException
  *
  * Priority order:
  * 1. Durable offline downloads ([DownloadedTrackDao])
- * 2. Transient LRU disk cache ([CacheManager])
- * 3. Fresh remote resolution via [StreamResolver]
+ * 2. Fresh remote resolution via [StreamResolver] (buffered through Media3's SimpleCache)
  */
 @OptIn(UnstableApi::class)
 class TrackUriResolver(
     private val streamResolver: dagger.Lazy<StreamResolver>,
-    private val cacheManager: dagger.Lazy<CacheManager>,
     private val downloadedTrackDao: dagger.Lazy<DownloadedTrackDao>? = null,
 ) : ResolvingDataSource.Resolver {
     override fun resolveDataSpec(dataSpec: DataSpec): DataSpec {
@@ -44,15 +41,13 @@ class TrackUriResolver(
                     if (file.exists()) return@runBlocking Uri.fromFile(file)
                 }
 
-                // 2. Check transient LRU cache
-                cacheManager.get().getCachedFile(trackId)?.takeIf { it.exists() }?.let { Uri.fromFile(it) }
-                    ?: runCatching {
-                        // 3. Resolve stream URL
-                        streamResolver.get().resolve(placeholderTrack(trackId, providerId)).streamUrl
-                    }.getOrElse { error ->
-                        if (error is kotlinx.coroutines.CancellationException) throw error
-                        throw IOException("Stream resolution failed for $trackId", error)
-                    }?.let { Uri.parse(it) }
+                // 2. Resolve stream URL
+                runCatching {
+                    streamResolver.get().resolve(placeholderTrack(trackId, providerId)).streamUrl
+                }.getOrElse { error ->
+                    if (error is kotlinx.coroutines.CancellationException) throw error
+                    throw IOException("Stream resolution failed for $trackId", error)
+                }?.let { Uri.parse(it) }
             } ?: throw IOException("No stream URL for $trackId")
         return dataSpec.withUri(resolved)
     }
