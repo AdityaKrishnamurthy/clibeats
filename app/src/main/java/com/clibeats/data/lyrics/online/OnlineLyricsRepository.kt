@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
@@ -104,7 +105,19 @@ class OnlineLyricsRepository
                         fetchedAt = System.currentTimeMillis(),
                     ),
                 )
+                lyricsCacheDao.trim(MAX_SAVED)
             }
+        }
+
+        /** How many songs have saved lyrics, and how much space they take (for Settings). */
+        val savedCount: Flow<Int> get() = lyricsCacheDao.countFlow()
+        val savedBytes: Flow<Long> get() = lyricsCacheDao.sizeBytesFlow()
+        val savedLimit: Int get() = MAX_SAVED
+
+        /** Forgets saved lyrics (downloaded songs keep theirs); they're looked up again when opened. */
+        suspend fun clearSaved() {
+            memory.clear()
+            runCatching { lyricsCacheDao.clearNotDownloaded() }
         }
 
         /** Fetches and saves [track]'s lyrics now (when it's downloaded), so they're there offline. */
@@ -315,6 +328,7 @@ class OnlineLyricsRepository
             const val SOURCE_TIMEOUT_MS = 9_000L
             const val YOUTUBE_PREFERENCE = 3
             const val MEMORY_SIZE = 64
+            const val MAX_SAVED = 2_000
             const val NOT_FOUND_MARK = "[not found]"
             const val NOT_FOUND_RETRY_MS = 3L * 24 * 60 * 60 * 1000
             const val USER_AGENT = "CLIBeats (Android music player; lyrics)"
@@ -430,6 +444,9 @@ internal class RecentMap<V>(
 
     @Synchronized
     fun get(key: String): V? = map[key]
+
+    @Synchronized
+    fun clear() = map.clear()
 
     @Synchronized
     fun put(

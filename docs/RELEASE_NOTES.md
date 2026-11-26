@@ -25,6 +25,10 @@ pronunciations.
   On syllable-synced songs the pronunciation fills in along with the line. Both can be on together and are
   remembered; a song's translations are saved, so switching back and forth is instant.
 - **A clearer typeface.** Lyrics use Poppins, big and rounded, for every language.
+- **Loaded only when you open them.** Now Playing opens on the cover for a new song and looks lyrics up only when you
+  tap the lyrics button or swipe up; coming back to the same song brings its lyrics back.
+- **Lyrics in Settings → Storage and Cache.** Shows how many songs have saved lyrics, their size, and the most kept
+  (2,000; the oldest are dropped past that, downloaded songs always keep theirs), with a Clear button.
 
 ## Fixes
 
