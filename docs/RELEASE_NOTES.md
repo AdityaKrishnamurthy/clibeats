@@ -1,6 +1,7 @@
 # CLIBeats v2.6.1 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.1.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.7 MB
 
 ## Play a playlist in one tap
 
