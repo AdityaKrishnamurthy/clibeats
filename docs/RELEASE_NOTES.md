@@ -1,26 +1,60 @@
 # CLIBeats v2.7.0 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Target SDK:** Android 15 (API 35) · **Download:** `CLIBeats-v2.7.0.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.7.0.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.8 MB
 
-## Queue ordering & autoplay persistence
+Synced lyrics, a sleep timer, and downloads that pick up where they stopped.
 
-- **Add to queue during radio**: Queuing a song while an autoplay suggestion is playing now inserts it after your previously queued tracks and strictly before remaining radio suggestions.
-- **Persistent radio boundaries**: Room database v5 adds `is_radio` on `queue_items` so autoplay markers survive app restarts and process death cleanly.
+## Synced lyrics
 
-## Synced lyrics & Now Playing
+- **Lyrics in Now Playing.** A new lyrics button swaps the cover for the song's words, scrolling to the line being
+  sung and highlighting it in your accent colour. Tap any line to jump to that moment.
+- Lyrics come from LRCLIB and are kept on the phone, so a song you've played once shows them again without a
+  connection. A song with no lyrics shows `[ NO SYNCED LYRICS AVAILABLE ]`; one tap brings the cover back.
 
-- **LRCLIB synced lyrics**: Toggle synced lyrics right inside Now Playing with auto-scroll highlighting, cached offline in `lyrics_cache`, and tap any lyric line to seek to its timestamp.
-- **Smoother scrubber & reduced recompositions**: Playback position ticks are isolated from track metadata changes, eliminating unnecessary full-screen redraws during playback.
+## Sleep timer
 
-## Background downloads & faster local library scans
+- **Falls asleep with you.** The bedtime icon at the bottom of Now Playing offers **15, 30, 45 or 60 minutes**, or
+  **End of track**. The time left shows beside the icon, and **Off** cancels it.
 
-- **Resumable WorkManager downloads**: Track downloads run via WorkManager's foreground data-sync worker with chunk-level HTTP `Range` checkpoints (`.chunks` + `.part`) so interrupted transfers resume cleanly across app backgrounding.
-- **Two-pass parallel scanner**: Local music folders insert playable song rows immediately and extract artwork and tags across 4 parallel IO workers.
+## Queue
 
-## Navigation, detail views & settings
+- **Your songs stay ahead of the radio.** Queuing a song while a suggestion is playing puts it after the songs you
+  already queued and before the suggestions still to come, instead of at the very end of the queue.
+- **The radio line survives a restart.** The queue remembers which songs are suggestions, so after closing and
+  reopening the app your songs still come first and `∞ FROM RADIO` still marks where they end.
 
-- **Unified back-stack router**: Replaced swipe pager navigation with isolated per-tab stacks (`Home`, `Search`, `Library`, `Downloads`/`Queue`/`Settings`), `< cd ..` breadcrumbs, and dedicated **Artist** and **Album** detail views reachable from song menus and Library browsers.
-- **Settings & privacy hardening**: Removed the redundant Active Provider block from Settings, added a **Mirror to Downloads/** toggle to opt out of mirroring plaintext `clibeats-backup.json` to shared storage, enforced HTTPS-only network security config, excluded sensitive local databases/preferences from Android Auto Backup & Device Transfer, and capped history retention at 3,000 rows with daily pruning.
+## Downloads
+
+- **Interrupted downloads resume.** Downloads run in the background and keep the part already fetched, so a song
+  stopped by a closed app or a dropped connection carries on from where it stopped instead of starting over. Two
+  songs still download at once.
+
+## Library
+
+- **Artist and album pages.** Tapping an artist or album now opens a page of its own — "Artist · 12 tracks" — with
+  ▶ PLAY, ⤨ SHUFFLE, the Find box, hold to select, and the back arrow returning you where you came from.
+- **Faster scans.** Songs appear in the library as they're found, and covers and tags are read in parallel
+  afterwards, so a large folder is playable while it finishes.
+
+## Settings
+
+- **Backup mirroring is your choice.** A new toggle in Settings → Backup stops the daily backup being copied to
+  `Download/CLIBeats`; the copy kept inside the app is always made.
+- **Tidier Settings.** Theme, Local Library, Storage and Cache, Audio Quality and Backup each have their own block,
+  and the old Active Provider row is gone (Online or Local is still chosen in Search).
+- **History stops at 3,000 plays.** Older entries are trimmed daily, so the app stays light.
+
+## Privacy
+
+- **HTTPS only.** The app now refuses plain HTTP connections.
+- **Backups leave out private data.** The local database, downloaded audio and preferences are excluded from
+  Android's cloud backup and device transfer.
+
+## Fixes
+
+- **A smoother scrubber.** Dragging the progress bar no longer redraws the whole screen twice a second; the cover,
+  title and controls stay put.
 
 ---
 
