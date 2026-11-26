@@ -284,6 +284,8 @@ fun PlaylistScreen(
                             onImportClick = { showImport = true },
                             onPlaylistClick = { viewModel.selectPlaylist(it.id) },
                             onDeleteClick = { pendingDelete = it },
+                            onPlayPlaylist = { viewModel.playNow(it) },
+                            onPlayPinned = { viewModel.playNow(null, pinned = it) },
                         )
                 }
             }

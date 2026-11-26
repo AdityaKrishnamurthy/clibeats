@@ -1,4 +1,19 @@
-# CLIBeats v2.6.0 — Release Notes
+# CLIBeats v2.6.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.1.apk` (verify with `SHA256SUMS.txt`)
+
+## Play a playlist in one tap
+
+- Every playlist in **Library → Playlists** has a small **▶** button: on the cover in the grid views, and at the
+  end of the row in the List and Details views. Tap it to play the whole playlist from the first song without
+  opening it ("Playing from" shows the playlist's name).
+- Works for your playlists, M3U/PLS file playlists, and the pinned ♥ Favorites, Most Played and Downloaded
+  (Downloaded plays only finished downloads). Empty playlists don't show it.
+- Tapping the cover or name still opens the playlist as before.
+
+---
+
+## v2.6.0
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.0.apk` (verify with `SHA256SUMS.txt`)
 · **Size:** about 5.6 MB

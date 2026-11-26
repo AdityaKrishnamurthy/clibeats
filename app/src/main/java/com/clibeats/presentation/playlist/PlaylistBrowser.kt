@@ -38,6 +38,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -60,6 +61,7 @@ import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.theme.CliBeatsAccent
+import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
@@ -98,6 +100,8 @@ private data class PlaylistEntry(
     val local: Boolean = false,
     val onClick: () -> Unit,
     val onLongClick: (() -> Unit)? = null,
+    /** The cover's play button: plays the whole list without opening it. Hidden for empty lists. */
+    val onPlay: (() -> Unit)? = null,
 )
 
 /**
@@ -119,6 +123,8 @@ internal fun PlaylistBrowser(
     onImportClick: () -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
     onDeleteClick: (Playlist) -> Unit,
+    onPlayPlaylist: (Playlist) -> Unit = {},
+    onPlayPinned: (String) -> Unit = {},
 ) {
     val (local, app) = state.playlists.partition { it.isLocalFilePlaylist() }
     val pinned =
@@ -133,6 +139,7 @@ internal fun PlaylistBrowser(
                 glyph = "♥︎",
                 pinned = true,
                 onClick = onFavoritesClick,
+                onPlay = { onPlayPinned("fav") },
             ),
             PlaylistEntry(
                 key = "most",
@@ -143,6 +150,7 @@ internal fun PlaylistBrowser(
                 glyph = "▲",
                 pinned = true,
                 onClick = onMostPlayedClick,
+                onPlay = { onPlayPinned("most") },
             ),
             PlaylistEntry(
                 key = "downloaded",
@@ -153,6 +161,7 @@ internal fun PlaylistBrowser(
                 glyph = "↓",
                 pinned = true,
                 onClick = onDownloadedClick,
+                onPlay = { onPlayPinned("downloaded") },
             ),
         )
     val own =
@@ -166,6 +175,7 @@ internal fun PlaylistBrowser(
                 glyph = "♫",
                 onClick = { onPlaylistClick(playlist) },
                 onLongClick = { onDeleteClick(playlist) },
+                onPlay = { onPlayPlaylist(playlist) },
             )
         }
     val files =
@@ -179,6 +189,7 @@ internal fun PlaylistBrowser(
                 glyph = "♫",
                 local = true,
                 onClick = { onPlaylistClick(playlist) },
+                onPlay = { onPlayPlaylist(playlist) },
             )
         }
     val total = (if (filter == PlaylistFilter.ALL) pinned.size + own.size else 0) + files.size
@@ -374,7 +385,17 @@ private fun PlaylistTile(
                 onLongClickLabel = entry.onLongClick?.let { "Delete playlist" },
             ),
     ) {
-        Cover(entry, Modifier.fillMaxWidth().aspectRatio(1f), glyphLarge = true)
+        Box(modifier = Modifier.fillMaxWidth().aspectRatio(1f)) {
+            Cover(entry, Modifier.fillMaxSize(), glyphLarge = true)
+            playAction(entry)?.let { onPlay ->
+                PlayButton(
+                    title = entry.title,
+                    size = if (large) PLAY_LARGE_DP.dp else PLAY_SMALL_DP.dp,
+                    onClick = onPlay,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(if (large) 8.dp else 5.dp),
+                )
+            }
+        }
         Text(
             text = entry.title,
             style = if (large) MaterialTheme.typography.bodyMedium else MaterialTheme.typography.bodySmall,
@@ -428,7 +449,48 @@ private fun PlaylistRow(
             }
             CountText(entry)
         }
-        Text(text = "›", style = MaterialTheme.typography.titleMedium, color = CliBeatsTextSecondary)
+        val onPlay = playAction(entry)
+        if (onPlay != null) {
+            Spacer(Modifier.width(8.dp))
+            PlayButton(title = entry.title, size = PLAY_ROW_DP.dp, onClick = onPlay)
+        } else {
+            Text(text = "›", style = MaterialTheme.typography.titleMedium, color = CliBeatsTextSecondary)
+        }
+    }
+}
+
+/** The play action to show for [entry], or null when it has nothing to play. */
+private fun playAction(entry: PlaylistEntry): (() -> Unit)? = entry.onPlay?.takeIf { entry.count > 0 }
+
+/**
+ * A small framed ▶ in the accent colour, the same rounded-square shape as the covers. On a cover it sits on a
+ * dimmed backing so it reads over any artwork.
+ */
+@Composable
+private fun PlayButton(
+    title: String,
+    size: Dp,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shape = RoundedCornerShape(6.dp)
+    Box(
+        modifier =
+            modifier
+                .size(size)
+                .clip(shape)
+                .background(CliBeatsBackground.copy(alpha = PLAY_BACKING_ALPHA))
+                .border(1.dp, CliBeatsAccent, shape)
+                .clickable(role = Role.Button, onClickLabel = "Play", onClick = onClick)
+                .semantics { contentDescription = "Play $title" },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.PlayArrow,
+            contentDescription = null,
+            tint = CliBeatsAccent,
+            modifier = Modifier.size(size * PLAY_ICON_RATIO),
+        )
     }
 }
 
@@ -480,3 +542,8 @@ private const val VIEW_BUTTON_DP = 36
 private const val VIEW_ICON_DP = 20
 private const val LIST_COVER_DP = 44
 private const val DETAILS_COVER_DP = 72
+private const val PLAY_SMALL_DP = 30
+private const val PLAY_LARGE_DP = 38
+private const val PLAY_ROW_DP = 36
+private const val PLAY_ICON_RATIO = 0.7f
+private const val PLAY_BACKING_ALPHA = 0.8f
