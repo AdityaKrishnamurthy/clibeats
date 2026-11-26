@@ -17,9 +17,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -29,7 +31,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,8 +42,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.download.DownloadStatus
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.navigation.AppRoute
+import com.clibeats.presentation.navigation.LocalAppNavigator
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
@@ -117,12 +121,33 @@ fun SongActionsSheet(
                 onPicked(track)
                 onDismiss()
             }
+            val navigator = LocalAppNavigator.current
+            if (track.artist.isNotBlank()) {
+                SheetAction(Icons.Outlined.Person, "View artist") {
+                    onPicked(track)
+                    onDismiss()
+                    navigator(AppRoute.ArtistDetail(track.artist, providerId = track.providerId))
+                }
+            }
+            if (track.album.isNotBlank()) {
+                SheetAction(Icons.Outlined.Album, "View album") {
+                    onPicked(track)
+                    onDismiss()
+                    navigator(
+                        AppRoute.AlbumDetail(
+                            albumName = track.album,
+                            artistName = track.artist,
+                            providerId = track.providerId,
+                        ),
+                    )
+                }
+            }
             val isLocal =
                 track.providerId == "local" ||
                     track.streamUrl?.startsWith("content://") == true
             if (!isLocal) {
-                val downloadedIds by actions.downloadedTrackIds.collectAsState()
-                val downloads by actions.downloads.collectAsState()
+                val downloadedIds by actions.downloadedTrackIds.collectAsStateWithLifecycle()
+                val downloads by actions.downloads.collectAsStateWithLifecycle()
                 val downloadStatus = downloads[track.id]
                 val isDownloaded = track.id in downloadedIds
                 when {
