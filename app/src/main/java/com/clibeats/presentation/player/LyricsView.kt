@@ -70,7 +70,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,7 +93,9 @@ internal class LyricsExtras(
     val loading: Boolean,
     val onToggleTranslation: () -> Unit,
     val onTogglePronunciation: () -> Unit,
-)
+) {
+    val showsAny get() = showTranslation || showPronunciation
+}
 
 /**
  * The lyrics area of Now Playing.
@@ -163,41 +164,58 @@ private fun LyricsToolbar(
             lyrics is Lyrics.Synced -> "LINE SYNCED"
             else -> "PLAIN"
         }
-    val label = listOf(timing, (lyrics.source ?: "from file").uppercase()).joinToString(" · ")
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    // "LyricsPlus · Apple" → "APPLE": where the timing really comes from, short enough to never reach the buttons.
+    val origin = (lyrics.source ?: "from file").substringAfterLast(" · ").uppercase()
+    val label = "$timing · $origin"
+    val buttons = if (state.canPronounce) 2 else 1
+    Box(modifier = Modifier.fillMaxWidth().height(TOGGLE_SIZE + 6.dp).padding(bottom = 6.dp)) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             color = CliBeatsTextSecondary,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .padding(end = (TOGGLE_SIZE + 8.dp) * buttons + 22.dp),
         )
-        if (extras.loading) {
-            CircularProgressIndicator(
-                modifier = Modifier.size(14.dp),
-                strokeWidth = 1.5.dp,
-                color = LocalAccentColor.current,
-            )
+        Row(
+            modifier = Modifier.align(Alignment.CenterEnd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            ToolbarButtons(state, extras)
         }
+    }
+}
+
+@Composable
+private fun ToolbarButtons(
+    state: LyricsState.Loaded,
+    extras: LyricsExtras,
+) {
+    if (extras.loading) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(14.dp),
+            strokeWidth = 1.5.dp,
+            color = LocalAccentColor.current,
+        )
+    }
+    LyricsToggle(
+        icon = Icons.Outlined.Translate,
+        label = "Translation",
+        on = extras.showTranslation,
+        onClick = extras.onToggleTranslation,
+    )
+    if (state.canPronounce) {
         LyricsToggle(
-            icon = Icons.Outlined.Translate,
-            label = "Translation",
-            on = extras.showTranslation,
-            onClick = extras.onToggleTranslation,
+            icon = Icons.Outlined.Abc,
+            label = "Pronunciation",
+            on = extras.showPronunciation,
+            onClick = extras.onTogglePronunciation,
         )
-        if (state.canPronounce) {
-            LyricsToggle(
-                icon = Icons.Outlined.Abc,
-                label = "Pronunciation",
-                on = extras.showPronunciation,
-                onClick = extras.onTogglePronunciation,
-            )
-        }
     }
 }
 
@@ -321,7 +339,7 @@ private fun SyncedLyrics(
             state = listState,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(top = topPad, bottom = maxHeight - topPad),
-            verticalArrangement = Arrangement.spacedBy(LINE_GAP),
+            verticalArrangement = Arrangement.spacedBy(if (extras.showsAny) LINE_GAP_WITH_EXTRAS else LINE_GAP),
         ) {
             itemsIndexed(lines, key = { i, line -> "$i@${line.startMs}" }) { index, line ->
                 // Lines further from the current one fade a little more (cheap, unlike a blur).
@@ -459,39 +477,123 @@ private fun LyricLineText(
             pronunciation = line.pronunciation.takeIf { extras.showPronunciation },
             translation = line.translation.takeIf { extras.showTranslation },
             alpha = if (isActive) SUB_ACTIVE_ALPHA else SUB_ALPHA * distanceFade(distance),
+            // Syllable sync: the pronunciation fills along with the line, at the same pace.
+            sung = if (isActive && line.words.isNotEmpty()) ({ sungFraction(line, position.value) }) else null,
         )
     }
 }
 
-/** A line's pronunciation and / or translation, smaller, under it. */
+/**
+ * A line's pronunciation and / or translation, smaller, under it. With [sung] (how much of the line has been
+ * sung, 0..1) the pronunciation fills in step with the syllables.
+ */
 @Composable
 private fun SubLines(
     pronunciation: String?,
     translation: String?,
     alpha: Float,
+    sung: (() -> Float)? = null,
 ) {
-    val color = CliBeatsTextPrimary.copy(alpha = alpha)
-    if (!pronunciation.isNullOrBlank()) {
-        Text(text = pronunciation, style = subStyle, color = color, modifier = Modifier.padding(top = 4.dp))
+    val shown = pronunciation?.takeIf { it.isNotBlank() }
+    val hasPronunciation = shown != null
+    if (shown != null) {
+        Box(modifier = Modifier.padding(top = SUB_TOP_GAP)) {
+            if (sung == null) {
+                Text(text = shown, style = pronunciationStyle, color = CliBeatsTextPrimary.copy(alpha = alpha))
+            } else {
+                SyncedPronunciation(shown, sung)
+            }
+        }
     }
     if (!translation.isNullOrBlank()) {
         Text(
             text = translation,
-            style = subStyle.copy(fontWeight = FontWeight.Normal, fontStyle = FontStyle.Italic),
-            color = color,
-            modifier = Modifier.padding(top = 2.dp),
+            style = translationStyle,
+            color = CliBeatsTextSecondary.copy(alpha = alpha),
+            modifier = Modifier.padding(top = if (hasPronunciation) 2.dp else SUB_TOP_GAP),
         )
     }
 }
 
-private val subStyle: TextStyle
+/** The pronunciation of the line being sung: dim, with the sung part bright (same idea as the line itself). */
+@Composable
+private fun SyncedPronunciation(
+    text: String,
+    sung: () -> Float,
+) {
+    var boxes by remember(text) { mutableStateOf<List<Rect>>(emptyList()) }
+    val path = remember { Path() }
+    Text(text = text, style = pronunciationStyle, color = CliBeatsTextPrimary.copy(alpha = SUB_DIM_ALPHA))
+    Text(
+        text = text,
+        style = pronunciationStyle,
+        color = CliBeatsTextPrimary,
+        onTextLayout = { boxes = characterBoxes(it) },
+        modifier =
+            Modifier.drawWithContent {
+                if (boxes.isEmpty()) return@drawWithContent
+                fractionPath(path, boxes, sung())
+                clipPath(path) { this@drawWithContent.drawContent() }
+            },
+    )
+}
+
+private val pronunciationStyle: TextStyle
+    @Composable get() =
+        MaterialTheme.typography.titleMedium.copy(
+            fontFamily = PoppinsFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 18.sp,
+            lineHeight = 25.sp,
+            letterSpacing = 0.2.sp,
+        )
+
+private val translationStyle: TextStyle
     @Composable get() =
         MaterialTheme.typography.titleMedium.copy(
             fontFamily = PoppinsFamily,
             fontWeight = FontWeight.Medium,
-            fontSize = 17.sp,
-            lineHeight = 24.sp,
+            fontSize = 16.sp,
+            lineHeight = 23.sp,
+            letterSpacing = 0.1.sp,
         )
+
+/** How much of [line] has been sung by [positionMs], by characters (0..1). */
+private fun sungFraction(
+    line: LyricLine,
+    positionMs: Long,
+): Float {
+    val total = line.words.sumOf { it.text.length }
+    if (total == 0) return 0f
+    var sung = 0f
+    for (word in line.words) {
+        if (positionMs < word.startMs) break
+        val progress =
+            if (positionMs >= word.endMs || word.endMs <= word.startMs) {
+                1f
+            } else {
+                (positionMs - word.startMs).toFloat() / (word.endMs - word.startMs)
+            }
+        sung += word.text.length * progress
+        if (progress < 1f) break
+    }
+    return sung / total
+}
+
+/** Sets [path] to the first [fraction] of the text whose character [boxes] these are. */
+private fun fractionPath(
+    path: Path,
+    boxes: List<Rect>,
+    fraction: Float,
+) {
+    path.reset()
+    val upTo = fraction.coerceIn(0f, 1f) * boxes.size
+    for ((i, box) in boxes.withIndex()) {
+        if (upTo <= i) break
+        val filled = (upTo - i).coerceAtMost(1f)
+        path.addRect(Rect(box.left, box.top, box.left + box.width * filled, box.bottom))
+    }
+}
 
 /** Each character's box, as tall as its text line (so ascenders and descenders are covered). */
 private fun characterBoxes(layout: TextLayoutResult): List<Rect> =
@@ -584,7 +686,7 @@ private fun PlainLyrics(
             if (line.isBlank()) {
                 Box(Modifier.height(22.dp))
             } else {
-                Column(modifier = Modifier.padding(bottom = 4.dp)) {
+                Column(modifier = Modifier.padding(bottom = if (extras.showsAny) 16.dp else 4.dp)) {
                     Text(text = line.trim(), style = lineStyle, color = CliBeatsTextPrimary.copy(alpha = 0.92f))
                     SubLines(
                         pronunciation = lyrics.pronunciations.getOrNull(i).takeIf { extras.showPronunciation },
@@ -618,6 +720,9 @@ private fun distanceFade(distance: Int): Float = if (distance <= 1) 1f else maxO
 
 private const val FOLLOW_SCROLL_MS = 520
 private const val SUB_ALPHA = 0.5f
+private const val SUB_DIM_ALPHA = 0.4f
+private val SUB_TOP_GAP = 6.dp
+private val LINE_GAP_WITH_EXTRAS = 26.dp
 private const val SUB_ACTIVE_ALPHA = 0.82f
 private val TOGGLE_SIZE = 34.dp
 private const val INTRO_MIN_MS = 4_000L
