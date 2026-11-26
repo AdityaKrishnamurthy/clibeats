@@ -52,8 +52,6 @@ import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
-import com.clibeats.presentation.navigation.AppRoute
-import com.clibeats.presentation.navigation.LocalAppNavigator
 import com.clibeats.presentation.playlist.PlaylistDetailView
 import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.playlist.PlaylistViewModel
@@ -113,7 +111,6 @@ fun LibraryScreen(
     val sort by viewModel.sort.collectAsStateWithLifecycle()
     val groupView by viewModel.groupView.collectAsStateWithLifecycle()
     val selectedTabIndex by viewModel.tab.collectAsStateWithLifecycle()
-    val navigator = LocalAppNavigator.current
     // Android back on Artists / Albums goes to Tracks first (an open artist / album has its own back).
     BackHandler(enabled = selectedTabIndex != LibraryViewModel.TAB_TRACKS) { viewModel.stepBack() }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
@@ -243,16 +240,8 @@ fun LibraryScreen(
                                 GroupBrowser(
                                     entries =
                                         currentState.artists.map { artist ->
-                                            val providerId = artist.tracks.firstOrNull()?.providerId ?: "youtube_music"
                                             artist.toEntry(
-                                                onClick = {
-                                                    navigator(
-                                                        AppRoute.ArtistDetail(
-                                                            artistName = artist.name,
-                                                            providerId = providerId,
-                                                        ),
-                                                    )
-                                                },
+                                                onClick = { viewModel.open(OpenedGroup.Artist(artist.name)) },
                                                 onPlay = { viewModel.playGroup(artist.tracks, 0, artist.name) },
                                             )
                                         },
@@ -267,17 +256,8 @@ fun LibraryScreen(
                                 GroupBrowser(
                                     entries =
                                         currentState.albums.map { album ->
-                                            val providerId = album.tracks.firstOrNull()?.providerId ?: "youtube_music"
                                             album.toEntry(
-                                                onClick = {
-                                                    navigator(
-                                                        AppRoute.AlbumDetail(
-                                                            albumName = album.title,
-                                                            artistName = album.artist,
-                                                            providerId = providerId,
-                                                        ),
-                                                    )
-                                                },
+                                                onClick = { viewModel.open(OpenedGroup.Album(album.key)) },
                                                 onPlay = { viewModel.playGroup(album.tracks, 0, album.title) },
                                             )
                                         },
