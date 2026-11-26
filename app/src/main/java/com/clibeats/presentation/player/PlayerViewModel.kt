@@ -7,6 +7,11 @@ import androidx.lifecycle.viewModelScope
 import com.clibeats.data.download.DownloadStatus
 import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.data.lyrics.LocalLyricsRepository
+import com.clibeats.data.lyrics.LyricsTranslator
+import com.clibeats.data.lyrics.needsPronunciation
+import com.clibeats.data.lyrics.online.OnlineLyricsRepository
+import com.clibeats.data.lyrics.online.OnlineLyricsResult
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
@@ -48,14 +53,19 @@ sealed interface SleepTimer {
 
 /** The current song's lyrics, for the Now Playing lyrics view. */
 sealed interface LyricsState {
-    /** Being read from the file. */
+    /** Being read from the file, or searched for online. */
     data object Loading : LyricsState
 
-    /** Nothing to show (no lyrics in the file, or not a local song). */
+    /** Nothing to show: no lyrics in the file, or none found online. */
     data object None : LyricsState
+
+    /** An online song whose lyrics aren't saved, and no connection to look them up. */
+    data object Offline : LyricsState
 
     data class Loaded(
         val lyrics: Lyrics,
+        /** Has lines in a non-Latin script, so a pronunciation can be shown. */
+        val canPronounce: Boolean = false,
     ) : LyricsState
 }
 
@@ -72,25 +82,119 @@ class PlayerViewModel
         private val downloadManager: TrackDownloadManager? = null,
         /** Lyrics read from local files; null in tests. */
         private val localLyrics: LocalLyricsRepository? = null,
+        /** Lyrics for YouTube Music songs (also when downloaded); null in tests. */
+        private val onlineLyrics: OnlineLyricsRepository? = null,
+        private val translator: LyricsTranslator? = null,
+        private val appPreferences: AppPreferences? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
-        /** The playing song's lyrics, read again when the song changes. */
+        /** Show each lyric line's translation under it (remembered). */
+        val showTranslation: StateFlow<Boolean> =
+            (appPreferences?.lyricsTranslate ?: flowOf(false)).stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+        /** Show how each non-Latin lyric line is pronounced, in Latin letters (remembered). */
+        val showPronunciation: StateFlow<Boolean> =
+            (appPreferences?.lyricsPronounce ?: flowOf(false)).stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+        fun setShowTranslation(on: Boolean) {
+            viewModelScope.launch { appPreferences?.setLyricsTranslate(on) }
+        }
+
+        fun setShowPronunciation(on: Boolean) {
+            viewModelScope.launch { appPreferences?.setLyricsPronounce(on) }
+        }
+
+        private val _extrasLoading = MutableStateFlow(false)
+
+        /** True while translations / pronunciations are being fetched (a small spinner by the buttons). */
+        val extrasLoading: StateFlow<Boolean> = _extrasLoading.asStateFlow()
+
+        /** The most complete lyrics seen per song (with the translations and pronunciations fetched so far). */
+        private val enriched =
+            java.util.Collections.synchronizedMap(
+                object : LinkedHashMap<String, Lyrics>() {
+                    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Lyrics>?): Boolean {
+                        return size > ENRICHED_KEPT
+                    }
+                },
+            )
+
+        /** The playing song's lyrics (local file, saved, or found online), before any translation. */
         @Suppress("OPT_IN_USAGE")
-        val lyrics: StateFlow<LyricsState> =
+        private val baseLyrics =
             playbackState
                 .map { it.currentTrack }
                 .distinctUntilChanged { a, b -> a?.id == b?.id && a?.streamUrl == b?.streamUrl }
                 .transformLatest { track ->
-                    val repo = localLyrics
-                    if (track == null || repo == null) {
-                        emit(LyricsState.None)
+                    if (track == null) {
+                        emit(null to LyricsState.None)
                         return@transformLatest
                     }
-                    emit(LyricsState.Loading)
-                    val found = runCatching { repo.lyricsFor(track) }.getOrNull()
-                    emit(found?.let { LyricsState.Loaded(it) } ?: LyricsState.None)
+                    emit(track to LyricsState.Loading)
+                    emit(track to loadLyrics(track))
+                }
+
+        @Suppress("ReturnCount")
+        private suspend fun loadLyrics(track: Track): LyricsState {
+            if (track.providerId == LOCAL_PROVIDER) {
+                val found = runCatching { localLyrics?.lyricsFor(track) }.getOrNull()
+                return found?.let(::loaded) ?: LyricsState.None
+            }
+            val repo = onlineLyrics ?: return LyricsState.None
+            return when (val result = runCatching { repo.lyricsFor(track) }.getOrNull()) {
+                is OnlineLyricsResult.Found -> loaded(result.lyrics)
+                OnlineLyricsResult.NotFound -> LyricsState.None
+                OnlineLyricsResult.Unreachable, null -> LyricsState.Offline
+            }
+        }
+
+        private fun loaded(lyrics: Lyrics) = LyricsState.Loaded(lyrics, canPronounce = hasNonLatin(lyrics))
+
+        /**
+         * What the lyrics view shows: the song's lyrics, filled in with translations / pronunciations when those
+         * are switched on. The best version so far shows at once; missing lines are fetched in the background and
+         * kept, so switching back and forth doesn't ask again. A failed fetch just leaves the lines without them.
+         */
+        @Suppress("OPT_IN_USAGE")
+        val lyrics: StateFlow<LyricsState> =
+            combine(baseLyrics, showTranslation, showPronunciation, ::Triple)
+                .transformLatest { (base, translate, pronounce) ->
+                    val (track, state) = base
+                    val loadedState = state as? LyricsState.Loaded
+                    if (track == null || loadedState == null) {
+                        emit(state)
+                        return@transformLatest
+                    }
+                    val best = enriched[track.id] ?: loadedState.lyrics
+                    emit(loaded(best))
+                    val tool = translator
+                    val wanted = translate || pronounce
+                    if (tool == null || !wanted || isComplete(best, translate, pronounce)) {
+                        return@transformLatest
+                    }
+                    _extrasLoading.value = true
+                    try {
+                        val filled = tool.enrich(best, translate, pronounce, translationTarget())
+                        enriched[track.id] = filled
+                        emit(loaded(filled))
+                        keep(track, filled)
+                    } finally {
+                        _extrasLoading.value = false
+                    }
                 }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), LyricsState.None)
+
+        /** Saves lyrics with their translations, so a song's are there next time (and offline, when downloaded). */
+        private suspend fun keep(
+            track: Track,
+            lyrics: Lyrics,
+        ) {
+            if (track.providerId == LOCAL_PROVIDER) {
+                localLyrics?.remember(track, lyrics)
+            } else {
+                onlineLyrics?.save(track.id, lyrics)
+            }
+        }
 
         /** Where the music is playing (null in previews/tests). */
         val audioOutput: StateFlow<AudioOutput>? = audioOutputMonitor?.current
@@ -315,6 +419,8 @@ class PlayerViewModel
             const val TOAST_MS = 1_500L
             const val MESSAGE_MS = 3_000L
             const val NOTICE_MS = 1_800L
+            const val LOCAL_PROVIDER = "local"
+            const val ENRICHED_KEPT = 30
         }
     }
 
@@ -330,3 +436,37 @@ data class DownloadBanner(
     val progressPercent: Int? = null,
     val isError: Boolean = false,
 )
+
+/** True when some line is in a non-Latin script (Japanese, Hindi, Korean, Kannada, …). */
+private fun hasNonLatin(lyrics: Lyrics): Boolean =
+    when (lyrics) {
+        is Lyrics.Synced -> lyrics.lines.any { needsPronunciation(it.text) }
+        is Lyrics.Plain -> needsPronunciation(lyrics.text)
+    }
+
+/** Whether every line that wants a translation / pronunciation already has one ("" counts: nothing to show). */
+private fun isComplete(
+    lyrics: Lyrics,
+    translate: Boolean,
+    pronounce: Boolean,
+): Boolean =
+    when (lyrics) {
+        is Lyrics.Synced ->
+            lyrics.lines.filter { it.text.isNotBlank() }.all { line ->
+                (!translate || line.translation != null) &&
+                    (!pronounce || !needsPronunciation(line.text) || line.pronunciation != null)
+            }
+        is Lyrics.Plain -> {
+            val lines = lyrics.text.lines()
+            lines.indices.filter { lines[it].isNotBlank() }.all { i ->
+                (!translate || lyrics.translations.getOrNull(i) != null) &&
+                    (!pronounce || !needsPronunciation(lines[i]) || lyrics.pronunciations.getOrNull(i) != null)
+            }
+        }
+    }
+
+/** The phone's language for translations ("en", "hi", "ja"; Chinese keeps its region: "zh-TW"). */
+private fun translationTarget(): String {
+    val locale = java.util.Locale.getDefault()
+    return if (locale.language == "zh") locale.toLanguageTag() else locale.language.ifBlank { "en" }
+}

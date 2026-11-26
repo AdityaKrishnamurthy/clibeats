@@ -49,6 +49,8 @@ class AppPreferences
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
             val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
+            val LYRICS_TRANSLATE = booleanPreferencesKey("lyrics_translate")
+            val LYRICS_PRONOUNCE = booleanPreferencesKey("lyrics_pronounce")
             val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
@@ -363,6 +365,20 @@ class AppPreferences
                 it[Keys.HOME_LANGUAGES] = names
                 it[Keys.HOME_LANGUAGES_ASKED] = true
             }
+        }
+
+        /** Lyrics: show each line's translation (into the phone's language) under it. */
+        val lyricsTranslate: Flow<Boolean> = dataStore.data.map { it[Keys.LYRICS_TRANSLATE] ?: false }
+
+        /** Lyrics: show how each non-Latin line is pronounced, in Latin letters, under it. */
+        val lyricsPronounce: Flow<Boolean> = dataStore.data.map { it[Keys.LYRICS_PRONOUNCE] ?: false }
+
+        suspend fun setLyricsTranslate(on: Boolean) {
+            dataStore.edit { it[Keys.LYRICS_TRANSLATE] = on }
+        }
+
+        suspend fun setLyricsPronounce(on: Boolean) {
+            dataStore.edit { it[Keys.LYRICS_PRONOUNCE] = on }
         }
 
         /** Library Artists / Albums layout (a PlaylistViewMode name); null = default. */

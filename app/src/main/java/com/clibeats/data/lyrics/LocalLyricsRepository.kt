@@ -33,6 +33,14 @@ class LocalLyricsRepository
             val lyrics: Lyrics?,
         )
 
+        /** Keeps [lyrics] (e.g. with translations added) as [track]'s for the rest of the app run. */
+        fun remember(
+            track: Track,
+            lyrics: Lyrics,
+        ) {
+            track.streamUrl?.takeIf { it.isNotBlank() }?.let { cache.put(it, CachedLyrics(lyrics)) }
+        }
+
         /** Null when [track] isn't a local file or has no lyrics. */
         suspend fun lyricsFor(track: Track): Lyrics? {
             if (track.providerId != LOCAL_PROVIDER) return null

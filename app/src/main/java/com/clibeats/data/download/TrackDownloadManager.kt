@@ -74,6 +74,8 @@ class TrackDownloadManager
         private val songDao: SongDao,
         /** The streaming cache: a song already played in full is copied from it, with no network. */
         private val mediaCaches: dagger.Lazy<MediaCaches>? = null,
+        /** Saves a downloaded song's lyrics too, so they show offline. */
+        private val onlineLyrics: dagger.Lazy<com.clibeats.data.lyrics.online.OnlineLyricsRepository>? = null,
     ) {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val _downloads = MutableStateFlow<Map<String, DownloadStatus>>(emptyMap())
@@ -313,6 +315,8 @@ class TrackDownloadManager
                 throw e
             }
             updateStatus(track.id, DownloadStatus.Completed(finalFile))
+            // The lyrics come along (looked up now, while online), so the song shows them offline too.
+            onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
         }
 
         /**

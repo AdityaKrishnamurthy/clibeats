@@ -216,6 +216,9 @@ fun NowPlayingScreen(
     // The finger moves this value directly; the snap animation runs only after letting go, so the two never
     // fight (which used to leave it stuck halfway).
     val lyricsState by viewModel.lyrics.collectAsState()
+    val showTranslation by viewModel.showTranslation.collectAsState()
+    val showPronunciation by viewModel.showPronunciation.collectAsState()
+    val extrasLoading by viewModel.extrasLoading.collectAsState()
     val lyricsOpen by viewModel.lyricsOpen.collectAsState()
     var lyricsProgress by remember { mutableFloatStateOf(if (viewModel.lyricsOpen.value) 1f else 0f) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
@@ -374,6 +377,14 @@ fun NowPlayingScreen(
                             isLocalSong = track?.providerId == "local",
                             onSeek = viewModel::seekTo,
                             livePosition = viewModel::livePositionMs,
+                            extras =
+                                LyricsExtras(
+                                    showTranslation = showTranslation,
+                                    showPronunciation = showPronunciation,
+                                    loading = extrasLoading,
+                                    onToggleTranslation = { viewModel.setShowTranslation(!showTranslation) },
+                                    onTogglePronunciation = { viewModel.setShowPronunciation(!showPronunciation) },
+                                ),
                             modifier =
                                 Modifier.graphicsLayer {
                                     val p = lyricsProgress

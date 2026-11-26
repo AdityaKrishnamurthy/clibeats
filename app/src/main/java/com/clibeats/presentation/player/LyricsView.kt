@@ -4,6 +4,7 @@
     "MagicNumber",
     "TooManyFunctions",
     "LoopWithTooManyJumpStatements",
+    "MatchingDeclarationName",
 )
 
 package com.clibeats.presentation.player
@@ -11,12 +12,15 @@ package com.clibeats.presentation.player
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +31,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Abc
+import androidx.compose.material.icons.outlined.Translate
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -42,6 +53,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
@@ -52,23 +64,37 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.clibeats.domain.model.LyricLine
 import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
+import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.theme.PoppinsFamily
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
+
+/** The translation / pronunciation switches and what they show. */
+internal class LyricsExtras(
+    val showTranslation: Boolean,
+    val showPronunciation: Boolean,
+    /** Translations or pronunciations are being fetched. */
+    val loading: Boolean,
+    val onToggleTranslation: () -> Unit,
+    val onTogglePronunciation: () -> Unit,
+)
 
 /**
  * The lyrics area of Now Playing.
@@ -77,6 +103,8 @@ import kotlinx.coroutines.flow.filter
  * - Either way the current line stays in view; scroll yourself and it waits a few seconds before following
  *   again. Tap a line to jump there.
  * - Plain lyrics are shown as text to scroll.
+ * - A slim bar on top says how they're timed and where they're from, with the Translate and Pronunciation
+ *   switches; each line's translation / pronunciation shows under it.
  */
 @Suppress("LongParameterList")
 @Composable
@@ -87,36 +115,138 @@ internal fun LyricsPanel(
     onSeek: (Long) -> Unit,
     /** The player's exact position now (read every frame). */
     livePosition: () -> Long,
+    extras: LyricsExtras,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier.fillMaxSize()) {
-        when (state) {
-            LyricsState.Loading -> Unit
-            LyricsState.None ->
-                LyricsMessage(
-                    if (isLocalSong) {
-                        "No lyrics in this file.\n\nLyrics are read from the song's LYRICS tag or a .lrc file " +
-                            "with the same name next to it."
-                    } else {
-                        "Lyrics for streamed songs aren't available yet."
-                    },
-                )
-            is LyricsState.Loaded ->
-                when (val lyrics = state.lyrics) {
-                    is Lyrics.Synced -> {
-                        val position = rememberPlaybackPosition(playback, livePosition)
-                        SyncedLyrics(lyrics, position, onSeek)
+    Column(modifier = modifier.fillMaxSize()) {
+        if (state is LyricsState.Loaded) LyricsToolbar(state, extras)
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            when (state) {
+                LyricsState.Loading -> if (!isLocalSong) LyricsMessage("Searching for lyrics…", busy = true)
+                LyricsState.None ->
+                    LyricsMessage(
+                        if (isLocalSong) {
+                            "No lyrics in this file.\n\nLyrics are read from the song's LYRICS tag or a .lrc file " +
+                                "with the same name next to it."
+                        } else {
+                            "No lyrics found for this song."
+                        },
+                    )
+                LyricsState.Offline ->
+                    LyricsMessage(
+                        "You're offline, and this song's lyrics haven't been saved yet.\n\n" +
+                            "They load when you're back online (downloaded songs keep theirs).",
+                    )
+                is LyricsState.Loaded ->
+                    when (val lyrics = state.lyrics) {
+                        is Lyrics.Synced -> {
+                            val position = rememberPlaybackPosition(playback, livePosition)
+                            SyncedLyrics(lyrics, position, onSeek, extras)
+                        }
+                        is Lyrics.Plain -> PlainLyrics(lyrics, extras)
                     }
-                    is Lyrics.Plain -> PlainLyrics(lyrics.text)
-                }
+            }
         }
     }
 }
 
+/** "SYLLABLE · LYRICSPLUS · APPLE", and the Translate / Pronunciation switches. */
 @Composable
-private fun LyricsMessage(text: String) {
+private fun LyricsToolbar(
+    state: LyricsState.Loaded,
+    extras: LyricsExtras,
+) {
+    val lyrics = state.lyrics
+    val timing =
+        when {
+            lyrics is Lyrics.Synced && lyrics.hasWordTiming -> "SYLLABLE"
+            lyrics is Lyrics.Synced -> "LINE SYNCED"
+            else -> "PLAIN"
+        }
+    val label = listOf(timing, (lyrics.source ?: "from file").uppercase()).joinToString(" · ")
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        if (extras.loading) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(14.dp),
+                strokeWidth = 1.5.dp,
+                color = LocalAccentColor.current,
+            )
+        }
+        LyricsToggle(
+            icon = Icons.Outlined.Translate,
+            label = "Translation",
+            on = extras.showTranslation,
+            onClick = extras.onToggleTranslation,
+        )
+        if (state.canPronounce) {
+            LyricsToggle(
+                icon = Icons.Outlined.Abc,
+                label = "Pronunciation",
+                on = extras.showPronunciation,
+                onClick = extras.onTogglePronunciation,
+            )
+        }
+    }
+}
+
+/** A small framed switch: accent and filled when on. */
+@Composable
+private fun LyricsToggle(
+    icon: ImageVector,
+    label: String,
+    on: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    val shape = RoundedCornerShape(8.dp)
+    Box(
+        modifier =
+            Modifier
+                .size(TOGGLE_SIZE)
+                .clip(shape)
+                .background(if (on) accent.copy(alpha = 0.16f) else Color.Transparent)
+                .border(1.dp, if (on) accent else CliBeatsBorderInactive, shape)
+                .toggleable(value = on, role = Role.Switch, onValueChange = { onClick() })
+                .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (on) accent else CliBeatsTextSecondary,
+            modifier = Modifier.size(20.dp),
+        )
+    }
+}
+
+@Composable
+private fun LyricsMessage(
+    text: String,
+    busy: Boolean = false,
+) {
     Box(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
-        Text(text = text, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (busy) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = LocalAccentColor.current,
+                )
+            }
+            Text(text = text, style = MaterialTheme.typography.bodyMedium, color = CliBeatsTextSecondary)
+        }
     }
 }
 
@@ -154,6 +284,7 @@ private fun SyncedLyrics(
     lyrics: Lyrics.Synced,
     position: State<Long>,
     onSeek: (Long) -> Unit,
+    extras: LyricsExtras,
 ) {
     val lines = remember(lyrics) { withIntro(lyrics.lines) }
     val starts = remember(lines) { LongArray(lines.size) { lines[it].startMs } }
@@ -204,6 +335,7 @@ private fun SyncedLyrics(
                         isPast = active >= 0 && index < active,
                         position = position,
                         distance = if (following) distance else 1,
+                        extras = extras,
                         onClick = { onSeek(line.startMs) },
                     )
                 }
@@ -268,6 +400,7 @@ private fun LyricLineText(
     isPast: Boolean,
     position: State<Long>,
     distance: Int,
+    extras: LyricsExtras,
     onClick: () -> Unit,
 ) {
     val bright = CliBeatsTextPrimary
@@ -284,7 +417,7 @@ private fun LyricLineText(
     )
     val scale by animateFloatAsState(if (isActive) 1f else INACTIVE_SCALE, tween(LINE_FADE_MS), label = "lineScale")
     val style = lyricStyle
-    Box(
+    Column(
         modifier =
             Modifier
                 .fillMaxWidth()
@@ -301,27 +434,64 @@ private fun LyricLineText(
                 ).padding(vertical = 2.dp)
                 .semantics { contentDescription = line.text },
     ) {
-        Text(text = line.text, style = style, color = bright.copy(alpha = dimAlpha))
-        // Syllable sync: the same text in full colour, shown only over the part already sung.
-        if (isActive && line.words.isNotEmpty()) {
-            // Each character's box is measured once per layout; every frame only picks which are sung.
-            var boxes by remember(line) { mutableStateOf<List<Rect>>(emptyList()) }
-            val path = remember { Path() }
-            Text(
-                text = line.text,
-                style = style,
-                color = bright,
-                onTextLayout = { boxes = characterBoxes(it) },
-                modifier =
-                    Modifier.drawWithContent {
-                        if (boxes.isEmpty()) return@drawWithContent
-                        sungPath(path, line, boxes, position.value)
-                        clipPath(path) { this@drawWithContent.drawContent() }
-                    },
-            )
+        Box {
+            Text(text = line.text, style = style, color = bright.copy(alpha = dimAlpha))
+            // Syllable sync: the same text in full colour, shown only over the part already sung.
+            if (isActive && line.words.isNotEmpty()) {
+                // Each character's box is measured once per layout; every frame only picks which are sung.
+                var boxes by remember(line) { mutableStateOf<List<Rect>>(emptyList()) }
+                val path = remember { Path() }
+                Text(
+                    text = line.text,
+                    style = style,
+                    color = bright,
+                    onTextLayout = { boxes = characterBoxes(it) },
+                    modifier =
+                        Modifier.drawWithContent {
+                            if (boxes.isEmpty()) return@drawWithContent
+                            sungPath(path, line, boxes, position.value)
+                            clipPath(path) { this@drawWithContent.drawContent() }
+                        },
+                )
+            }
         }
+        SubLines(
+            pronunciation = line.pronunciation.takeIf { extras.showPronunciation },
+            translation = line.translation.takeIf { extras.showTranslation },
+            alpha = if (isActive) SUB_ACTIVE_ALPHA else SUB_ALPHA * distanceFade(distance),
+        )
     }
 }
+
+/** A line's pronunciation and / or translation, smaller, under it. */
+@Composable
+private fun SubLines(
+    pronunciation: String?,
+    translation: String?,
+    alpha: Float,
+) {
+    val color = CliBeatsTextPrimary.copy(alpha = alpha)
+    if (!pronunciation.isNullOrBlank()) {
+        Text(text = pronunciation, style = subStyle, color = color, modifier = Modifier.padding(top = 4.dp))
+    }
+    if (!translation.isNullOrBlank()) {
+        Text(
+            text = translation,
+            style = subStyle.copy(fontWeight = FontWeight.Normal, fontStyle = FontStyle.Italic),
+            color = color,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+    }
+}
+
+private val subStyle: TextStyle
+    @Composable get() =
+        MaterialTheme.typography.titleMedium.copy(
+            fontFamily = PoppinsFamily,
+            fontWeight = FontWeight.Medium,
+            fontSize = 17.sp,
+            lineHeight = 24.sp,
+        )
 
 /** Each character's box, as tall as its text line (so ascenders and descenders are covered). */
 private fun characterBoxes(layout: TextLayoutResult): List<Rect> =
@@ -392,34 +562,37 @@ private fun BreakDots(
     }
 }
 
-/** Plain (untimed) lyrics: just the text, verse by verse. */
+/** Plain (untimed) lyrics: the text, verse by verse (line by line with translations / pronunciations on). */
 @Composable
-private fun PlainLyrics(text: String) {
-    val verses = remember(text) { text.split(Regex("\n\\s*\n")) }
+private fun PlainLyrics(
+    lyrics: Lyrics.Plain,
+    extras: LyricsExtras,
+) {
+    val lines = remember(lyrics.text) { lyrics.text.lines() }
+    val lineStyle =
+        MaterialTheme.typography.titleMedium.copy(
+            fontFamily = PoppinsFamily,
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 20.sp,
+            lineHeight = 30.sp,
+        )
     LazyColumn(
         modifier = Modifier.fillMaxSize().fadingEdges(),
         contentPadding = PaddingValues(vertical = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
-        item {
-            Text(
-                text = "NOT SYNCED · PLAIN LYRICS",
-                style = MaterialTheme.typography.labelSmall,
-                color = CliBeatsTextSecondary,
-            )
-        }
-        itemsIndexed(verses) { _, verse ->
-            Text(
-                text = verse.trim(),
-                style =
-                    MaterialTheme.typography.titleMedium.copy(
-                        fontFamily = PoppinsFamily,
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 20.sp,
-                        lineHeight = 30.sp,
-                    ),
-                color = CliBeatsTextPrimary.copy(alpha = 0.92f),
-            )
+        itemsIndexed(lines) { i, line ->
+            if (line.isBlank()) {
+                Box(Modifier.height(22.dp))
+            } else {
+                Column(modifier = Modifier.padding(bottom = 4.dp)) {
+                    Text(text = line.trim(), style = lineStyle, color = CliBeatsTextPrimary.copy(alpha = 0.92f))
+                    SubLines(
+                        pronunciation = lyrics.pronunciations.getOrNull(i).takeIf { extras.showPronunciation },
+                        translation = lyrics.translations.getOrNull(i).takeIf { extras.showTranslation },
+                        alpha = SUB_ALPHA,
+                    )
+                }
+            }
         }
     }
 }
@@ -444,6 +617,9 @@ private fun Modifier.fadingEdges(): Modifier =
 private fun distanceFade(distance: Int): Float = if (distance <= 1) 1f else maxOf(0.45f, 1f - 0.18f * (distance - 1))
 
 private const val FOLLOW_SCROLL_MS = 520
+private const val SUB_ALPHA = 0.5f
+private const val SUB_ACTIVE_ALPHA = 0.82f
+private val TOGGLE_SIZE = 34.dp
 private const val INTRO_MIN_MS = 4_000L
 private const val FOLLOW_PAUSE_MS = 3_000L
 private const val ACTIVE_LINE_AT = 0.28f
