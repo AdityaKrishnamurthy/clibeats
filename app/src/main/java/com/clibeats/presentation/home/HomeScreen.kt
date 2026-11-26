@@ -134,7 +134,9 @@ fun HomeScreen(
     opened?.let { collection ->
         OpenedCollectionView(
             opened = collection,
-            homeViewModel = homeViewModel,
+            onBack = homeViewModel::closeCollection,
+            onPlay = homeViewModel::playCollection,
+            onSave = homeViewModel::saveCollection,
             trackActions = trackActions,
             playingTrackId = playingId,
             downloadedIds = downloadedIds,

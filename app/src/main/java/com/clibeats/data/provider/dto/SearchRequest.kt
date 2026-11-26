@@ -21,7 +21,12 @@ data class SearchRequest(
         // Same, filtering to albums, singles and EPs.
         private const val ALBUMS_FILTER_PARAM = "EgWKAQIYAWoMEA4QChADEAQQCRAF"
 
+        // Same, filtering to playlists (featured and community ones).
+        private const val PLAYLISTS_FILTER_PARAM = "EgWKAQIoAWoMEA4QChADEAQQCRAF"
+
         fun forAlbums(query: String): SearchRequest = forQuery(query).copy(params = ALBUMS_FILTER_PARAM)
+
+        fun forPlaylists(query: String): SearchRequest = forQuery(query).copy(params = PLAYLISTS_FILTER_PARAM)
 
         fun forQuery(
             query: String,

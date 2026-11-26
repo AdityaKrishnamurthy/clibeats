@@ -11,6 +11,14 @@
   (Downloaded plays only finished downloads). Empty playlists don't show it.
 - Tapping the cover or name still opens the playlist as before.
 
+## Search finds playlists
+
+- Online Search now shows a **PLAYLISTS** row of cards above the songs: YouTube Music's own and community
+  playlists matching what you typed (e.g. "tamil hits", "workout", "lofi").
+- Tap one to open it in the same view as Home cards: **▶ PLAY**, **SHUFFLE**, **+ SAVE** (saves it as one of
+  your playlists), the Find box and hold to select. Back returns to your results.
+- Local search is unchanged (songs on the phone only).
+
 ## Settings
 
 - **Storage and Cache:** Downloads is laid out like Artwork and Songs: its size and song count, a framed

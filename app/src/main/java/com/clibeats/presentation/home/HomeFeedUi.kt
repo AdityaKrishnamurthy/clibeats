@@ -326,10 +326,11 @@ private fun CardShelf(
     }
 }
 
+/** A Home card (cover, name, subtitle); Search uses it for playlist results too. */
 @OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongParameterList")
 @Composable
-private fun FeedCard(
+internal fun FeedCard(
     title: String,
     subtitle: String,
     artworkUrl: String?,
@@ -645,7 +646,7 @@ private fun RowScope.QuickAction(
  * A row's sideways swipe stays in the row: at either end it stops instead of flipping to the next tab.
  * (Swipes that start outside the rows still switch tabs.)
  */
-private fun Modifier.keepSwipesInRow(): Modifier = nestedScroll(KeepHorizontalScroll)
+internal fun Modifier.keepSwipesInRow(): Modifier = nestedScroll(KeepHorizontalScroll)
 
 private object KeepHorizontalScroll : NestedScrollConnection {
     override fun onPostScroll(
@@ -668,13 +669,15 @@ private object KeepHorizontalScroll : NestedScrollConnection {
 @Composable
 internal fun OpenedCollectionView(
     opened: OpenedCollection,
-    homeViewModel: HomeViewModel,
+    onBack: () -> Unit,
+    onPlay: (tracks: List<Track>, index: Int, source: String) -> Unit,
+    onSave: (name: String, tracks: List<Track>) -> Unit,
     trackActions: TrackActionsViewModel,
     playingTrackId: String?,
     downloadedIds: Set<String>,
     onSongMenu: (Track) -> Unit,
 ) {
-    BackHandler(onBack = homeViewModel::closeCollection)
+    BackHandler(onBack = onBack)
     val context = LocalContext.current
     var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
     bulkAddTracks?.let { AddToPlaylistDialog(tracks = it, onDismiss = { bulkAddTracks = null }) }
@@ -713,8 +716,8 @@ internal fun OpenedCollectionView(
                 opened.tracks == null -> "Loading songs…"
                 else -> "No songs here."
             },
-        onBackClick = homeViewModel::closeCollection,
-        onTrackClick = { list, index -> homeViewModel.playCollection(list, index, opened.title) },
+        onBackClick = onBack,
+        onTrackClick = { list, index -> onPlay(list, index, opened.title) },
         onRemoveClick = null,
         removeLabel = "",
         onSwipeRight = trackActions::addToQueue,
@@ -725,10 +728,10 @@ internal fun OpenedCollectionView(
                 emptyList()
             } else {
                 listOf(
-                    "[ ▶ PLAY ]" to { homeViewModel.playCollection(tracks, 0, opened.title) },
-                    "[ ⤨ SHUFFLE ]" to { homeViewModel.playCollection(tracks.shuffled(), 0, opened.title) },
+                    "[ ▶ PLAY ]" to { onPlay(tracks, 0, opened.title) },
+                    "[ ⤨ SHUFFLE ]" to { onPlay(tracks.shuffled(), 0, opened.title) },
                     "[ + SAVE ]" to {
-                        homeViewModel.saveCollection(opened.title, tracks)
+                        onSave(opened.title, tracks)
                         val note = "Saved “${opened.title}” to your playlists"
                         Toast.makeText(context, note, Toast.LENGTH_SHORT).show()
                     },

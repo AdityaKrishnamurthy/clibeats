@@ -113,6 +113,9 @@ class HomeFeedRepository
                 }
             }
 
+        /** Playlists on YouTube Music matching [query], for Search; null when it can't be reached. */
+        suspend fun searchPlaylists(query: String): List<HomeItem.Collection>? = youTube.searchPlaylists(query)
+
         /** A playlist, album or artist page: its name (blank if it has none) and songs. Null when offline. */
         suspend fun collection(browseId: String): Pair<String, List<Track>>? = youTube.page(browseId)
 
