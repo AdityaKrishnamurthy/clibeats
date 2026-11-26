@@ -72,6 +72,12 @@ interface PlaybackRepository {
 
     fun seekTo(positionMs: Long)
 
+    /**
+     * The exact playback position right now (the player's own clock, not the twice-a-second update in
+     * [playbackState]). Main thread only. Used to keep lyrics in step frame by frame.
+     */
+    fun livePositionMs(): Long = playbackState.value.positionMs
+
     fun skipToIndex(index: Int)
 
     /** Suspends until the saved queue has been restored into the player (used for playback resumption). */

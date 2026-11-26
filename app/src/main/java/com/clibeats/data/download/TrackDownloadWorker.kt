@@ -19,6 +19,9 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -44,18 +47,19 @@ class TrackDownloadWorker(
             ).downloadManager()
 
         ensureChannel()
-        runCatching { setForeground(createForegroundInfo(track.title, 0)) }
+        runCatching { setForeground(createForegroundInfo(track, 0)) }
 
         var ok = false
         coroutineScope {
             val progressJob =
                 launch {
-                    manager.downloads.collect { map ->
-                        val status = map[track.id]
-                        if (status is DownloadStatus.Downloading) {
-                            runCatching { setForeground(createForegroundInfo(track.title, status.progressPercent)) }
-                        }
-                    }
+                    // Only this song's progress, and only when its percent changes (updating more often gets
+                    // dropped by Android and costs battery).
+                    manager.downloads
+                        .map { (it[track.id] as? DownloadStatus.Downloading)?.progressPercent }
+                        .filterNotNull()
+                        .distinctUntilChanged()
+                        .collect { pct -> runCatching { setForeground(createForegroundInfo(track, pct)) } }
                 }
             try {
                 ok = manager.executeWork(track)
@@ -81,9 +85,12 @@ class TrackDownloadWorker(
     }
 
     private fun createForegroundInfo(
-        title: String,
+        track: Track,
         percent: Int,
     ): ForegroundInfo {
+        val title = track.title
+        // One notification per song: two downloading at once each keep their own.
+        val notificationId = NOTIFICATION_ID + (track.id.hashCode() and NOTIFICATION_ID_SPREAD)
         val notification =
             NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -94,15 +101,16 @@ class TrackDownloadWorker(
                 .setProgress(PERCENT_MAX, percent.coerceIn(0, PERCENT_MAX), percent == 0)
                 .build()
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ForegroundInfo(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            ForegroundInfo(notificationId, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
-            ForegroundInfo(NOTIFICATION_ID, notification)
+            ForegroundInfo(notificationId, notification)
         }
     }
 
     companion object {
         const val CHANNEL_ID = "clibeats_downloads"
         private const val NOTIFICATION_ID = 4102
+        private const val NOTIFICATION_ID_SPREAD = 0xFFFF
         private const val PERCENT_MAX = 100
         private const val MAX_RETRIES = 2
 

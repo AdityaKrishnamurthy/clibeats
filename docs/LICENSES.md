@@ -30,6 +30,8 @@ CLIBeats is built using open source software libraries. Below is the inventory o
 ## 6. Fonts
 - **JetBrains Mono**: SIL Open Font License 1.1
   - Copyright 2020 The JetBrains Mono Project Authors
+- **Poppins** (lyrics): SIL Open Font License 1.1 (`docs/licenses/Poppins-OFL.txt`)
+  - Copyright 2020 The Poppins Project Authors
 
 ## 7. Testing
 - **Google Truth / JUnit 4 / Mockito / Paparazzi / Timber**: Apache License 2.0 / EPL 1.0 / MIT

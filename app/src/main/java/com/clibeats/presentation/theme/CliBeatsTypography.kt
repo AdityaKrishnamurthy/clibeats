@@ -20,6 +20,17 @@ val JetBrainsMonoFamily = FontFamily(
     Font(R.font.jetbrains_mono_bold, FontWeight.Bold),
 )
 
+/**
+ * Poppins (SIL Open Font License, docs/licenses/Poppins-OFL.txt) for lyrics: big, rounded and bold. It also
+ * covers Devanagari (Hindi); other scripts (Kannada, Japanese, …) fall back to the phone's Noto fonts.
+ */
+val PoppinsFamily =
+    FontFamily(
+        Font(R.font.poppins_medium, FontWeight.Medium),
+        Font(R.font.poppins_semibold, FontWeight.SemiBold),
+        Font(R.font.poppins_bold, FontWeight.Bold),
+    )
+
 val CliBeatsTypography = Typography(
     titleLarge = TextStyle(
         fontFamily = JetBrainsMonoFamily,

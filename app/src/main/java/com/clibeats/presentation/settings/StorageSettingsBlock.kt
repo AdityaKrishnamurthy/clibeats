@@ -77,12 +77,15 @@ internal fun StorageSettingsBlock(
     onClearSongCache: () -> Unit,
     onManageDownloads: () -> Unit,
     onClearDownloads: () -> Unit,
+    lyrics: LyricsStorage = LyricsStorage(),
 ) {
     val accent = LocalAccentColor.current
     TuiBlock(title = "Storage and Cache", isActive = true) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
-                text = "TOTAL USED  " + formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes),
+                text =
+                    "TOTAL USED  " +
+                        formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
                 style = MaterialTheme.typography.labelMedium,
                 color = accent,
             )
@@ -108,7 +111,47 @@ internal fun StorageSettingsBlock(
                 onManage = onManageDownloads,
                 onClearAll = onClearDownloads,
             )
+            LyricsRow(lyrics)
         }
+    }
+}
+
+/** Saved lyrics for the Storage block: how many songs, their size, the most kept, and clearing them. */
+internal class LyricsStorage(
+    val songs: Int = 0,
+    val bytes: Long = 0L,
+    val limit: Int = 0,
+    val onClear: () -> Unit = {},
+)
+
+@Composable
+private fun LyricsRow(lyrics: LyricsStorage) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "LYRICS  ${formatSize(lyrics.bytes)} · ${lyrics.songs} / ${lyrics.limit} songs",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (lyrics.songs > 0) {
+                Text(
+                    text = "[ CLEAR ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier =
+                        Modifier
+                            .semantics { contentDescription = "Clear saved lyrics" }
+                            .clickable(role = Role.Button, onClick = lyrics.onClear)
+                            .padding(8.dp),
+                )
+            }
+        }
+        Text(
+            text = "oldest dropped past ${lyrics.limit} · downloaded songs keep theirs",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

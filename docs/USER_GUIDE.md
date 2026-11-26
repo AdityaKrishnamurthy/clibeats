@@ -68,6 +68,19 @@ title or artist (A–Z or Z–A).
   snaps onto it. Repeat (off → all → one), previous, play/pause,
   next, shuffle, sleep timer,
   queue, add to playlist, ♥. Drag the artwork down to close.
+- **Lyrics** — tap the lyrics button at the bottom of Now Playing, or swipe up on the cover. The cover shrinks
+  into a small row and the words take its place. Syllable-synced lyrics fill in syllable by syllable; line-synced
+  ones light up line by line; otherwise the plain text is shown. Tap a line to jump there; scroll yourself and it
+  waits a few seconds before following again. Swipe up on the small row to bring the cover back, swipe down to
+  close Now Playing.
+  - **Local songs** read their own lyrics: the file's LYRICS tag (FLAC, Opus/Ogg, MP3, M4A) or a `.lrc` file with
+    the same name next to the song. They are never searched for online.
+  - **YouTube Music songs** get theirs from several sources at once (LyricsPlus, BetterLyrics, LRCLIB, YouTube
+    Music, lyrics.ovh): syllable sync first, then line sync, then plain. Once found they're saved; downloaded
+    songs save theirs when the download finishes, so they show offline.
+  - **文A Translate** shows each line's meaning in your phone's language; **abc Pronunciation** (for Japanese,
+    Hindi, Korean and other non-Latin lyrics) shows it in Latin letters, filling in time with the singing on
+    syllable-synced songs. Both can be on together, and are remembered.
 - **Audio output** — under the quality line, Now Playing shows where the music is playing (phone speaker, wired
   headphones or your Bluetooth device by name). Tap it to switch output in Android's own picker.
 - **Previous** — more than 3 seconds into a song it restarts it; press again to play the song that played

@@ -71,6 +71,8 @@ fun SettingsScreen(
     val cacheUsage by viewModel.cacheUsage.collectAsStateWithLifecycle()
     val artworkCacheMb by viewModel.artworkCacheMb.collectAsStateWithLifecycle()
     val downloadedBytes by viewModel.downloadedBytes.collectAsStateWithLifecycle()
+    val lyricsCount by viewModel.lyricsCount.collectAsStateWithLifecycle()
+    val lyricsBytes by viewModel.lyricsBytes.collectAsStateWithLifecycle()
     val downloadedItems by viewModel.downloadedSongItems.collectAsStateWithLifecycle()
     val shareFile by viewModel.shareFile.collectAsStateWithLifecycle()
     val localTrackCount by viewModel.localTrackCount.collectAsStateWithLifecycle()
@@ -229,6 +231,13 @@ fun SettingsScreen(
             onClearSongCache = { confirmClearSongs = true },
             onManageDownloads = { showManageDownloads = true },
             onClearDownloads = { confirmClearDownloads = true },
+            lyrics =
+                LyricsStorage(
+                    songs = lyricsCount,
+                    bytes = lyricsBytes,
+                    limit = viewModel.lyricsLimit,
+                    onClear = viewModel::clearLyrics,
+                ),
         )
         TuiBlock(title = "Audio Quality", isActive = true) {
             Row(

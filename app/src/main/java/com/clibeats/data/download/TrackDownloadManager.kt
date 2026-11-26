@@ -52,6 +52,8 @@ class TrackDownloadManager
         @ApplicationContext private val context: Context,
         private val store: DownloadStore,
         private val fetcher: DownloadStreamFetcher,
+        /** Saves a downloaded song's lyrics too, so they show offline. */
+        private val onlineLyrics: dagger.Lazy<com.clibeats.data.lyrics.online.OnlineLyricsRepository>? = null,
     ) {
         constructor(
             context: Context,
@@ -189,6 +191,8 @@ class TrackDownloadManager
                 if (cached != null) {
                     val file = store.saveCompleted(track, hash, partFile, cached)
                     updateStatus(track.id, DownloadStatus.Completed(file))
+                    // The lyrics come along (looked up now, while online), so the song shows them offline too.
+                    onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
                     return true
                 }
 
@@ -249,6 +253,8 @@ class TrackDownloadManager
                 if (format != null) {
                     val file = store.saveCompleted(track, hash, partFile, format)
                     updateStatus(track.id, DownloadStatus.Completed(file))
+                    // The lyrics come along (looked up now, while online), so the song shows them offline too.
+                    onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
                     succeeded = true
                 }
                 attempt++

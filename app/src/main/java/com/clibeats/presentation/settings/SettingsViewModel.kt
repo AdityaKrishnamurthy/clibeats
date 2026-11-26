@@ -44,7 +44,20 @@ class SettingsViewModel
         private val mediaCaches: MediaCaches? = null,
         private val playbackRepository: PlaybackRepository? = null,
         private val downloadManager: TrackDownloadManager? = null,
+        private val onlineLyrics: com.clibeats.data.lyrics.online.OnlineLyricsRepository? = null,
     ) : ViewModel() {
+        /** Saved lyrics: songs, bytes, and the most kept (downloaded songs always keep theirs). */
+        val lyricsCount: StateFlow<Int> =
+            (onlineLyrics?.savedCount ?: flowOf(0)).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0)
+        val lyricsBytes: StateFlow<Long> =
+            (onlineLyrics?.savedBytes ?: flowOf(0L))
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
+        val lyricsLimit: Int get() = onlineLyrics?.savedLimit ?: 0
+
+        fun clearLyrics() {
+            viewModelScope.launch { onlineLyrics?.clearSaved() }
+        }
+
         val cacheUsage: StateFlow<CacheUsage> = mediaCaches?.usage ?: MutableStateFlow(CacheUsage())
 
         val downloadedSongItems: StateFlow<List<DownloadedSongItem>> =
