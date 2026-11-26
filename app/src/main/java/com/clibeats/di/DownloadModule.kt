@@ -3,17 +3,14 @@
 package com.clibeats.di
 
 import android.content.Context
-import com.clibeats.data.cache.MediaCaches
+import com.clibeats.data.download.DownloadStore
+import com.clibeats.data.download.DownloadStreamFetcher
 import com.clibeats.data.download.TrackDownloadManager
-import com.clibeats.data.local.dao.DownloadedTrackDao
-import com.clibeats.data.local.dao.SongDao
-import com.clibeats.playback.StreamResolver
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
-import okhttp3.OkHttpClient
 import javax.inject.Singleton
 
 @Module
@@ -21,21 +18,14 @@ import javax.inject.Singleton
 object DownloadModule {
     @Provides
     @Singleton
-    @Suppress("LongParameterList")
     fun provideTrackDownloadManager(
         @ApplicationContext context: Context,
-        okHttpClient: OkHttpClient,
-        streamResolver: dagger.Lazy<StreamResolver>,
-        downloadedTrackDao: DownloadedTrackDao,
-        songDao: SongDao,
-        mediaCaches: dagger.Lazy<MediaCaches>,
+        store: DownloadStore,
+        fetcher: DownloadStreamFetcher,
     ): TrackDownloadManager =
         TrackDownloadManager(
             context = context,
-            okHttpClient = okHttpClient,
-            streamResolver = streamResolver,
-            downloadedTrackDao = downloadedTrackDao,
-            songDao = songDao,
-            mediaCaches = mediaCaches,
+            store = store,
+            fetcher = fetcher,
         )
 }
