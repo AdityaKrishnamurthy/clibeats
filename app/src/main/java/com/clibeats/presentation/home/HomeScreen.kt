@@ -36,7 +36,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +49,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ProviderSwitcher
@@ -89,25 +89,25 @@ fun HomeScreen(
         }
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
-    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
-    val playingId by trackActions.playingTrackId.collectAsState()
-    val uiState by homeViewModel.uiState.collectAsState()
-    val isRefreshing by homeViewModel.isRefreshing.collectAsState()
-    val providerName by homeViewModel.activeProviderName.collectAsState()
-    val activeProviderId by homeViewModel.activeProviderId.collectAsState()
-    val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsState()
-    val isOnline by homeViewModel.isOnline.collectAsState()
-    val viewMode by homeViewModel.viewMode.collectAsState()
-    val feed by homeViewModel.feed.collectAsState()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
+    val uiState by homeViewModel.uiState.collectAsStateWithLifecycle()
+    val isRefreshing by homeViewModel.isRefreshing.collectAsStateWithLifecycle()
+    val providerName by homeViewModel.activeProviderName.collectAsStateWithLifecycle()
+    val activeProviderId by homeViewModel.activeProviderId.collectAsStateWithLifecycle()
+    val recentlyPlayed by homeViewModel.recentlyPlayed.collectAsStateWithLifecycle()
+    val isOnline by homeViewModel.isOnline.collectAsStateWithLifecycle()
+    val viewMode by homeViewModel.viewMode.collectAsStateWithLifecycle()
+    val feed by homeViewModel.feed.collectAsStateWithLifecycle()
     val homeListState = rememberLazyListState()
     // Each sideways row's position, by row name; kept here so it survives opening a card.
     val rowStates = remember { HashMap<String, LazyListState>() }
-    val moods by homeViewModel.moods.collectAsState()
-    val selectedMood by homeViewModel.selectedMood.collectAsState()
-    val opened by homeViewModel.opened.collectAsState()
-    val localHome by homeViewModel.local.collectAsState()
-    val languages by homeViewModel.languages.collectAsState()
-    val localSetup by homeViewModel.localSetup.collectAsState()
+    val moods by homeViewModel.moods.collectAsStateWithLifecycle()
+    val selectedMood by homeViewModel.selectedMood.collectAsStateWithLifecycle()
+    val opened by homeViewModel.opened.collectAsStateWithLifecycle()
+    val localHome by homeViewModel.local.collectAsStateWithLifecycle()
+    val languages by homeViewModel.languages.collectAsStateWithLifecycle()
+    val localSetup by homeViewModel.localSetup.collectAsStateWithLifecycle()
     val context = LocalContext.current
     // The same folder picker as Settings -> Local Music; read access is kept across reboots.
     val pickMusicFolder =
@@ -119,7 +119,7 @@ fun HomeScreen(
                 homeViewModel.addLocalFolder(uri.toString())
             }
         }
-    val languagesAsked by homeViewModel.languagesAsked.collectAsState()
+    val languagesAsked by homeViewModel.languagesAsked.collectAsStateWithLifecycle()
     var pickLanguages by remember { mutableStateOf(false) }
     if (pickLanguages) {
         LanguagePickerDialog(
@@ -154,8 +154,11 @@ fun HomeScreen(
                 songMenu = { addToPlaylistTrack = it },
                 open = homeViewModel::openCollection,
                 selectMood = homeViewModel::selectMood,
-                editLanguages = { pickLanguages = true },
-                skipLanguages = { homeViewModel.setLanguages(emptySet()) },
+                language =
+                    LanguageActions(
+                        edit = { pickLanguages = true },
+                        skip = { homeViewModel.setLanguages(emptySet()) },
+                    ),
                 rowState = { name -> rowStates.getOrPut(name) { LazyListState() } },
             )
         }
