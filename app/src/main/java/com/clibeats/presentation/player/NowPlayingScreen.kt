@@ -3,9 +3,13 @@
 package com.clibeats.presentation.player
 
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -33,6 +38,7 @@ import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.BluetoothAudio
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Lyrics
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -52,10 +58,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -202,6 +210,108 @@ fun NowPlayingScreen(
     var showSleepDialog by remember { mutableStateOf(false) }
     var showPlaylistDialog by remember { mutableStateOf(false) }
 
+    // ── Lyrics: 0 = the big cover, 1 = lyrics (the cover shrinks into a row above the controls) ──
+    // Follows the finger while dragged, then snaps to the nearer side (or the way it was flung).
+    val lyricsState by viewModel.lyrics.collectAsState()
+    var lyricsOpen by rememberSaveable { mutableStateOf(false) }
+    val lyricsProgress = remember { Animatable(if (lyricsOpen) 1f else 0f) }
+    val showArtwork by remember { derivedStateOf { lyricsProgress.value < 1f } }
+    val showLyrics by remember { derivedStateOf { lyricsProgress.value > 0f } }
+    val compactHeader by remember { derivedStateOf { lyricsProgress.value >= COMPACT_AT } }
+
+    fun settleLyrics(open: Boolean) {
+        lyricsOpen = open
+        scope.launch {
+            lyricsProgress.animateTo(
+                if (open) 1f else 0f,
+                spring(dampingRatio = LYRICS_SPRING_DAMPING, stiffness = Spring.StiffnessMediumLow),
+            )
+        }
+    }
+    BackHandler(enabled = lyricsOpen) { settleLyrics(false) }
+    val lyricsDragPx = with(LocalDensity.current) { LYRICS_DRAG_DP.dp.toPx() }
+
+    fun dragLyrics(dy: Float) {
+        scope.launch { lyricsProgress.snapTo((lyricsProgress.value - dy / lyricsDragPx).coerceIn(0f, 1f)) }
+    }
+
+    fun releaseLyrics(velocity: Float) {
+        settleLyrics(
+            when {
+                velocity < -LYRICS_FLING_PX_S -> true
+                velocity > LYRICS_FLING_PX_S -> false
+                else -> lyricsProgress.value > COMPACT_AT
+            },
+        )
+    }
+
+    // The small row (lyrics open): drag it down to bring the cover back, up to keep the lyrics.
+    val compactRowDrag =
+        Modifier.pointerInput(Unit) {
+            val tracker = VelocityTracker()
+            var total = 0f
+            detectVerticalDragGestures(
+                onDragStart = {
+                    tracker.resetTracking()
+                    total = 0f
+                    scope.launch { lyricsProgress.stop() }
+                },
+                onDragEnd = { releaseLyrics(tracker.calculateVelocity().y) },
+                onDragCancel = { releaseLyrics(0f) },
+                onVerticalDrag = { change, dy ->
+                    change.consume()
+                    total += dy
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, total))
+                    dragLyrics(dy)
+                },
+            )
+        }
+
+    // The big cover: drag up to pull the lyrics in; drag down to close the player, as before.
+    val artworkDrag =
+        Modifier.pointerInput(Unit) {
+            val tracker = VelocityTracker()
+            var total = 0f
+            var towardLyrics: Boolean? = null
+            detectVerticalDragGestures(
+                onDragStart = {
+                    tracker.resetTracking()
+                    total = 0f
+                    towardLyrics = null
+                },
+                onDragEnd = {
+                    val velocity = tracker.calculateVelocity().y
+                    when (towardLyrics) {
+                        true -> releaseLyrics(velocity)
+                        else ->
+                            if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
+                                onClose()
+                            } else {
+                                scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
+                            }
+                    }
+                },
+                onDragCancel = {
+                    if (towardLyrics == true) {
+                        releaseLyrics(0f)
+                    } else {
+                        scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
+                    }
+                },
+                onVerticalDrag = { change, dy ->
+                    change.consume()
+                    total += dy
+                    tracker.addPosition(change.uptimeMillis, Offset(0f, total))
+                    if (towardLyrics == null) towardLyrics = dy < 0
+                    if (towardLyrics == true) {
+                        dragLyrics(dy)
+                    } else {
+                        scope.launch { dragOffset.snapTo((dragOffset.value + dy).coerceAtLeast(0f)) }
+                    }
+                },
+            )
+        }
+
     CompositionLocalProvider(LocalAccentColor provides accent) {
         Box(
             modifier =
@@ -263,79 +373,131 @@ fun NowPlayingScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Box(
-                        modifier =
-                            Modifier
-                                // Height first: on short screens the cover shrinks instead of spilling over the title.
-                                .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
-                                .then(dragToDismiss)
-                                .then(closeAction)
-                                .semantics { contentDescription = artworkDescription },
-                    ) {
-                        if (thumbUrl != null) {
-                            AsyncImage(
-                                model = thumbUrl,
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
-                        }
-                        if (artUrl != null && artUrl != thumbUrl) {
-                            AsyncImage(
-                                model = hiResRequest,
-                                onError = { if (!artFallback) artFallback = true },
-                                contentDescription = null,
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier.fillMaxSize(),
-                            )
+                    if (showLyrics) {
+                        LyricsPanel(
+                            state = lyricsState,
+                            playback = state,
+                            isLocalSong = track?.providerId == "local",
+                            onSeek = viewModel::seekTo,
+                            modifier =
+                                Modifier.graphicsLayer {
+                                    val p = lyricsProgress.value
+                                    alpha = ((p - LYRICS_FADE_FROM) / (1f - LYRICS_FADE_FROM)).coerceIn(0f, 1f)
+                                    translationY = (1f - p) * -LYRICS_SLIDE_DP.dp.toPx()
+                                },
+                        )
+                    }
+                    if (showArtwork) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    // Height first: on short screens the cover shrinks, not spilling over the title.
+                                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                    // Opening lyrics: the cover sinks toward its small spot above the controls.
+                                    .graphicsLayer {
+                                        val p = lyricsProgress.value
+                                        alpha = (1f - p * ART_FADE_SPEED).coerceIn(0f, 1f)
+                                        val scale = 1f - (1f - ART_MIN_SCALE) * p
+                                        scaleX = scale
+                                        scaleY = scale
+                                        translationY = size.height * ART_SINK * p
+                                    }.clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(8.dp))
+                                    .then(artworkDrag)
+                                    .then(closeAction)
+                                    .semantics { contentDescription = artworkDescription },
+                        ) {
+                            if (thumbUrl != null) {
+                                AsyncImage(
+                                    model = thumbUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            if (artUrl != null && artUrl != thumbUrl) {
+                                AsyncImage(
+                                    model = hiResRequest,
+                                    onError = { if (!artFallback) artFallback = true },
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
                         }
                     }
                 }
 
                 Spacer(Modifier.height(20.dp))
 
-                // ── Where it's playing from, then title / artist / quality ──
-                playingFromLabel(state)?.let { from ->
-                    Text(
-                        text = "PLAYING FROM ${from.uppercase()}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = fromColor,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(bottom = 4.dp),
-                    )
-                }
-                Text(
-                    text = track?.title ?: "Nothing playing",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = CliBeatsTextPrimary,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                )
-                if (!track?.artist.isNullOrBlank()) {
-                    Text(
-                        text = track!!.artist,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = CliBeatsTextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    text = qualityLine(state),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statsColor,
-                    textAlign = TextAlign.Center,
-                )
-                if (audioOutput != null) {
-                    val activity = LocalContext.current
-                    AudioOutputChip(output = audioOutput, onClick = { viewModel.openOutputSwitcher(activity) })
+                // ── Where it's playing from, then title / artist / quality (a small row while lyrics are open) ──
+                Box(modifier = Modifier.fillMaxWidth().animateContentSize()) {
+                    if (compactHeader) {
+                        CompactNowPlaying(
+                            title = track?.title ?: "Nothing playing",
+                            artist = track?.artist.orEmpty(),
+                            quality = qualityLine(state),
+                            qualityColor = statsColor,
+                            thumbUrl = thumbUrl,
+                            onClick = { settleLyrics(false) },
+                            modifier =
+                                Modifier.then(compactRowDrag).graphicsLayer {
+                                    alpha = ((lyricsProgress.value - COMPACT_AT) / (1f - COMPACT_AT)).coerceIn(0f, 1f)
+                                },
+                        )
+                    } else {
+                        Column(
+                            modifier =
+                                Modifier.fillMaxWidth().graphicsLayer {
+                                    alpha = (1f - lyricsProgress.value / COMPACT_AT).coerceIn(0f, 1f)
+                                },
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            playingFromLabel(state)?.let { from ->
+                                Text(
+                                    text = "PLAYING FROM ${from.uppercase()}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = fromColor,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.padding(bottom = 4.dp),
+                                )
+                            }
+                            Text(
+                                text = track?.title ?: "Nothing playing",
+                                style = MaterialTheme.typography.headlineSmall,
+                                color = CliBeatsTextPrimary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                textAlign = TextAlign.Center,
+                            )
+                            if (!track?.artist.isNullOrBlank()) {
+                                Text(
+                                    text = track!!.artist,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = CliBeatsTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                text = qualityLine(state),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = statsColor,
+                                textAlign = TextAlign.Center,
+                            )
+                            if (audioOutput != null) {
+                                val activity = LocalContext.current
+                                AudioOutputChip(
+                                    output = audioOutput,
+                                    onClick = { viewModel.openOutputSwitcher(activity) },
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -384,6 +546,19 @@ fun NowPlayingScreen(
                             Text(" $sleepLabel", style = MaterialTheme.typography.labelSmall, color = CliBeatsAccent)
                         }
                     }
+                    IconButton(onClick = { settleLyrics(!lyricsOpen) }, enabled = track != null) {
+                        val hasLyrics = lyricsState is LyricsState.Loaded
+                        Icon(
+                            Icons.Outlined.Lyrics,
+                            contentDescription = if (lyricsOpen) "Hide lyrics" else "Show lyrics",
+                            tint =
+                                when {
+                                    lyricsOpen -> CliBeatsAccent
+                                    hasLyrics -> CliBeatsTextSecondary
+                                    else -> CliBeatsTextSecondary.copy(alpha = NO_LYRICS_ALPHA)
+                                },
+                        )
+                    }
                     IconButton(onClick = onOpenQueue) {
                         Icon(Icons.AutoMirrored.Outlined.QueueMusic, "Open queue", tint = CliBeatsTextSecondary)
                     }
@@ -431,6 +606,79 @@ fun NowPlayingScreen(
         if (showPlaylistDialog && track != null) {
             // Shared, themed dialog (same as long-press elsewhere), with inline "+ New playlist".
             AddToPlaylistDialog(track = track, onDismiss = { showPlaylistDialog = false })
+        }
+    }
+}
+
+/**
+ * Now Playing while lyrics are open: a small cover, title, artist and quality in one row, with a handle above
+ * it. Drag it down (or tap it) to bring the big cover back.
+ */
+@Suppress("FunctionNaming", "LongParameterList")
+@Composable
+private fun CompactNowPlaying(
+    title: String,
+    artist: String,
+    quality: String,
+    qualityColor: Color,
+    thumbUrl: String?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .clickable(onClickLabel = "Show the cover", onClick = onClick)
+                .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.size(width = 28.dp, height = 3.dp).background(CliBeatsBorderInactive, RoundedCornerShape(2.dp)))
+        Spacer(Modifier.height(10.dp))
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier =
+                    Modifier
+                        .size(COMPACT_ART_DP.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .border(1.dp, CliBeatsBorderInactive, RoundedCornerShape(6.dp)),
+            ) {
+                if (thumbUrl != null) {
+                    AsyncImage(
+                        model = thumbUrl,
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = CliBeatsTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (artist.isNotBlank()) {
+                    Text(
+                        text = artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = CliBeatsTextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = quality,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = qualityColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }
@@ -669,6 +917,20 @@ private fun providerLabel(id: String): String =
     }
 
 private const val DISMISS_DRAG_DP = 120
+
+// Lyrics view: how far a drag goes from cover to lyrics, when the header turns into the small row, and how
+// the cover sinks and fades as it goes.
+private const val LYRICS_DRAG_DP = 320
+private const val LYRICS_FLING_PX_S = 1_200f
+private const val LYRICS_SPRING_DAMPING = 0.86f
+private const val COMPACT_AT = 0.5f
+private const val LYRICS_FADE_FROM = 0.2f
+private const val LYRICS_SLIDE_DP = 28
+private const val ART_FADE_SPEED = 1.4f
+private const val ART_MIN_SCALE = 0.55f
+private const val ART_SINK = 0.5f
+private const val COMPACT_ART_DP = 52
+private const val NO_LYRICS_ALPHA = 0.45f
 private const val DISMISS_VELOCITY_PX_S = 1_500f
 private const val SNAP_BACK_MS = 200
 private const val ART_CROSSFADE_MS = 450

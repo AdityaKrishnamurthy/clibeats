@@ -6,7 +6,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.download.DownloadStatus
 import com.clibeats.data.download.TrackDownloadManager
+import com.clibeats.data.lyrics.LocalLyricsRepository
 import com.clibeats.domain.model.AudioOutput
+import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.RepeatMode
@@ -44,6 +46,20 @@ sealed interface SleepTimer {
     data object EndOfTrack : SleepTimer
 }
 
+/** The current song's lyrics, for the Now Playing lyrics view. */
+sealed interface LyricsState {
+    /** Being read from the file. */
+    data object Loading : LyricsState
+
+    /** Nothing to show (no lyrics in the file, or not a local song). */
+    data object None : LyricsState
+
+    data class Loaded(
+        val lyrics: Lyrics,
+    ) : LyricsState
+}
+
+@Suppress("LongParameterList")
 @HiltViewModel
 class PlayerViewModel
     @Inject
@@ -54,8 +70,27 @@ class PlayerViewModel
         private val audioOutputMonitor: AudioOutputMonitor? = null,
         private val notices: Notices? = null,
         private val downloadManager: TrackDownloadManager? = null,
+        /** Lyrics read from local files; null in tests. */
+        private val localLyrics: LocalLyricsRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+
+        /** The playing song's lyrics, read again when the song changes. */
+        @Suppress("OPT_IN_USAGE")
+        val lyrics: StateFlow<LyricsState> =
+            playbackState
+                .map { it.currentTrack }
+                .distinctUntilChanged { a, b -> a?.id == b?.id && a?.streamUrl == b?.streamUrl }
+                .transformLatest { track ->
+                    val repo = localLyrics
+                    if (track == null || repo == null) {
+                        emit(LyricsState.None)
+                        return@transformLatest
+                    }
+                    emit(LyricsState.Loading)
+                    val found = runCatching { repo.lyricsFor(track) }.getOrNull()
+                    emit(found?.let { LyricsState.Loaded(it) } ?: LyricsState.None)
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), LyricsState.None)
 
         /** Where the music is playing (null in previews/tests). */
         val audioOutput: StateFlow<AudioOutput>? = audioOutputMonitor?.current
