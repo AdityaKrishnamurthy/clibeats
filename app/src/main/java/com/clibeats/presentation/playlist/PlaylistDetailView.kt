@@ -19,6 +19,8 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -108,7 +110,9 @@ internal class SelectionActions(
  * - Hold a song to start selecting (tap more to add them); a bar offers download, add to playlist, queue,
  *   favorite, remove, and the usual menu for a single song. Back or ✕ ends the selection.
  * - Songs still downloading (Downloaded) are greyed out with their progress, and get full colour when done.
+ * - With [playAll], ▶ PLAY and ⤨ SHUFFLE at the top play the whole list (in the order shown) via [onTrackClick].
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Suppress("LongMethod", "LongParameterList", "CyclomaticComplexMethod")
 @Composable
 internal fun PlaylistDetailView(
@@ -138,6 +142,8 @@ internal fun PlaylistDetailView(
     /** Songs shown greyed out until they finish downloading (the Downloaded playlist's queue). */
     pendingIds: Set<String> = emptySet(),
     playingTrackId: String? = null,
+    /** Adds ▶ PLAY and ⤨ SHUFFLE before [headerActions]. */
+    playAll: Boolean = false,
 ) {
     val accent = LocalAccentColor.current
     // A list you can reorder is re-saved in the picked order (and can still be dragged after). Fixed lists
@@ -231,9 +237,21 @@ internal fun PlaylistDetailView(
                 onSort = if (tracks.size > 1) onSort else null,
             )
         }
-        if (headerActions.isNotEmpty() && !selecting) {
-            Row(modifier = Modifier.padding(horizontal = 4.dp)) {
-                headerActions.forEach { (label, onClick) ->
+        // Songs still waiting to download (Downloaded) can't play yet, so PLAY / SHUFFLE leave them out.
+        val playable = if (playAll) ordered.filter { it.id !in pendingIds || it.id in downloadedIds } else emptyList()
+        val actions =
+            if (playable.isEmpty()) {
+                headerActions
+            } else {
+                listOf(
+                    "[ ▶ PLAY ]" to { onTrackClick(playable, 0) },
+                    "[ ⤨ SHUFFLE ]" to { onTrackClick(playable.shuffled(), 0) },
+                ) + headerActions
+            }
+        if (actions.isNotEmpty() && !selecting) {
+            // Wraps to a second line when the labels don't fit (e.g. next to SAVE AS APP PLAYLIST).
+            FlowRow(modifier = Modifier.padding(horizontal = 4.dp)) {
+                actions.forEach { (label, onClick) ->
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelMedium,

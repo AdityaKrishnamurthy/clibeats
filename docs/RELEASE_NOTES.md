@@ -10,6 +10,9 @@
 - Works for your playlists, M3U/PLS file playlists, and the pinned ♥ Favorites, Most Played and Downloaded
   (Downloaded plays only finished downloads). Empty playlists don't show it.
 - Tapping the cover or name still opens the playlist as before.
+- Inside a playlist, **[ ▶ PLAY ]** and **[ ⤨ SHUFFLE ]** sit at the top of your playlists, M3U/PLS playlists,
+  ♥ Favorites, Most Played and Downloaded, like on Home cards. They play the list in the order shown (after a
+  sort too); Downloaded leaves out songs still downloading.
 
 ## Search finds playlists
 

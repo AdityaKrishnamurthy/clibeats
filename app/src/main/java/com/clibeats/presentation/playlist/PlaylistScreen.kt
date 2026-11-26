@@ -157,6 +157,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     s.isMostPlayedOpen -> {
@@ -178,6 +179,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     s.isDownloadedOpen -> {
@@ -209,6 +211,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     selected != null -> {
@@ -269,6 +272,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     else ->
