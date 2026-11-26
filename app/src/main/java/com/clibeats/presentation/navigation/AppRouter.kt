@@ -6,10 +6,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Per-tab back stacks plus one global utility stack for Queue and Settings.
+ * Per-tab back stacks for Home, Search, Library, and Settings plus one overlay stack for Queue.
  *
- * Pure Kotlin so navigation history, tab isolation, double-tap-to-root, and system-back
- * order are unit-testable without a UI host.
+ * Pure Kotlin so navigation history, tab isolation, re-tap-to-root, and system-back order are
+ * unit-testable without a UI host.
  */
 class AppRouter(
     startTab: MainTab = MainTab.HOME,
@@ -29,6 +29,8 @@ class AppRouter(
         get() = utilityStack.isNotEmpty() || stack(activeTab).size > 1 || activeTab != MainTab.HOME
 
     fun isAtTabRoot(tab: MainTab = activeTab): Boolean = utilityStack.isEmpty() && stack(tab).size == 1
+
+    fun topRoute(tab: MainTab): AppRoute = stack(tab).last()
 
     /**
      * Switches tabs. Tapping an active tab pops back to its root; returns true only when the
@@ -61,7 +63,7 @@ class AppRouter(
                 activeTab = MainTab.entries.first { it.route == route }
             }
 
-            AppRoute.Queue, AppRoute.Settings -> {
+            AppRoute.Queue -> {
                 if (utilityStack.lastOrNull() != route) utilityStack.add(route)
             }
 
@@ -73,7 +75,7 @@ class AppRouter(
         }
     }
 
-    /** Pops the utility stack, then the active tab's stack, then switches back to Home. */
+    /** Pops the queue overlay, then the active tab's stack, then switches back to Home. */
     fun popBack(): Boolean =
         when {
             utilityStack.isNotEmpty() -> {

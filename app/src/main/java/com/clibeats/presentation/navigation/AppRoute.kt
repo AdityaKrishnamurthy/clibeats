@@ -1,23 +1,26 @@
 package com.clibeats.presentation.navigation
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.LibraryMusic
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.graphics.vector.ImageVector
 
-/** The four music-first tabs in the bottom bar. Queue and Settings live in the top bar. */
+/**
+ * Bottom navigation tabs matching v2.6.1 layout: Home, Search, Library, Settings.
+ * Playlists live inside Library; Queue opens full screen from the mini player or Now Playing.
+ */
 enum class MainTab(
     val route: AppRoute.Tab,
     val label: String,
     val icon: ImageVector,
 ) {
-    HOME(AppRoute.Home, "HOME", Icons.Outlined.Home),
-    SEARCH(AppRoute.Search, "SEARCH", Icons.Outlined.Search),
-    LIBRARY(AppRoute.Library, "LIBRARY", Icons.Outlined.LibraryMusic),
-    PLAYLISTS(AppRoute.Playlists, "PLAYLISTS", Icons.AutoMirrored.Outlined.PlaylistPlay),
+    HOME(AppRoute.Home, "Home", Icons.Outlined.Home),
+    SEARCH(AppRoute.Search, "Search", Icons.Outlined.Search),
+    LIBRARY(AppRoute.Library, "Library", Icons.Outlined.LibraryMusic),
+    SETTINGS(AppRoute.Settings, "Settings", Icons.Outlined.Settings),
 }
 
 val LocalAppNavigator = compositionLocalOf<(AppRoute) -> Unit> { {} }
@@ -42,15 +45,8 @@ sealed interface AppRoute {
         override val breadcrumb: String = "~/library"
     }
 
-    data object Playlists : Tab {
-        override val breadcrumb: String = "~/playlists"
-    }
-
-    data class PlaylistDetail(
-        val playlistId: String,
-        val title: String,
-    ) : AppRoute {
-        override val breadcrumb: String = "~/playlists/${title.slug()}"
+    data object Settings : Tab {
+        override val breadcrumb: String = "~/settings"
     }
 
     data class ArtistDetail(
@@ -72,10 +68,6 @@ sealed interface AppRoute {
 
     data object Queue : AppRoute {
         override val breadcrumb: String = "~/queue"
-    }
-
-    data object Settings : AppRoute {
-        override val breadcrumb: String = "~/settings"
     }
 }
 

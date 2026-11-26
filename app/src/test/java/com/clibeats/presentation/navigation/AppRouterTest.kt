@@ -14,8 +14,8 @@ class AppRouterTest {
 
         assertThat(router.selectTab(MainTab.LIBRARY)).isFalse()
         assertThat(router.currentRoute).isEqualTo(AppRoute.Library)
-        router.navigate(AppRoute.PlaylistDetail("p1", "Mix"))
-        assertThat(router.currentRoute).isEqualTo(AppRoute.PlaylistDetail("p1", "Mix"))
+        router.navigate(AppRoute.AlbumDetail("Digital Shades", "M83"))
+        assertThat(router.currentRoute).isEqualTo(AppRoute.AlbumDetail("Digital Shades", "M83"))
 
         assertThat(router.selectTab(MainTab.HOME)).isFalse()
         assertThat(router.currentRoute).isEqualTo(AppRoute.ArtistDetail("M83"))
@@ -34,15 +34,12 @@ class AppRouterTest {
     }
 
     @Test
-    fun `popBack unwinds utility screens, then tab stack, then returns to Home`() {
+    fun `popBack unwinds queue overlay, then tab stack, then returns to Home`() {
         val router = AppRouter()
         router.selectTab(MainTab.SEARCH)
         router.navigate(AppRoute.ArtistDetail("Daft Punk"))
         router.navigate(AppRoute.Queue)
-        router.navigate(AppRoute.Settings)
 
-        assertThat(router.currentRoute).isEqualTo(AppRoute.Settings)
-        assertThat(router.popBack()).isTrue()
         assertThat(router.currentRoute).isEqualTo(AppRoute.Queue)
         assertThat(router.popBack()).isTrue()
         assertThat(router.currentRoute).isEqualTo(AppRoute.ArtistDetail("Daft Punk"))
@@ -51,5 +48,22 @@ class AppRouterTest {
         assertThat(router.popBack()).isTrue()
         assertThat(router.activeTab).isEqualTo(MainTab.HOME)
         assertThat(router.popBack()).isFalse()
+    }
+
+    @Test
+    fun `settings lives in bottom tabs matching v2 6 1 navigation`() {
+        val router = AppRouter()
+
+        assertThat(MainTab.entries).containsExactly(
+            MainTab.HOME,
+            MainTab.SEARCH,
+            MainTab.LIBRARY,
+            MainTab.SETTINGS,
+        ).inOrder()
+
+        assertThat(router.selectTab(MainTab.SETTINGS)).isFalse()
+        assertThat(router.currentRoute).isEqualTo(AppRoute.Settings)
+        assertThat(router.popBack()).isTrue()
+        assertThat(router.activeTab).isEqualTo(MainTab.HOME)
     }
 }
