@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -82,6 +83,7 @@ import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** What Home's feed rows do when tapped or held. */
+@Suppress("LongParameterList") // one bundle of callbacks, all named at the call site
 internal class FeedActions(
     /** A song in a row: the row's name, its songs and the tapped one. */
     val playSong: (String, List<Track>, Int) -> Unit,
@@ -92,6 +94,11 @@ internal class FeedActions(
     val editLanguages: () -> Unit = {},
     /** "Not now" on the language suggestion: keep every language. */
     val skipLanguages: () -> Unit = {},
+    /**
+     * The scroll state of the row named so, owned by Home: opening a card and coming back leaves each row
+     * scrolled where it was. Null: each row keeps its own (reset when it leaves the screen).
+     */
+    val rowState: ((String) -> LazyListState)? = null,
 )
 
 /**
@@ -224,7 +231,7 @@ private fun SongShelf(
         val columnWidth = if (songs.size > SONGS_PER_COLUMN) maxWidth * COLUMN_WIDTH_FRACTION else maxWidth
         val columns = songs.withIndex().chunked(SONGS_PER_COLUMN)
         LazyRow(
-            state = rememberLazyListState(),
+            state = actions.rowState?.invoke(row) ?: rememberLazyListState(),
             modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -296,6 +303,7 @@ private fun CardShelf(
 ) {
     val songs = shelf.songs
     LazyRow(
+        state = actions.rowState?.invoke(shelf.title) ?: rememberLazyListState(),
         modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -326,10 +334,11 @@ private fun CardShelf(
     }
 }
 
+/** A Home card (cover, name, subtitle); Search uses it for playlist results too. */
 @OptIn(ExperimentalFoundationApi::class)
 @Suppress("LongParameterList")
 @Composable
-private fun FeedCard(
+internal fun FeedCard(
     title: String,
     subtitle: String,
     artworkUrl: String?,
@@ -645,7 +654,7 @@ private fun RowScope.QuickAction(
  * A row's sideways swipe stays in the row: at either end it stops instead of flipping to the next tab.
  * (Swipes that start outside the rows still switch tabs.)
  */
-private fun Modifier.keepSwipesInRow(): Modifier = nestedScroll(KeepHorizontalScroll)
+internal fun Modifier.keepSwipesInRow(): Modifier = nestedScroll(KeepHorizontalScroll)
 
 private object KeepHorizontalScroll : NestedScrollConnection {
     override fun onPostScroll(
@@ -668,13 +677,15 @@ private object KeepHorizontalScroll : NestedScrollConnection {
 @Composable
 internal fun OpenedCollectionView(
     opened: OpenedCollection,
-    homeViewModel: HomeViewModel,
+    onBack: () -> Unit,
+    onPlay: (tracks: List<Track>, index: Int, source: String) -> Unit,
+    onSave: (name: String, tracks: List<Track>) -> Unit,
     trackActions: TrackActionsViewModel,
     playingTrackId: String?,
     downloadedIds: Set<String>,
     onSongMenu: (Track) -> Unit,
 ) {
-    BackHandler(onBack = homeViewModel::closeCollection)
+    BackHandler(onBack = onBack)
     val context = LocalContext.current
     var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
     bulkAddTracks?.let { AddToPlaylistDialog(tracks = it, onDismiss = { bulkAddTracks = null }) }
@@ -713,8 +724,8 @@ internal fun OpenedCollectionView(
                 opened.tracks == null -> "Loading songs…"
                 else -> "No songs here."
             },
-        onBackClick = homeViewModel::closeCollection,
-        onTrackClick = { list, index -> homeViewModel.playCollection(list, index, opened.title) },
+        onBackClick = onBack,
+        onTrackClick = { list, index -> onPlay(list, index, opened.title) },
         onRemoveClick = null,
         removeLabel = "",
         onSwipeRight = trackActions::addToQueue,
@@ -725,10 +736,10 @@ internal fun OpenedCollectionView(
                 emptyList()
             } else {
                 listOf(
-                    "[ ▶ PLAY ]" to { homeViewModel.playCollection(tracks, 0, opened.title) },
-                    "[ ⤨ SHUFFLE ]" to { homeViewModel.playCollection(tracks.shuffled(), 0, opened.title) },
+                    "[ ▶ PLAY ]" to { onPlay(tracks, 0, opened.title) },
+                    "[ ⤨ SHUFFLE ]" to { onPlay(tracks.shuffled(), 0, opened.title) },
                     "[ + SAVE ]" to {
-                        homeViewModel.saveCollection(opened.title, tracks)
+                        onSave(opened.title, tracks)
                         val note = "Saved “${opened.title}” to your playlists"
                         Toast.makeText(context, note, Toast.LENGTH_SHORT).show()
                     },

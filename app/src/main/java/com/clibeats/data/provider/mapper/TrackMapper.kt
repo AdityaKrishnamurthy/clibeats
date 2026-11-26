@@ -12,6 +12,8 @@ import com.clibeats.data.provider.dto.BrowseResponse
 import com.clibeats.data.provider.dto.PlayerResponse
 import com.clibeats.data.provider.dto.SearchResponse
 import com.clibeats.data.provider.dto.VideoDetails
+import com.clibeats.domain.model.CollectionKind
+import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.Track
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -89,6 +91,37 @@ fun SearchResponse.toAlbumHits(): List<AlbumHit> {
                 ?.lastOrNull()
         AlbumHit(browseId, title, parseSubtitle(column(1)).artist, artwork)
     }
+}
+
+/**
+ * Playlists from a playlists-filtered search, in result order: their page id (`VL...`), name,
+ * "Creator • 10M views" and cover.
+ */
+fun SearchResponse.toPlaylistHits(): List<HomeItem.Collection> {
+    val root = contents ?: return emptyList()
+    return findAll(root, "musicResponsiveListItemRenderer").mapNotNull { item ->
+        val browseId =
+            item.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+                ?.takeIf { it.startsWith("VL") } ?: return@mapNotNull null
+        val columns = item.nav("flexColumns")?.safeArray() ?: return@mapNotNull null
+
+        fun column(i: Int) =
+            columns.getOrNull(i)?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")?.safeArray()
+                ?.mapNotNull { it.nav("text")?.safeString() }.orEmpty()
+        val title = column(0).joinToString("").trim().ifBlank { return@mapNotNull null }
+        val artwork =
+            item.nav("thumbnail", "musicThumbnailRenderer", "thumbnail", "thumbnails")
+                ?.safeArray()
+                ?.mapNotNull { it.nav("url")?.safeString() }
+                ?.lastOrNull()
+        HomeItem.Collection(
+            browseId = browseId,
+            title = title,
+            subtitle = column(1).joinToString("").trim(),
+            artworkUrl = artwork,
+            kind = CollectionKind.PLAYLIST,
+        )
+    }.distinctBy { it.browseId }
 }
 
 /**

@@ -4,14 +4,19 @@ package com.clibeats.presentation.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.clibeats.data.home.HomeFeedRepository
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.provider.ProviderResult
 import com.clibeats.domain.repository.PlaybackRepository
+import com.clibeats.domain.repository.PlaylistRepository
 import com.clibeats.playback.StreamResolver
+import com.clibeats.presentation.home.OpenedCollection
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -40,6 +45,8 @@ class SearchViewModel
         private val appPreferences: AppPreferences,
         private val playbackRepository: PlaybackRepository,
         private val streamResolver: StreamResolver? = null,
+        private val homeFeedRepository: HomeFeedRepository? = null,
+        private val playlistRepository: PlaylistRepository? = null,
     ) : ViewModel() {
         private val _query = MutableStateFlow("")
         val query: StateFlow<String> = _query.asStateFlow()
@@ -157,7 +164,97 @@ class SearchViewModel
             index: Int,
         ) = onPlay(tracks, index)
 
+        /**
+         * Playlists matching the query on YouTube Music (shown in a row above the songs). Empty for Local and
+         * other providers, for short queries, and when YouTube Music can't be reached.
+         */
+        @Suppress("OPT_IN_USAGE")
+        val playlistResults: StateFlow<List<HomeItem.Collection>> =
+            _query
+                .debounce(DEBOUNCE_MS)
+                .distinctUntilChanged()
+                .flatMapLatest { q ->
+                    activeProviderId.flatMapLatest { id ->
+                        val repo = homeFeedRepository
+                        if (q.length < MIN_QUERY_LENGTH || repo == null || id != YOUTUBE_MUSIC_ID) {
+                            flowOf(emptyList())
+                        } else {
+                            flow<List<HomeItem.Collection>> {
+                                emit(emptyList())
+                                emit(repo.searchPlaylists(q).orEmpty())
+                            }
+                        }
+                    }
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
+
+        private val _opened = MutableStateFlow<OpenedCollection?>(null)
+
+        /** A playlist opened from the results (shown over Search); null when none is open. */
+        val opened: StateFlow<OpenedCollection?> = _opened.asStateFlow()
+        private var openJob: Job? = null
+
+        fun openPlaylist(item: HomeItem.Collection) {
+            val repo = homeFeedRepository ?: return
+            _opened.value = OpenedCollection(item)
+            openJob?.cancel()
+            // A Spotify Top 50 from Home: its songs are found on YouTube Music as it opens, shown as they come.
+            if (item.browseId.startsWith(HomeFeedRepository.SPOTIFY_PREFIX)) {
+                openJob =
+                    viewModelScope.launch {
+                        repo.spotifyChart(item.browseId.removePrefix(HomeFeedRepository.SPOTIFY_PREFIX)).collect { p ->
+                            _opened.value =
+                                OpenedCollection(
+                                    item,
+                                    tracks = p.tracks.takeIf { it.isNotEmpty() || p.done },
+                                    failed = p.done && p.tracks.isEmpty(),
+                                    progress = if (p.done) null else "finding songs ${p.tried}/${p.total}…",
+                                )
+                        }
+                    }
+                return
+            }
+            openJob =
+                viewModelScope.launch {
+                    val page = repo.collection(item.browseId)
+                    _opened.value =
+                        if (page == null) {
+                            OpenedCollection(item, failed = true)
+                        } else {
+                            OpenedCollection(item, tracks = page.second, title = page.first.ifBlank { item.title })
+                        }
+                }
+        }
+
+        fun closePlaylist() {
+            openJob?.cancel()
+            _opened.value = null
+        }
+
+        /** Plays an opened playlist from [index]; "Playing from" shows its name. */
+        fun playCollection(
+            tracks: List<Track>,
+            index: Int,
+            source: String,
+        ) {
+            if (tracks.isNotEmpty()) playbackRepository.playFrom(tracks, index, source)
+        }
+
+        /** Saves an opened playlist as one of your playlists, under its name. */
+        fun saveCollection(
+            name: String,
+            tracks: List<Track>,
+        ) {
+            val repo = playlistRepository ?: return
+            viewModelScope.launch {
+                runCatching {
+                    val id = repo.createAppPlaylist(name, emptyList())
+                    tracks.forEach { repo.addTrackToPlaylist(id, it) }
+                }
+            }
+        }
+
         private companion object {
             const val SOURCE = "Search"
+            const val YOUTUBE_MUSIC_ID = "youtube_music"
         }
     }

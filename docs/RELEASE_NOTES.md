@@ -1,4 +1,78 @@
-# CLIBeats v2.6.0 — Release Notes
+# CLIBeats v2.6.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.1.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.7 MB
+
+## Play a playlist in one tap
+
+- Every playlist in **Library → Playlists** has a small **▶** button: on the cover in the grid views, and at the
+  end of the row in the List and Details views. Tap it to play the whole playlist from the first song without
+  opening it ("Playing from" shows the playlist's name).
+- Works for your playlists, M3U/PLS file playlists, and the pinned ♥ Favorites, Most Played and Downloaded
+  (Downloaded plays only finished downloads). Empty playlists don't show it.
+- Tapping the cover or name still opens the playlist as before.
+- Inside a playlist, **[ ▶ PLAY ]** and **[ ⤨ SHUFFLE ]** sit at the top of your playlists, M3U/PLS playlists,
+  ♥ Favorites, Most Played and Downloaded, like on Home cards. They play the list in the order shown (after a
+  sort too); Downloaded leaves out songs still downloading.
+
+## Search finds playlists
+
+- Online Search now shows a **PLAYLISTS** row of cards above the songs: YouTube Music's own and community
+  playlists matching what you typed (e.g. "tamil hits", "workout", "lofi").
+- Tap one to open it in the same view as Home cards: **▶ PLAY**, **SHUFFLE**, **+ SAVE** (saves it as one of
+  your playlists), the Find box and hold to select. Back returns to your results.
+- Playlists that are on your **Home** page come first when they match (Top 50s, charts, your languages'
+  playlists), marked "On your Home", then the rest.
+- Local search is unchanged (songs on the phone only).
+- Search results show two buttons per song, **Play next** and **Add to playlist**; swipe right to queue.
+
+## Home (online): your own rows
+
+- After YouTube Music's rows, the online Home ends with rows made from what **you** play online, like the
+  Local Home: **Mixes for you** (a mix for this time of day and one per top artist, with the artists you play
+  alongside them), **Jump back in**, **Your top artists**, **Forgotten gems**, **On repeat** (your most played
+  in the last four weeks) and **Albums to revisit**. Rows with nothing in them are left out.
+- Cards open in the playlist view with ▶ PLAY / SHUFFLE / + SAVE. `[ ↻ REFRESH ]` reshuffles the mixes.
+- Your rows respect every clear: after clearing Recently played, the Library's played list or Most Played (or
+  taking a song off Most Played), those plays stop counting right away; after clearing everything the rows are
+  gone until you play again.
+
+## Library: Artists and Albums
+
+- **Grid, list or details** (the same four views as Playlists, remembered), with covers: artists round, albums
+  square. **Sort** by most played, most songs or A–Z.
+- Each shows its **songs and how often you played them** ("12 songs · 48 plays").
+- Group credits are split, so "A.R. Rahman, Ravi Basrur & Karthik" counts for each of them, and a long name no
+  longer squeezes the count into a column of letters.
+- **Tap** an artist or album to open its songs (most played first for an artist) with ▶ PLAY, ⤨ SHUFFLE, Find
+  and hold to select; **▶** on the card plays it straight away. Works in Online and Local.
+- Songs without an album name aren't listed under Albums.
+
+## Now Playing
+
+- **Playing from** is right for every song, not just the list you last started: songs you queue show
+  "Queue", and when ⏮ goes back to a song from an earlier search or playlist it shows that one again
+  ("Recently played" when it isn't known, e.g. after a restart).
+- **PLAYING FROM** is softened toward white (black on Light) until it reads clearly, instead of the raw cover
+  colour (a hot-pink cover made it hard to read).
+
+## Lists keep their place
+
+- Coming back from a playlist, artist, album or Home card lands where you were: the Playlists grid (e.g. down
+  at Local playlists), the Library's Tracks, Artists and Albums, Search results and its playlist row, and each
+  sideways row on Home.
+
+## Settings
+
+- **Storage and Cache:** Downloads is laid out like Artwork and Songs: its size and song count, a framed
+  **↓ MANAGE** button, `[ CLEAR ALL ]` on the right, and a short note.
+- Cache sizes: **Artwork** 128 MB (default), 256 MB, 512 MB, 1 GB; **Songs** 512 MB (default), 1, 1.5, 2, 2.5,
+  3 GB. A smaller size saved before (64 MB artwork, 256 MB songs) is raised to the new smallest one. A new artwork
+  limit applies right away.
+
+---
+
+## v2.6.0
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.0.apk` (verify with `SHA256SUMS.txt`)
 · **Size:** about 5.6 MB

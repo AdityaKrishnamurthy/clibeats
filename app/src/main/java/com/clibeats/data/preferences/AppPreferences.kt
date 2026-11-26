@@ -23,6 +23,20 @@ class AppPreferences
     constructor(
         private val dataStore: DataStore<Preferences>,
     ) {
+        companion object {
+            /** Settings → Storage and Cache: artwork sizes (MB); the first is the default. */
+            val ARTWORK_CACHE_OPTIONS_MB = listOf(128, 256, 512, 1024, 2048)
+
+            /** Settings → Storage and Cache: song cache sizes (MB); the first is the default. */
+            val SONG_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 2560, 3072)
+
+            /** [mb] if it's offered, else the next size up (the largest when it's bigger than all). */
+            internal fun snapToOption(
+                mb: Int,
+                options: List<Int>,
+            ): Int = options.firstOrNull { it >= mb } ?: options.last()
+        }
+
         private object Keys {
             val ACTIVE_PROVIDER_ID = stringPreferencesKey("active_provider_id")
             val CACHE_MAX_MB = intPreferencesKey("cache_max_mb")
@@ -34,6 +48,7 @@ class AppPreferences
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
+            val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
             val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
@@ -213,9 +228,10 @@ class AppPreferences
                 prefs[Keys.ACTIVE_PROVIDER_ID]
             }
 
+        /** Song cache limit in MB, one of [SONG_CACHE_OPTIONS_MB] (a size no longer offered moves up to the next). */
         val cacheMaxMb: Flow<Int> =
             dataStore.data.map { prefs ->
-                prefs[Keys.CACHE_MAX_MB] ?: 512
+                snapToOption(prefs[Keys.CACHE_MAX_MB] ?: DEFAULT_SONG_CACHE_MB, SONG_CACHE_OPTIONS_MB)
             }
 
         val highQualityStreaming: Flow<Boolean> =
@@ -223,15 +239,18 @@ class AppPreferences
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
             }
 
+        /** Artwork cache limit in MB, one of [ARTWORK_CACHE_OPTIONS_MB] (a size no longer offered moves up). */
         val artworkCacheMb: Flow<Int> =
-            dataStore.data.map { prefs -> prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB }
+            dataStore.data.map { prefs ->
+                snapToOption(prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB, ARTWORK_CACHE_OPTIONS_MB)
+            }
 
         /** False until the first-run onboarding is finished (new installs only). */
         val onboardingDone: Flow<Boolean> =
             dataStore.data.map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
 
         suspend fun setArtworkCacheMb(mb: Int) {
-            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb }
+            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = snapToOption(mb, ARTWORK_CACHE_OPTIONS_MB) }
         }
 
         suspend fun setOnboardingDone() {
@@ -293,7 +312,7 @@ class AppPreferences
         }
 
         suspend fun setCacheMaxMb(maxMb: Int) {
-            dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb }
+            dataStore.edit { it[Keys.CACHE_MAX_MB] = snapToOption(maxMb, SONG_CACHE_OPTIONS_MB) }
         }
 
         suspend fun setAutoQueueRelated(enabled: Boolean) {
@@ -346,6 +365,13 @@ class AppPreferences
             }
         }
 
+        /** Library Artists / Albums layout (a PlaylistViewMode name); null = default. */
+        val libraryGroupView: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_GROUP_VIEW] }
+
+        suspend fun setLibraryGroupView(name: String) {
+            dataStore.edit { it[Keys.LIBRARY_GROUP_VIEW] = name }
+        }
+
         suspend fun setPlaylistView(name: String) {
             dataStore.edit { it[Keys.PLAYLIST_VIEW] = name }
         }
@@ -366,6 +392,7 @@ class AppPreferences
     }
 
 private const val DEFAULT_ARTWORK_CACHE_MB = 128
+private const val DEFAULT_SONG_CACHE_MB = 512
 
 /** Stored download id meaning "no update download in progress or kept". */
 const val NO_DOWNLOAD = -1L

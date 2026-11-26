@@ -14,6 +14,7 @@ import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.HomeFeed
 import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.HomeMood
+import com.clibeats.domain.model.HomeShelf
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.provider.MusicProvider
 import com.clibeats.domain.provider.ProviderRegistry
@@ -269,6 +270,8 @@ class HomeViewModel
                         result = repo.feed(params, picked)
                     }
                     _isRefreshing.value = false
+                    // The full page (not a mood) ends with your own rows, made from what you've played online.
+                    result = withYourRows(result, mood = params, reshuffle = force)
                     when {
                         result != null -> {
                             if (params == null && result.moods.isNotEmpty()) _moods.value = result.moods
@@ -285,6 +288,50 @@ class HomeViewModel
                         }
                     }
                 }
+        }
+
+        /** Songs behind the online Home's own cards (mixes, albums, artists), by card id. */
+        private var yourCollections: Map<String, List<Track>> = emptyMap()
+
+        /** Your rows as last added to the page (so they can be swapped after a clear). */
+        private var yourShelves: List<HomeShelf> = emptyList()
+        private var yourReshuffles = 0
+
+        /** [feed] with your rows after YouTube Music's (Refresh reshuffles the mixes); a mood's page as it is. */
+        private suspend fun withYourRows(
+            feed: HomeFeed?,
+            mood: String?,
+            reshuffle: Boolean,
+        ): HomeFeed? {
+            val repo = localHomeRepository
+            if (feed == null || mood != null || repo == null) return feed
+            if (reshuffle) yourReshuffles++
+            val page = runCatching { repo.buildOnline(yourReshuffles) }.getOrNull()
+            if (page != null) {
+                yourCollections = page.collections
+                yourShelves = page.shelves
+            }
+            return page?.let { feed.copy(shelves = feed.shelves + it.shelves) } ?: feed
+        }
+
+        /**
+         * After a clear (Recently played, the Library's played list, Most Played): rebuild your rows and swap them
+         * on the page shown and in the saved pages, so cleared plays stop counting right away.
+         */
+        private suspend fun rebuildYourRows() {
+            val repo = localHomeRepository ?: return
+            val page = runCatching { repo.buildOnline(yourReshuffles) }.getOrNull() ?: return
+            val old = yourShelves.toSet()
+
+            fun swap(feed: HomeFeed) = feed.copy(shelves = feed.shelves.filterNot { it in old } + page.shelves)
+            yourCollections = page.collections
+            yourShelves = page.shelves
+            // Saved full pages only (key "|languages"); mood pages never had your rows.
+            feedCache.replaceAll { key, feed -> if (key.startsWith("|")) swap(feed) else feed }
+            val shown = _feed.value
+            if (shown is FeedState.Loaded && _selectedMood.value == null && shownProviderId == YOUTUBE_ID) {
+                _feed.value = FeedState.Loaded(swap(shown.feed))
+            }
         }
 
         // ── Local Home ──
@@ -380,7 +427,7 @@ class HomeViewModel
 
         @Suppress("ReturnCount")
         fun openCollection(item: HomeItem.Collection) {
-            _local.value?.collections?.get(item.browseId)?.let { tracks ->
+            (_local.value?.collections?.get(item.browseId) ?: yourCollections[item.browseId])?.let { tracks ->
                 openJob?.cancel()
                 _opened.value = OpenedCollection(item, tracks = tracks)
                 return
@@ -497,6 +544,9 @@ class HomeViewModel
         // Last in the class on purpose: the first load runs right away (on creation), so every
         // field it touches must already be set up.
         init {
+            localHomeRepository?.let { repo ->
+                viewModelScope.launch { repo.onlineClears.drop(1).collect { rebuildYourRows() } }
+            }
             viewModelScope.launch {
                 // The saved languages first, so the first load is already tuned (no unfiltered flash).
                 _languages.value = HomeLanguage.fromNames(appPreferences.homeLanguages.first())

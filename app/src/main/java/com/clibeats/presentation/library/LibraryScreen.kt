@@ -7,6 +7,7 @@
 
 package com.clibeats.presentation.library
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,19 +21,19 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.domain.model.Track
+import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.SongActionsSheet
 import com.clibeats.presentation.component.SongTableHeader
@@ -50,14 +52,14 @@ import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.playlist.PlaylistDetailView
 import com.clibeats.presentation.playlist.PlaylistScreen
 import com.clibeats.presentation.playlist.PlaylistViewModel
+import com.clibeats.presentation.playlist.SelectionActions
 import com.clibeats.presentation.search.formatDuration
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsDivider
-import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
@@ -76,9 +78,17 @@ fun LibraryScreen(
     val playlistViewModel: PlaylistViewModel = hiltViewModel()
     // Tapping the Library tab while already on it: inside a playlist, back to the playlist list first;
     // otherwise the next section (Playlists → Online → Local).
+    val opened by viewModel.opened.collectAsState()
+    // Scroll positions live here (above the early returns), so opening an artist / album and coming back,
+    // or switching between Tracks, Artists and Albums, keeps each list where it was.
+    val tracksListState = rememberLazyListState()
+    val artistsGridState = rememberLazyGridState()
+    val albumsGridState = rememberLazyGridState()
     LaunchedEffect(toggleModeRequested) {
         if (toggleModeRequested) {
-            if (mode == LibraryMode.PLAYLISTS && playlistViewModel.isPlaylistOpen) {
+            if (viewModel.stepBack()) {
+                // Closed an artist / album, or went from Artists / Albums back to Tracks.
+            } else if (mode == LibraryMode.PLAYLISTS && playlistViewModel.isPlaylistOpen) {
                 playlistViewModel.selectPlaylist(null)
             } else {
                 viewModel.nextMode()
@@ -95,8 +105,14 @@ fun LibraryScreen(
         }
         return
     }
+    // An artist or album opened from the list shows its songs (Play, Shuffle, Find, select) under the switch.
+    if (OpenedGroupView(opened, state, viewModel, trackActions, mode)) return
     val localFolderChosen by viewModel.localFolderChosen.collectAsState()
-    var selectedTabIndex by rememberSaveable { mutableIntStateOf(0) }
+    val sort by viewModel.sort.collectAsState()
+    val groupView by viewModel.groupView.collectAsState()
+    val selectedTabIndex by viewModel.tab.collectAsState()
+    // Android back on Artists / Albums goes to Tracks first (an open artist / album has its own back).
+    BackHandler(enabled = selectedTabIndex != LibraryViewModel.TAB_TRACKS) { viewModel.stepBack() }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     addToPlaylistTrack?.let { track ->
         SongActionsSheet(track = track, onDismiss = { addToPlaylistTrack = null })
@@ -170,7 +186,7 @@ fun LibraryScreen(
                                 Modifier
                                     .weight(1f)
                                     .border(1.dp, if (selected) CliBeatsAccent else CliBeatsDivider)
-                                    .clickable(role = Role.Tab) { selectedTabIndex = index }
+                                    .clickable(role = Role.Tab) { viewModel.setTab(index) }
                                     .padding(vertical = 8.dp),
                         )
                     }
@@ -210,6 +226,7 @@ fun LibraryScreen(
                             0 ->
                                 TracksList(
                                     tracks = currentState.tracks,
+                                    listState = tracksListState,
                                     downloadedIds = downloadedIds,
                                     playingTrackId = playingId,
                                     onTrackClick = { track, index ->
@@ -219,8 +236,38 @@ fun LibraryScreen(
                                     onSwipeLeft = trackActions::favorite,
                                     onLongPress = { addToPlaylistTrack = it },
                                 )
-                            1 -> ArtistsList(artists = currentState.artists)
-                            2 -> AlbumsList(albums = currentState.albums)
+                            1 ->
+                                GroupBrowser(
+                                    entries =
+                                        currentState.artists.map { artist ->
+                                            artist.toEntry(
+                                                onClick = { viewModel.open(OpenedGroup.Artist(artist.name)) },
+                                                onPlay = { viewModel.playGroup(artist.tracks, 0, artist.name) },
+                                            )
+                                        },
+                                    noun = "artist",
+                                    viewMode = groupView,
+                                    onViewModeChange = viewModel::setGroupView,
+                                    sort = sort,
+                                    onSortChange = viewModel::setSort,
+                                    gridState = artistsGridState,
+                                )
+                            2 ->
+                                GroupBrowser(
+                                    entries =
+                                        currentState.albums.map { album ->
+                                            album.toEntry(
+                                                onClick = { viewModel.open(OpenedGroup.Album(album.key)) },
+                                                onPlay = { viewModel.playGroup(album.tracks, 0, album.title) },
+                                            )
+                                        },
+                                    noun = "album",
+                                    viewMode = groupView,
+                                    onViewModeChange = viewModel::setGroupView,
+                                    sort = sort,
+                                    onSortChange = viewModel::setSort,
+                                    gridState = albumsGridState,
+                                )
                         }
                     }
                 }
@@ -233,6 +280,7 @@ fun LibraryScreen(
 @Composable
 private fun TracksList(
     tracks: List<Track>,
+    listState: LazyListState,
     downloadedIds: Set<String> = emptySet(),
     playingTrackId: String? = null,
     onTrackClick: (Track, Int) -> Unit,
@@ -240,7 +288,7 @@ private fun TracksList(
     onLongPress: (Track) -> Unit,
     onSwipeLeft: (Track) -> Unit,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
         item {
             SongTableHeader()
         }
@@ -294,70 +342,97 @@ private fun LibraryModeToggle(
     }
 }
 
-@Suppress("FunctionNaming")
+/**
+ * The artist or album that's open, with the Library switch above it. Returns false (draws nothing) when none
+ * is open. An artist lists their songs most played first; an album keeps its order.
+ */
+@Suppress("FunctionNaming", "LongMethod", "ReturnCount")
 @Composable
-private fun ArtistsList(artists: List<ArtistGroup>) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = artists, key = { _, item -> item.name }) { index, artist ->
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "${index + 1}. ${artist.name}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = CliBeatsTextPrimary,
-                    maxLines = 1,
-                )
-                Text(
-                    text = "${artist.trackCount} ${if (artist.trackCount == 1) "track" else "tracks"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                )
-            }
-            HorizontalDivider(thickness = 1.dp, color = CliBeatsSurface)
-        }
-    }
-}
-
-@Suppress("FunctionNaming")
-@Composable
-private fun AlbumsList(albums: List<AlbumGroup>) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        itemsIndexed(items = albums, key = { _, item -> "${item.artist}_${item.title}" }) { index, album ->
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "${index + 1}. ${album.title}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = CliBeatsTextPrimary,
-                        maxLines = 1,
-                    )
-                    Text(
-                        text = album.artist,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = CliBeatsTextSecondary,
-                        maxLines = 1,
+private fun OpenedGroupView(
+    opened: OpenedGroup?,
+    state: LibraryUiState,
+    viewModel: LibraryViewModel,
+    trackActions: TrackActionsViewModel,
+    mode: LibraryMode,
+): Boolean {
+    if (opened == null) return false
+    val success = state as? LibraryUiState.Success ?: return false
+    val detail =
+        when (opened) {
+            is OpenedGroup.Artist ->
+                success.artists.firstOrNull { it.name.equals(opened.name, ignoreCase = true) }?.let { artist ->
+                    OpenedDetail(
+                        title = artist.name,
+                        subtitle = "Artist · ${statsLabel(artist.trackCount, artist.playCount)}",
+                        tracks = artist.tracks,
+                        coverUrl = artist.artworkUrl,
                     )
                 }
-                Text(
-                    text = "${album.trackCount} ${if (album.trackCount == 1) "track" else "tracks"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = CliBeatsTextSecondary,
-                )
-            }
-            HorizontalDivider(thickness = 1.dp, color = CliBeatsSurface)
+            is OpenedGroup.Album ->
+                success.albums.firstOrNull { it.key == opened.key }?.let { album ->
+                    OpenedDetail(
+                        title = album.title,
+                        subtitle = "Album · ${album.artist} · ${statsLabel(album.trackCount, album.playCount)}",
+                        tracks = album.tracks,
+                        coverUrl = album.artworkUrl,
+                    )
+                }
+        }
+    if (detail == null) {
+        // Gone from the list (history cleared, files removed): back to the list.
+        LaunchedEffect(opened) { viewModel.open(null) }
+        return false
+    }
+    BackHandler { viewModel.open(null) }
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
+    val downloads by trackActions.downloads.collectAsState()
+    val playingId by trackActions.playingTrackId.collectAsState()
+    var menuTrack by remember { mutableStateOf<Track?>(null) }
+    var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
+    menuTrack?.let { SongActionsSheet(track = it, onDismiss = { menuTrack = null }) }
+    bulkAddTracks?.let { AddToPlaylistDialog(tracks = it, onDismiss = { bulkAddTracks = null }) }
+    val selection =
+        remember(trackActions) {
+            SelectionActions(
+                download = trackActions::downloadAll,
+                addToPlaylist = { bulkAddTracks = it },
+                queue = trackActions::addAllToQueue,
+                playNext = trackActions::playAllNext,
+                favorite = trackActions::favoriteAll,
+                more = { menuTrack = it },
+            )
+        }
+    Column(modifier = Modifier.fillMaxSize().background(CliBeatsBackground)) {
+        Box(modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 12.dp)) {
+            LibraryModeToggle(mode = mode, onSelect = viewModel::setMode)
+        }
+        Box(modifier = Modifier.weight(1f)) {
+            PlaylistDetailView(
+                title = detail.title,
+                subtitle = detail.subtitle,
+                tracks = detail.tracks,
+                emptyText = "No songs here.",
+                onBackClick = { viewModel.open(null) },
+                onTrackClick = { list, index -> viewModel.playGroup(list, index, detail.title) },
+                onRemoveClick = null,
+                removeLabel = "",
+                onSwipeRight = trackActions::addToQueue,
+                onSwipeLeft = trackActions::favorite,
+                selection = selection,
+                coverUrl = detail.coverUrl,
+                downloadedIds = downloadedIds,
+                downloads = downloads,
+                playingTrackId = playingId,
+                playAll = true,
+            )
         }
     }
+    return true
 }
+
+private class OpenedDetail(
+    val title: String,
+    val subtitle: String,
+    val tracks: List<Track>,
+    val coverUrl: String?,
+)

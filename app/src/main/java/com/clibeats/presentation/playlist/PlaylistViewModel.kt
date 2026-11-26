@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -256,6 +257,30 @@ class PlaylistViewModel
             }
         }
 
+        /**
+         * The play button on a playlist cover: plays the whole playlist from the first song without opening it.
+         * [playlist] is null for the pinned lists, picked by [pinned] ("fav", "most", "downloaded").
+         */
+        fun playNow(
+            playlist: Playlist?,
+            pinned: String? = null,
+        ) {
+            viewModelScope.launch {
+                val (tracks, source) =
+                    when {
+                        playlist != null ->
+                            playlistRepository.getSongsForPlaylistAsFlow(playlist.id).first() to playlist.name
+                        pinned == PINNED_FAVORITES -> favorites.first() to "♥ Favorites"
+                        pinned == PINNED_MOST_PLAYED -> mostPlayed.first() to "Most Played"
+                        // Only finished downloads: songs still waiting in the queue aren't on the phone yet.
+                        pinned == PINNED_DOWNLOADED ->
+                            (downloadManager?.getDownloadedSongs()?.first() ?: emptyList()) to "Downloaded"
+                        else -> return@launch
+                    }
+                playPlaylist(tracks, 0, source)
+            }
+        }
+
         /** Renames one of your playlists (blank names are ignored). Its songs and cover are untouched. */
         fun renamePlaylist(
             playlist: Playlist,
@@ -305,10 +330,15 @@ class PlaylistViewModel
             }
         }
 
-        private companion object {
-            const val FAVORITES_ID = "__favorites__"
-            const val MOST_PLAYED_ID = "__most_played__"
-            const val DOWNLOADED_ID = "__downloaded__"
-            const val MOST_PLAYED_LIMIT = 50
+        companion object {
+            private const val FAVORITES_ID = "__favorites__"
+            private const val MOST_PLAYED_ID = "__most_played__"
+            private const val DOWNLOADED_ID = "__downloaded__"
+            private const val MOST_PLAYED_LIMIT = 50
+
+            /** Keys of the pinned lists, for [playNow]. */
+            const val PINNED_FAVORITES = "fav"
+            const val PINNED_MOST_PLAYED = "most"
+            const val PINNED_DOWNLOADED = "downloaded"
         }
     }

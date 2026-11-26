@@ -7,7 +7,7 @@
 **A free, open-source Android music player with a terminal-inspired interface.**<br>
 Stream online or play your own lossless library — no ads, no accounts, no tracking.
 
-[![Version](https://img.shields.io/badge/version-2.6.0-1DB954)](#)
+[![Version](https://img.shields.io/badge/version-2.6.1-1DB954)](#)
 [![Downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FOmprakash-p06%2Fclibeats%2Fstats%2Fdownloads-badge.json)](#downloads)
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.x-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
@@ -65,8 +65,9 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 ### Home
 - **Online:** *Trending in <your country>* (YouTube's daily top songs for the country your SIM / mobile network is
   in), then **Charts & Top 50** (Spotify's Top 50 Global and your country's, plus YouTube's charts), then rows for
-  your languages, then YouTube Music's own feed (Quick picks, new releases, playlists). **Mood chips** (Relax,
-  Workout, …) filter it.
+  your languages, then YouTube Music's own feed (Quick picks, new releases, playlists), and last **your own rows**
+  from what you play online (mixes, Jump back in, Your top artists, Forgotten gems, On repeat, Albums to revisit;
+  clearing your history clears them too). **Mood chips** (Relax, Workout, …) filter it.
 - **Languages:** pick the languages you listen to (33, from Arabic to Vietnamese); Home hides other languages and
   adds songs, playlists and Top 50 charts in yours.
 - **Playlist, album and artist cards** open in the playlist view with ▶ Play, Shuffle and + Save as playlist.
@@ -84,7 +85,10 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ### Library, playlists & favourites
 - **Library** has three sections: **Playlists**, **Online** (songs you've played, with its own `[ CLEAR ]`) and
-  **Local** (your device music, Tracks / Artists / Albums).
+  **Local** (your device music), the last two as Tracks / Artists / Albums.
+- **Artists and Albums** show as a grid, list or details with covers and play counts ("12 songs · 48 plays"),
+  sorted by most played, most songs or A–Z. Tap one to open its songs (▶ Play, Shuffle); ▶ on a card plays it.
+- **▶ on every playlist** plays it without opening it; inside a playlist, **▶ Play** and **Shuffle** sit at the top.
 - **Playlists:** ♥ Favorites and Most Played pinned on top (each with a confirmed `[ CLEAR ALL ]`),
   then your playlists (`[ ↓ IMPORT ]`, `[ + NEW ]`), then local playlists in their own section. Four views — small
   grid, large grid, list and details — remembered between launches.
@@ -185,7 +189,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Swipe left / right outside a song row | Next / previous tab |
 | Tap **Home** again | Switch Online ↔ Local |
 | Tap **Search** again · **double-tap** | Switch Online ↔ Local · open the keyboard |
-| Tap **Library** again | Leave the open playlist, then Playlists → Online → Local |
+| Tap **Library** again | Leave the open playlist / artist / album, then Artists or Albums → Tracks, then Playlists → Online → Local |
 
 **Player**
 
@@ -211,7 +215,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 - **Home** — online: trending, charts & Top 50, your languages and YouTube Music's feed; local: mixes and
   rediscovery rows from your library.
-- **Search** — search YouTube Music or your device; hold a result for more options.
+- **Search** — search YouTube Music or your device; online results include **playlists** (those on your Home
+  first); hold a result for more options.
 - **Library** — **Playlists** (Favorites, Most Played, your playlists, import, local M3U), **Online** (played songs)
   and **Local** (device music: Tracks / Artists / Albums).
 - **Settings** — theme & accent, local music folders, playback, storage, backup, updates, about.

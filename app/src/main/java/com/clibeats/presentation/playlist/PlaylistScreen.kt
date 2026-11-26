@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AlertDialog
@@ -79,6 +80,8 @@ fun PlaylistScreen(
     val trackActions: TrackActionsViewModel = hiltViewModel()
     val state by viewModel.uiState.collectAsState()
     val viewMode by viewModel.viewMode.collectAsState()
+    // Here, not in the list: opening a playlist removes the list, and coming back should land where you were.
+    val browserGridState = rememberLazyGridState()
     var showCreateDialog by remember { mutableStateOf(false) }
     var pendingDelete by remember { mutableStateOf<Playlist?>(null) }
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
@@ -157,6 +160,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     s.isMostPlayedOpen -> {
@@ -178,6 +182,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     s.isDownloadedOpen -> {
@@ -209,6 +214,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     selected != null -> {
@@ -269,6 +275,7 @@ fun PlaylistScreen(
                             downloadedIds = downloadedIds,
                             downloads = downloads,
                             playingTrackId = playingId,
+                            playAll = true,
                         )
                     }
                     else ->
@@ -284,6 +291,9 @@ fun PlaylistScreen(
                             onImportClick = { showImport = true },
                             onPlaylistClick = { viewModel.selectPlaylist(it.id) },
                             onDeleteClick = { pendingDelete = it },
+                            onPlayPlaylist = { viewModel.playNow(it) },
+                            onPlayPinned = { viewModel.playNow(null, pinned = it) },
+                            gridState = browserGridState,
                         )
                 }
             }

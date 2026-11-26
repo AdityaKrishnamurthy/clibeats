@@ -72,6 +72,9 @@ class HomeFeedRepository
         private val json = Json { ignoreUnknownKeys = true }
         private val cacheFile: File get() = File(context.filesDir, CACHE_FILE)
 
+        /** The playlists on the Home page shown last (Search puts matching ones first). */
+        @Volatile private var lastHomePlaylists: List<HomeItem.Collection> = emptyList()
+
         /** Genre name -> (browseId, params), read once per app run. */
         @Volatile private var genres: Map<String, Pair<String, String>>? = null
         private val spotifyLists = ConcurrentHashMap<String, SpotifyPlaylist>()
@@ -109,8 +112,19 @@ class HomeFeedRepository
                     // (Quick picks and the rest).
                     val trending = extra.trending?.let { HomeLanguageFilter.filter(listOf(it), languages) }.orEmpty()
                     val ordered = trending + listOfNotNull(extra.charts) + extra.languages + shelves
+                    if (moodParams == null && ordered.isNotEmpty()) lastHomePlaylists = homePlaylists(ordered)
                     ordered.takeIf { it.isNotEmpty() }?.let { HomeFeed(main?.moods.orEmpty(), it) }
                 }
+            }
+
+        /** Playlists on YouTube Music matching [query], for Search; null when it can't be reached. */
+        suspend fun searchPlaylists(query: String): List<HomeItem.Collection>? =
+            withContext(Dispatchers.IO) {
+                val found = youTube.searchPlaylists(query)
+                // Before Home has loaded this run, its saved copy still knows the feed's playlists.
+                val home = lastHomePlaylists.ifEmpty { readSaved()?.let { homePlaylists(parse(it).shelves) }.orEmpty() }
+                val ranked = rankPlaylistsWithHome(query, found.orEmpty(), home)
+                if (found == null && ranked.isEmpty()) null else ranked
             }
 
         /** A playlist, album or artist page: its name (blank if it has none) and songs. Null when offline. */

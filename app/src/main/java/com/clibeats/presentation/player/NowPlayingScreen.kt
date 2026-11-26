@@ -148,6 +148,16 @@ fun NowPlayingScreen(
         remember(artColors, themeBackground) {
             artColors?.let { statsColorFor(it, themeBackground, lightTheme) }
         }
+    // "PLAYING FROM …": the album colour, softened toward white (black on Light) until it reads clearly.
+    val fromTarget =
+        remember(artColors, themeBackground) {
+            artColors?.let { labelColorFor(it, themeBackground, lightTheme) }
+        }
+    val fromColor by animateColorAsState(
+        targetValue = fromTarget ?: LocalAccentColor.current,
+        animationSpec = tween(COLOR_FADE_MS),
+        label = "from",
+    )
     val statsColor by animateColorAsState(
         targetValue = statsTarget ?: LocalAccentColor.current,
         animationSpec = tween(COLOR_FADE_MS),
@@ -292,7 +302,7 @@ fun NowPlayingScreen(
                     Text(
                         text = "PLAYING FROM ${from.uppercase()}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = LocalAccentColor.current,
+                        color = fromColor,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
@@ -537,12 +547,39 @@ private fun statsColorFor(
     colors: ArtworkColors,
     themeBackground: Color,
     lightTheme: Boolean,
-): Color {
+): Color = readableTextColor(colors.accent, colorsBehindText(colors, themeBackground, lightTheme), lightTheme)
+
+/** The colours small text can land on: the washed, blurred cover and the album tint. */
+private fun colorsBehindText(
+    colors: ArtworkColors,
+    themeBackground: Color,
+    lightTheme: Boolean,
+): List<Color> {
     val topTint = topTintTarget(colors, themeBackground, lightTheme)
     val wash = if (lightTheme) themeBackground else lerp(themeBackground, topTint, WASH_TINT)
     val washAlpha = (if (lightTheme) LIGHT_WASH else DARK_WASH).second
-    val behind = colors.coverColors.map { lerp(it, wash, washAlpha) } + topTint
-    return readableTextColor(colors.accent, behind, lightTheme)
+    return colors.coverColors.map { lerp(it, wash, washAlpha) } + topTint
+}
+
+/**
+ * The "PLAYING FROM" label's colour. A vivid cover colour (hot pink, neon green) on a tinted background looks
+ * harsh and can be unreadable, so it's always softened a little toward white (black on Light), and further
+ * until it has [MIN_CONTRAST] against everything behind it. White (black) when nothing tinted is readable.
+ */
+private fun labelColorFor(
+    colors: ArtworkColors,
+    themeBackground: Color,
+    lightTheme: Boolean,
+): Color {
+    val behind = colorsBehindText(colors, themeBackground, lightTheme)
+    val toward = if (lightTheme) Color.Black else Color.White
+    var mix = LABEL_MIN_SOFTEN
+    while (mix < 1f) {
+        val candidate = lerp(colors.accent, toward, mix)
+        if (behind.all { contrastRatio(candidate, it) >= MIN_CONTRAST }) return candidate
+        mix += LABEL_SOFTEN_STEP
+    }
+    return toward
 }
 
 /** The album tint blended into the theme background, as used at the top of the screen. */
@@ -652,3 +689,6 @@ private const val WASH_TINT = 0.35f
 private const val WASH_MIDDLE = 0.55f
 private val DARK_WASH = Triple(0.42f, 0.6f, 0.9f)
 private val LIGHT_WASH = Triple(0.62f, 0.74f, 0.92f)
+
+private const val LABEL_MIN_SOFTEN = 0.3f
+private const val LABEL_SOFTEN_STEP = 0.05f

@@ -26,6 +26,7 @@ import com.clibeats.data.provider.mapper.pageTitle
 import com.clibeats.data.provider.mapper.playlistTracks
 import com.clibeats.data.provider.mapper.radioContinuation
 import com.clibeats.data.provider.mapper.toAlbumHits
+import com.clibeats.data.provider.mapper.toPlaylistHits
 import com.clibeats.data.provider.mapper.toRadioTrackList
 import com.clibeats.data.provider.mapper.toTrack
 import com.clibeats.data.provider.mapper.toTrackList
@@ -37,6 +38,7 @@ import com.clibeats.data.provider.youtube.StreamCacheManager
 import com.clibeats.data.provider.youtube.StreamUrlDeobfuscator
 import com.clibeats.data.provider.youtube.YouTubeClientConfig
 import com.clibeats.data.provider.youtube.YouTubeClientStrategy
+import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.PlaybackException
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
@@ -82,6 +84,10 @@ class YouTubeMusicProvider
         /** Albums, singles and EPs for [query]; null when YouTube Music can't be reached. */
         suspend fun searchAlbums(query: String): List<AlbumHit>? =
             runCatching { api.search(SearchRequest.forAlbums(query)).toAlbumHits() }.getOrNull()
+
+        /** Playlists for [query] (YouTube Music's own and community ones); null when it can't be reached. */
+        suspend fun searchPlaylists(query: String): List<HomeItem.Collection>? =
+            runCatching { api.search(SearchRequest.forPlaylists(query)).toPlaylistHits() }.getOrNull()
 
         /**
          * Every track on [album] (album pages leave the artist out of each row, so it's filled from the album).

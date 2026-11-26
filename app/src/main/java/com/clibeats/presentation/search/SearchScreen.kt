@@ -19,14 +19,16 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -50,6 +52,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.CliConfirmDialog
@@ -61,11 +64,16 @@ import com.clibeats.presentation.component.TrackActionsViewModel
 import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiTextField
+import com.clibeats.presentation.home.FeedCard
+import com.clibeats.presentation.home.OpenedCollection
+import com.clibeats.presentation.home.OpenedCollectionView
+import com.clibeats.presentation.home.keepSwipesInRow
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 
-@Suppress("FunctionNaming", "LongMethod")
+// One screen state switch (idle / recent / loading / error / results); split further it reads worse.
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun SearchScreen(
     focusRequested: Boolean = false,
@@ -100,6 +108,11 @@ fun SearchScreen(
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     var menuTrack by remember { mutableStateOf<Track?>(null) }
     val recentSearches by viewModel.recentSearches.collectAsState()
+    val playlists by viewModel.playlistResults.collectAsState()
+    val opened by viewModel.opened.collectAsState()
+    // Here (above the early return), so the results are where you left them after opening a playlist.
+    val resultsListState = rememberLazyListState()
+    val playlistRowState = rememberLazyListState()
     val focusManager = LocalFocusManager.current
     var confirmClearRecent by remember { mutableStateOf(false) }
     if (confirmClearRecent) {
@@ -110,6 +123,12 @@ fun SearchScreen(
             onConfirm = viewModel::clearRecentSearches,
             onDismiss = { confirmClearRecent = false },
         )
+    }
+
+    // A playlist opened from the results shows over Search (same view as Home cards); Back returns here.
+    opened?.let { collection ->
+        OpenedSearchPlaylist(collection, viewModel, trackActions, playingId, downloadedIds)
+        return
     }
 
     Column(
@@ -190,11 +209,15 @@ fun SearchScreen(
                 is SearchUiState.Loading -> SearchLoadingState(providerName)
                 is SearchUiState.Error -> SearchErrorState(currentState.message)
                 is SearchUiState.Success ->
-                    if (currentState.tracks.isEmpty()) {
+                    if (currentState.tracks.isEmpty() && playlists.isEmpty()) {
                         SearchNoResultsState()
                     } else {
                         SearchResultsList(
                             tracks = currentState.tracks,
+                            playlists = playlists,
+                            onPlaylistClick = viewModel::openPlaylist,
+                            listState = resultsListState,
+                            playlistRowState = playlistRowState,
                             downloadedIds = downloadedIds,
                             playingTrackId = playingId,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
@@ -352,6 +375,10 @@ private fun SearchNoResultsState() {
 @Composable
 private fun SearchResultsList(
     tracks: List<Track>,
+    playlists: List<HomeItem.Collection> = emptyList(),
+    onPlaylistClick: (HomeItem.Collection) -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
+    playlistRowState: LazyListState = rememberLazyListState(),
     downloadedIds: Set<String> = emptySet(),
     playingTrackId: String? = null,
     onTrackClick: (Int) -> Unit,
@@ -361,9 +388,14 @@ private fun SearchResultsList(
     onAddToPlaylist: (Track) -> Unit,
     onMore: (Track) -> Unit,
 ) {
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        item {
-            SongTableHeader()
+    LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+        if (playlists.isNotEmpty()) {
+            item(key = "playlists") { PlaylistResultsRow(playlists, onPlaylistClick, playlistRowState) }
+        }
+        if (tracks.isNotEmpty()) {
+            item {
+                SongTableHeader()
+            }
         }
         itemsIndexed(items = tracks, key = { _, track -> track.id }) { index, track ->
             SongTableRow(
@@ -405,17 +437,7 @@ private fun SearchResultsList(
                                 modifier = Modifier.size(18.dp),
                             )
                         }
-                        IconButton(
-                            onClick = { onAddToQueue(track) },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                                contentDescription = "Add to queue",
-                                tint = CliBeatsTextSecondary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                        // No queue button: swiping the row right adds it to the queue.
                     }
                 },
             )
@@ -435,4 +457,67 @@ internal fun formatDuration(durationMs: Long): String {
     } else {
         "%d:%02d".format(minutes, seconds)
     }
+}
+
+/** Playlists matching the search, as a sideways row of cards (like Home); tapping one opens it. */
+@Suppress("FunctionNaming")
+@Composable
+private fun PlaylistResultsRow(
+    playlists: List<HomeItem.Collection>,
+    onClick: (HomeItem.Collection) -> Unit,
+    rowState: LazyListState,
+) {
+    val accent = LocalAccentColor.current
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+        Text(
+            text = "PLAYLISTS · ${playlists.size}",
+            style = MaterialTheme.typography.labelMedium,
+            color = accent,
+            modifier = Modifier.padding(vertical = 6.dp),
+        )
+        LazyRow(
+            state = rowState,
+            // Swiping the row sideways scrolls the cards instead of flipping to the next tab.
+            modifier = Modifier.fillMaxWidth().keepSwipesInRow(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(playlists, key = { it.browseId }) { item ->
+                FeedCard(
+                    title = item.title,
+                    subtitle = item.subtitle,
+                    artworkUrl = item.artworkUrl,
+                    round = false,
+                    playing = false,
+                    onClick = { onClick(item) },
+                    onLongClick = null,
+                )
+            }
+        }
+    }
+}
+
+/** A playlist opened from the results, over Search, with Play, Shuffle and Save (the same view as Home cards). */
+@Suppress("FunctionNaming")
+@Composable
+private fun OpenedSearchPlaylist(
+    collection: OpenedCollection,
+    viewModel: SearchViewModel,
+    trackActions: TrackActionsViewModel,
+    playingId: String?,
+    downloadedIds: Set<String>,
+) {
+    var menuTrack by remember { mutableStateOf<Track?>(null) }
+    Box(modifier = Modifier.fillMaxSize().background(CliBeatsBackground)) {
+        OpenedCollectionView(
+            opened = collection,
+            onBack = viewModel::closePlaylist,
+            onPlay = viewModel::playCollection,
+            onSave = viewModel::saveCollection,
+            trackActions = trackActions,
+            playingTrackId = playingId,
+            downloadedIds = downloadedIds,
+            onSongMenu = { menuTrack = it },
+        )
+    }
+    menuTrack?.let { track -> SongActionsSheet(track = track, onDismiss = { menuTrack = null }) }
 }

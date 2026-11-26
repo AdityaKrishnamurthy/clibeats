@@ -115,8 +115,25 @@ class PlayerAdapter
             queueGeneration++
         }
 
-        /** Where the current queue was started from, for "Playing from …". */
-        private var queueSource: String? = null
+        /**
+         * Where each song came from, for "Playing from …" (a playlist's name, "Search", "Queue", ...), by song id.
+         * Kept per song, not per queue: songs you queue, and songs "previous" brings back from an earlier queue,
+         * keep their own. The most recent [SOURCES_KEPT] songs are remembered.
+         */
+        private val trackSources =
+            object : LinkedHashMap<String, String?>(SOURCES_KEPT, LOAD_FACTOR, true) {
+                override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String?>?) = size > SOURCES_KEPT
+            }
+
+        /** Where [trackId] was played from, or null when that isn't known. */
+        fun sourceOf(trackId: String): String? = trackSources[trackId]
+
+        private fun setSource(
+            track: Track,
+            source: String?,
+        ) {
+            trackSources[track.id] = source
+        }
 
         /** Song id -> downloaded file path, kept in step with the downloads table. */
         private val downloadedFiles = ConcurrentHashMap<String, String>()
@@ -260,6 +277,7 @@ class PlayerAdapter
         /** Plays [track] now. Songs queued after the current one stay queued (tapping a song used to wipe them). */
         fun playTrack(track: Track) {
             startPlaybackService()
+            setSource(track, null)
             if (trackList.isNotEmpty()) {
                 val index = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
                 trackList.add(index, track)
@@ -274,7 +292,6 @@ class PlayerAdapter
             unshuffledOrder = null
             trackList.clear()
             startNewQueue()
-            queueSource = null
             trackList.add(track)
             syncQueue()
             val mediaItem = track.toMediaItem()
@@ -291,7 +308,7 @@ class PlayerAdapter
             source: String? = null,
         ) {
             startPlaybackService()
-            queueSource = source
+            tracks.forEach { setSource(it, source) }
             // With shuffle on, a newly started list plays shuffled: the tapped song first, the rest mixed.
             val ordered: List<Track>
             val start: Int
@@ -317,6 +334,7 @@ class PlayerAdapter
 
         fun addToQueue(track: Track) {
             startPlaybackService()
+            setSource(track, QUEUED_SOURCE)
             if (autoplayIds.remove(track.id)) publishRadio()
             val first = (player.currentMediaItemIndex + 1).coerceIn(0, trackList.size)
             // Songs you queue play before the autoplay suggestions (after the ones you queued earlier).
@@ -380,6 +398,7 @@ class PlayerAdapter
 
         fun playNext(track: Track) {
             startPlaybackService()
+            setSource(track, QUEUED_SOURCE)
             val targetIndex =
                 if (trackList.isEmpty()) {
                     0
@@ -405,7 +424,6 @@ class PlayerAdapter
             if (tracks.isEmpty()) return
             trackList.clear()
             startNewQueue()
-            queueSource = null
             trackList.addAll(tracks)
             syncQueue()
             val mediaItems = tracks.map { it.toMediaItem() }
@@ -465,6 +483,7 @@ class PlayerAdapter
          * otherwise inserts it right after the current song. Used by "next" to return to a song left via "previous".
          */
         fun playForward(track: Track) {
+            if (track.id !in trackSources) setSource(track, HISTORY_SOURCE)
             val current = player.currentMediaItemIndex
             val existing =
                 trackList.indices
@@ -505,6 +524,8 @@ class PlayerAdapter
          * and "next" returns to the song that was playing. Used by "previous" for songs from earlier queues.
          */
         fun playBeforeCurrent(track: Track) {
+            // A song from an earlier queue keeps where it was played from ("Search", a playlist, ...).
+            if (track.id !in trackSources) setSource(track, HISTORY_SOURCE)
             startPlaybackService()
             val index = player.currentMediaItemIndex.coerceIn(0, trackList.size)
             trackList.add(index, track)
@@ -765,7 +786,7 @@ class PlayerAdapter
                     fromDownload =
                         currentTrack?.providerId != LOCAL_PROVIDER_ID &&
                             player.currentMediaItem?.let(::isFile) == true,
-                    queueSource = queueSource,
+                    queueSource = currentTrack?.let { trackSources[it.id] },
                     fromRadio = currentTrack?.id in autoplayIds,
                 )
         }
@@ -907,3 +928,11 @@ class PlayerAdapter
                 }
         }
     }
+
+/** "Playing from" for songs added with Queue / Play next. */
+internal const val QUEUED_SOURCE = "Queue"
+
+/** "Playing from" for a song "previous" brings back whose source isn't known (e.g. after a restart). */
+internal const val HISTORY_SOURCE = "Recently played"
+private const val SOURCES_KEPT = 2_000
+private const val LOAD_FACTOR = 0.75f

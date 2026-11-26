@@ -171,4 +171,53 @@ class LocalHomeBuilderTest {
         assertThat(partOfDay(19 * 60)).isEqualTo("Evening")
         assertThat(partOfDay(2 * 60)).isEqualTo("Late night")
     }
+
+    @Test
+    fun `online rows use their own ids, skip file-only rows, and add On repeat`() {
+        val songs = (1..12).map { song("o$it", if (it <= 6) "Artist A" else "Artist B", album = "Album ${it % 2}") }
+        val plays = songs.flatMap { s -> (1..3).map { n -> at(s, n * day) } } + songs.take(4).map { at(it, 2 * day) }
+        val home =
+            buildLocalHome(songs, songs, plays, now, zone, seed = 42, idPrefix = "you", online = true)
+
+        val titles = home.shelves.map { it.title }
+        assertThat(titles).containsAtLeast("Mixes for you", "Your top artists", "On repeat")
+        assertThat(titles).containsNoneOf("Recently added", "Never played", "Discover your library")
+        assertThat(home.collections.keys.all { it.startsWith("you:") }).isTrue()
+        assertThat(home.shelf("On repeat")!!.items).isNotEmpty()
+    }
+
+    @Test
+    fun `online rows are empty before anything was played`() {
+        val home =
+            buildLocalHome(emptyList(), emptyList(), emptyList(), now, zone, seed = 1, idPrefix = "you", online = true)
+        assertThat(home.shelves).isEmpty()
+    }
+
+    @Test
+    fun `plays hidden by a clear or a Most Played removal don't count`() {
+        val a = song("a", "A")
+        val b = song("b", "B")
+        val plays = listOf(at(a, 10 * day), at(a, 2 * day), at(b, 3 * day), at(b, 1 * day))
+        val clearedAt = now - 5 * day
+        val resets = mapOf(b.id to now - 2 * day)
+
+        val kept = playsAfterClears(plays, clearedAt, resets)
+
+        assertThat(kept).containsExactly(at(a, 2 * day), at(b, 1 * day))
+        assertThat(playsAfterClears(plays, now, emptyMap())).isEmpty()
+    }
+
+    @Test
+    fun `after everything is cleared the online rows are gone`() {
+        val songs = (1..12).map { song("c$it", "Artist ${it % 3}", album = "Album ${it % 2}") }
+        val plays = songs.map { at(it, day) }
+        val kept = playsAfterClears(plays, now, emptyMap())
+        val stillPlayed = kept.mapTo(HashSet()) { it.songId }
+
+        val home =
+            buildLocalHome(songs.filter { it.id in stillPlayed }, emptyList(), kept, now, zone, 7, "you", online = true)
+
+        assertThat(home.shelves).isEmpty()
+        assertThat(home.collections).isEmpty()
+    }
 }

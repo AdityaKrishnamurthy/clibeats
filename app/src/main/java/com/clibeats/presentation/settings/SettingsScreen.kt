@@ -20,6 +20,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -68,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.TuiBlock
@@ -111,8 +114,6 @@ private fun trimZeros(number: String): String = if ('.' in number) number.trimEn
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
-private val ARTWORK_CACHE_OPTIONS = listOf(64, 128, 256, 512)
-private val SONG_CACHE_OPTIONS = listOf(256, 512, 1024, 2048)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
@@ -468,53 +469,25 @@ fun SettingsScreen(
                 CacheRow(
                     label = "ARTWORK",
                     usedBytes = cacheUsage.artworkBytes,
-                    options = ARTWORK_CACHE_OPTIONS,
+                    options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
                     selectedMb = artworkCacheMb,
                     onSelect = viewModel::setArtworkCacheMb,
                     onClear = { confirmClearArtwork = true },
-                    note = "new limit applies on next app start",
                 )
                 CacheRow(
                     label = "SONGS",
                     usedBytes = cacheUsage.songBytes,
-                    options = SONG_CACHE_OPTIONS,
+                    options = AppPreferences.SONG_CACHE_OPTIONS_MB,
                     selectedMb = uiState.cacheMaxMb,
                     onSelect = viewModel::setSongCacheMb,
                     onClear = { confirmClearSongs = true },
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val songs = downloadedItems.size
-                    Text(
-                        text = downloadsLabel(downloadedBytes, songs),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "[ MANAGE ]",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent,
-                        modifier =
-                            Modifier
-                                .clickable(role = Role.Button) { showManageDownloads = true }
-                                .padding(horizontal = 6.dp, vertical = 8.dp),
-                    )
-                    if (downloadedItems.isNotEmpty()) {
-                        Text(
-                            text = "[ CLEAR ALL ]",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error,
-                            modifier =
-                                Modifier
-                                    .semantics { contentDescription = "Delete all downloaded songs" }
-                                    .clickable(role = Role.Button) { confirmClearDownloads = true }
-                                    .padding(horizontal = 6.dp, vertical = 8.dp),
-                        )
-                    }
-                }
+                DownloadsRow(
+                    usedBytes = downloadedBytes,
+                    songs = downloadedItems.size,
+                    onManage = { showManageDownloads = true },
+                    onClearAll = { confirmClearDownloads = true },
+                )
             }
         }
 
@@ -632,6 +605,7 @@ fun SettingsScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Suppress("FunctionNaming", "LongParameterList")
 @Composable
 private fun CacheRow(
@@ -663,7 +637,11 @@ private fun CacheRow(
                         .padding(8.dp),
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // Wraps to a second line when the sizes don't fit (Songs has six).
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             options.forEach { mb ->
                 val isSelected = mb == selectedMb
                 Text(
@@ -686,6 +664,56 @@ private fun CacheRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/** Offline downloads, laid out like [CacheRow]: a title line, a framed button and a note. */
+@Suppress("FunctionNaming")
+@Composable
+private fun DownloadsRow(
+    usedBytes: Long,
+    songs: Int,
+    onManage: () -> Unit,
+    onClearAll: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = downloadsLabel(usedBytes, songs),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+            if (songs > 0) {
+                Text(
+                    text = "[ CLEAR ALL ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier =
+                        Modifier
+                            .semantics { contentDescription = "Delete all downloaded songs" }
+                            .clickable(role = Role.Button, onClick = onClearAll)
+                            .padding(8.dp),
+                )
+            }
+        }
+        Text(
+            text = "↓ MANAGE",
+            style = MaterialTheme.typography.labelSmall,
+            color = accent,
+            modifier =
+                Modifier
+                    .border(1.dp, accent)
+                    .semantics { contentDescription = "Manage downloaded songs" }
+                    .clickable(role = Role.Button, onClick = onManage)
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+        )
+        Text(
+            text = if (songs > 0) "saved for offline · no size limit" else "nothing downloaded yet",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

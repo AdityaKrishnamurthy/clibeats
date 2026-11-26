@@ -27,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -99,6 +100,8 @@ fun HomeScreen(
     val viewMode by homeViewModel.viewMode.collectAsState()
     val feed by homeViewModel.feed.collectAsState()
     val homeListState = rememberLazyListState()
+    // Each sideways row's position, by row name; kept here so it survives opening a card.
+    val rowStates = remember { HashMap<String, LazyListState>() }
     val moods by homeViewModel.moods.collectAsState()
     val selectedMood by homeViewModel.selectedMood.collectAsState()
     val opened by homeViewModel.opened.collectAsState()
@@ -134,7 +137,9 @@ fun HomeScreen(
     opened?.let { collection ->
         OpenedCollectionView(
             opened = collection,
-            homeViewModel = homeViewModel,
+            onBack = homeViewModel::closeCollection,
+            onPlay = homeViewModel::playCollection,
+            onSave = homeViewModel::saveCollection,
             trackActions = trackActions,
             playingTrackId = playingId,
             downloadedIds = downloadedIds,
@@ -151,6 +156,7 @@ fun HomeScreen(
                 selectMood = homeViewModel::selectMood,
                 editLanguages = { pickLanguages = true },
                 skipLanguages = { homeViewModel.setLanguages(emptySet()) },
+                rowState = { name -> rowStates.getOrPut(name) { LazyListState() } },
             )
         }
 
