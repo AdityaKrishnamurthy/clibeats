@@ -32,7 +32,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.ReorderableList
@@ -67,7 +67,7 @@ fun QueueScreen(
     viewModel: QueueViewModel = hiltViewModel(),
     onClose: (() -> Unit)? = null,
 ) {
-    val state by viewModel.uiState.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     // Removing has no ✕ any more (swipe right or the TalkBack action), so every removal offers UNDO.
@@ -121,7 +121,7 @@ fun QueueScreen(
                     )
                 }
 
-                val autoplay by viewModel.autoplayEnabled.collectAsState()
+                val autoplay by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
                 Text(
                     text = if (autoplay) "[ ∞ AUTOPLAY: ON ]" else "[ ∞ AUTOPLAY: OFF ]",
                     style = MaterialTheme.typography.labelSmall,
@@ -241,7 +241,7 @@ private fun SplitQueueView(
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    val autoplayOn by viewModel.autoplayEnabled.collectAsState()
+                    val autoplayOn by viewModel.autoplayEnabled.collectAsStateWithLifecycle()
                     if (autoplayOn) {
                         Text(
                             text = "[ ↻ RADIO ]",
@@ -342,7 +342,7 @@ private fun ReorderableUpcomingList(
     onRemove: (Int, Track) -> Unit,
     scrollToTopRequest: Int,
 ) {
-    val radioIds by viewModel.radioTrackIds.collectAsState()
+    val radioIds by viewModel.radioTrackIds.collectAsStateWithLifecycle()
     // The first radio song gets a "from radio" line above it: your queued songs above, suggestions below.
     val firstRadio = upcoming.indexOfFirst { it.id in radioIds }
     ReorderableList(

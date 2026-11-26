@@ -7,11 +7,13 @@ import androidx.lifecycle.viewModelScope
 import com.clibeats.data.download.DownloadStatus
 import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.domain.model.AudioOutput
+import com.clibeats.domain.model.LyricLine
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.model.Track
 import com.clibeats.domain.repository.LibraryRepository
+import com.clibeats.domain.repository.LyricsRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.PlaylistRepository
 import com.clibeats.playback.AudioOutputMonitor
@@ -26,8 +28,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -44,6 +48,7 @@ sealed interface SleepTimer {
     data object EndOfTrack : SleepTimer
 }
 
+@Suppress("LongParameterList")
 @HiltViewModel
 class PlayerViewModel
     @Inject
@@ -54,8 +59,38 @@ class PlayerViewModel
         private val audioOutputMonitor: AudioOutputMonitor? = null,
         private val notices: Notices? = null,
         private val downloadManager: TrackDownloadManager? = null,
+        private val lyricsRepository: LyricsRepository? = null,
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
+
+        /** Playback state without 500 ms position ticks, so UI chrome does not recompose twice a second. */
+        val playbackMetadata: StateFlow<PlaybackState> =
+            playbackState
+                .map { it.copy(positionMs = 0L, bufferedPositionMs = 0L) }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.Eagerly, playbackState.value)
+
+        val positionMs: StateFlow<Long> =
+            playbackState
+                .map { it.positionMs }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
+
+        @Suppress("OPT_IN_USAGE")
+        val lyrics: StateFlow<List<LyricLine>> =
+            playbackState
+                .map { it.currentTrack }
+                .distinctUntilChangedBy { it?.id }
+                .flatMapLatest { track ->
+                    flow {
+                        if (track == null || lyricsRepository == null) {
+                            emit(emptyList())
+                        } else {
+                            emit(emptyList())
+                            emit(lyricsRepository.getLyrics(track).getOrDefault(emptyList()))
+                        }
+                    }
+                }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), emptyList())
 
         /** Where the music is playing (null in previews/tests). */
         val audioOutput: StateFlow<AudioOutput>? = audioOutputMonitor?.current

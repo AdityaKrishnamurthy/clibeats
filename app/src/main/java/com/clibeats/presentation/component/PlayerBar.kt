@@ -88,6 +88,7 @@ fun PlayerBar(
     isPlaying: Boolean = false,
     progress: Float = 0f,
     currentMs: Long = 0L,
+    positionMsProvider: (() -> Long)? = null,
     totalMs: Long = 0L,
     artworkContent: (@Composable () -> Unit)? = null,
     onPlayPauseClick: () -> Unit = {},
@@ -219,7 +220,12 @@ fun PlayerBar(
 
             Spacer(modifier = Modifier.height(2.dp))
 
-            MiniSeekBar(progress = progress, currentMs = currentMs, totalMs = totalMs, onSeek = onSeek)
+            MiniSeekBar(
+                progress = progress,
+                currentMsProvider = positionMsProvider ?: { currentMs },
+                totalMs = totalMs,
+                onSeek = onSeek,
+            )
         }
     }
 }
@@ -233,10 +239,11 @@ fun PlayerBar(
 @Composable
 private fun MiniSeekBar(
     progress: Float,
-    currentMs: Long,
+    currentMsProvider: () -> Long,
     totalMs: Long,
     onSeek: (Long) -> Unit,
 ) {
+    val currentMs = currentMsProvider()
     val accent = LocalAccentColor.current
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
@@ -362,7 +369,7 @@ private const val PENDING_TIMEOUT_MS = 1_500L
 private const val CATCH_UP_MS = 1_500L
 
 /** Format milliseconds as `m:ss` or `h:mm:ss`. */
-private fun formatPlayerTime(ms: Long): String {
+internal fun formatPlayerTime(ms: Long): String {
     if (ms <= 0L) return "0:00"
     val totalSec = ms / 1_000L
     val hours = totalSec / 3600

@@ -37,7 +37,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -52,6 +51,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.HomeItem
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
@@ -99,17 +99,17 @@ fun SearchScreen(
         }
     }
     val trackActions: TrackActionsViewModel = hiltViewModel()
-    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
-    val playingId by trackActions.playingTrackId.collectAsState()
-    val query by viewModel.query.collectAsState()
-    val state by viewModel.searchResults.collectAsState()
-    val providerName by viewModel.activeProviderName.collectAsState()
-    val activeProviderId by viewModel.activeProviderId.collectAsState()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
+    val query by viewModel.query.collectAsStateWithLifecycle()
+    val state by viewModel.searchResults.collectAsStateWithLifecycle()
+    val providerName by viewModel.activeProviderName.collectAsStateWithLifecycle()
+    val activeProviderId by viewModel.activeProviderId.collectAsStateWithLifecycle()
     var playlistPickerTrack by remember { mutableStateOf<Track?>(null) }
     var menuTrack by remember { mutableStateOf<Track?>(null) }
-    val recentSearches by viewModel.recentSearches.collectAsState()
-    val playlists by viewModel.playlistResults.collectAsState()
-    val opened by viewModel.opened.collectAsState()
+    val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
+    val playlists by viewModel.playlistResults.collectAsStateWithLifecycle()
+    val opened by viewModel.opened.collectAsStateWithLifecycle()
     // Here (above the early return), so the results are where you left them after opening a playlist.
     val resultsListState = rememberLazyListState()
     val playlistRowState = rememberLazyListState()

@@ -17,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -26,6 +25,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.update.ReleaseInfo
 import com.clibeats.data.update.UpdateState
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -34,8 +34,8 @@ import com.clibeats.presentation.theme.LocalAccentColor
 @Suppress("FunctionNaming", "LongMethod")
 @Composable
 fun UpdatePrompt(viewModel: UpdateViewModel = hiltViewModel()) {
-    val visible by viewModel.promptVisible.collectAsState()
-    val state by viewModel.state.collectAsState()
+    val visible by viewModel.promptVisible.collectAsStateWithLifecycle()
+    val state by viewModel.state.collectAsStateWithLifecycle()
     if (!visible) return
     val release = state.releaseOrNull() ?: return
     val accent = LocalAccentColor.current
