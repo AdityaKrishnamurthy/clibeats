@@ -11,7 +11,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,18 +18,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScope
@@ -44,7 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,7 +53,6 @@ import com.clibeats.presentation.player.PlayerViewModel
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.update.UpdateStatusBar
 import com.clibeats.util.ARTWORK_FULL_PX
@@ -73,12 +62,8 @@ import com.clibeats.util.artworkUrlFor
 @Composable
 fun MainLayout(
     activeTab: MainTab = MainTab.HOME,
-    breadcrumb: String = "~/home",
-    canGoBack: Boolean = false,
-    onBack: () -> Unit = {},
     onTabSelected: (MainTab) -> Unit = {},
     onQueueClick: () -> Unit = {},
-    onSettingsClick: () -> Unit = {},
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
@@ -101,16 +86,6 @@ fun MainLayout(
             containerColor = MaterialTheme.colorScheme.background,
         ) {
             Column(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
-                CliBeatsTopAppBar(
-                    breadcrumb = breadcrumb,
-                    canGoBack = canGoBack,
-                    onBack = onBack,
-                    onQueueClick = onQueueClick,
-                    onSettingsClick = onSettingsClick,
-                )
-
-                HorizontalDivider(color = CliBeatsDivider, thickness = 1.dp)
-
                 UpdateStatusBar()
 
                 Box(
@@ -271,59 +246,6 @@ private fun NavigationSuiteScope.buildNavItems(
             },
         )
     }
-}
-
-@Suppress("FunctionNaming")
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CliBeatsTopAppBar(
-    breadcrumb: String,
-    canGoBack: Boolean,
-    onBack: () -> Unit,
-    onQueueClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-) {
-    TopAppBar(
-        modifier = Modifier.height(48.dp),
-        colors = TopAppBarDefaults.topAppBarColors(containerColor = CliBeatsSurface),
-        title = {
-            Text(
-                text = if (canGoBack) breadcrumb else "> clibeats",
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        },
-        navigationIcon = {
-            if (canGoBack) {
-                Text(
-                    text = "< cd ..",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = CliBeatsTextSecondary,
-                    modifier =
-                        Modifier
-                            .clickable(role = Role.Button, onClick = onBack)
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                )
-            }
-        },
-        actions = {
-            IconButton(onClick = onQueueClick) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                    contentDescription = "Open queue",
-                    tint = CliBeatsTextSecondary,
-                )
-            }
-            IconButton(onClick = onSettingsClick) {
-                Icon(
-                    imageVector = Icons.Outlined.Settings,
-                    contentDescription = "Open settings",
-                    tint = CliBeatsTextSecondary,
-                )
-            }
-        },
-    )
 }
 
 internal fun playingFromLabel(state: PlaybackState): String? =
