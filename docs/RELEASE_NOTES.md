@@ -32,6 +32,9 @@
   alongside them), **Jump back in**, **Your top artists**, **Forgotten gems**, **On repeat** (your most played
   in the last four weeks) and **Albums to revisit**. Rows with nothing in them are left out.
 - Cards open in the playlist view with ▶ PLAY / SHUFFLE / + SAVE. `[ ↻ REFRESH ]` reshuffles the mixes.
+- Your rows respect every clear: after clearing Recently played, the Library's played list or Most Played (or
+  taking a song off Most Played), those plays stop counting right away; after clearing everything the rows are
+  gone until you play again.
 
 ## Library: Artists and Albums
 
@@ -46,6 +49,9 @@
 
 ## Now Playing
 
+- **Playing from** is right for every song, not just the list you last started: songs you queue show
+  "Queue", and when ⏮ goes back to a song from an earlier search or playlist it shows that one again
+  ("Recently played" when it isn't known, e.g. after a restart).
 - **PLAYING FROM** is softened toward white (black on Light) until it reads clearly, instead of the raw cover
   colour (a hot-pink cover made it hard to read).
 

@@ -18,6 +18,16 @@ data class Play(
 )
 
 /**
+ * The plays your own rows may use: only those after [clearedAt] (the latest "clear" anywhere: Home's Recently
+ * played, the Library's played list, Most Played) and, for a song taken off Most Played, after that moment.
+ */
+fun playsAfterClears(
+    plays: List<Play>,
+    clearedAt: Long,
+    songResets: Map<String, Long>,
+): List<Play> = plays.filter { it.playedAt > clearedAt && it.playedAt > (songResets[it.songId] ?: 0L) }
+
+/**
  * Home for local music: rows built from the library and the play history, plus the song lists behind
  * every card ([collections], keyed by the card's id) and what the Shuffle all / Surprise album buttons use.
  */

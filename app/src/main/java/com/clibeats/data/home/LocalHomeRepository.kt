@@ -80,15 +80,38 @@ class LocalHomeRepository
             }
 
         /**
+         * What the online rows depend on besides new plays: every "clear" (Home's Recently played, the
+         * Library's played list, Most Played, a song taken off Most Played). Emits when any of them changes.
+         */
+        val onlineClears: Flow<Pair<Long, Map<String, Long>>> =
+            combine(
+                appPreferences.homeRecentsClearedAt,
+                appPreferences.libraryHistoryClearedAt,
+                appPreferences.mostPlayedClearedAt,
+                appPreferences.mostPlayedSongResets,
+            ) { home, library, mostPlayed, resets -> maxOf(home, library, mostPlayed) to resets }
+                .distinctUntilChanged()
+
+        /**
          * Your rows for the online Home (mixes, jump back in, top artists, forgotten gems, on repeat, albums to
-         * revisit), made from the songs you've played online. Empty rows are left out; nothing before any plays.
+         * revisit), made from the songs you've played online. Plays hidden by a clear don't count, and songs
+         * with no plays left drop out, so after clearing there are no rows until you play again.
          */
         suspend fun buildOnline(reshuffle: Int = 0): LocalHome =
             withContext(Dispatchers.Default) {
-                val songs = songRepository.getPlayedOnlineTracksAsFlow(0L).first()
+                val (clearedAt, resets) = onlineClears.first()
+                val played = songRepository.getPlayedOnlineTracksAsFlow(clearedAt).first()
+                val ids = played.mapTo(HashSet()) { it.id }
                 val plays =
-                    historyRepository.getRecentHistoryAsFlow(HISTORY_LIMIT).first()
-                        .map { Play(it.songId, it.playedAt) }
+                    playsAfterClears(
+                        historyRepository.getRecentHistoryAsFlow(HISTORY_LIMIT).first()
+                            .map { Play(it.songId, it.playedAt) }
+                            .filter { it.songId in ids },
+                        clearedAt,
+                        resets,
+                    )
+                val stillPlayed = plays.mapTo(HashSet()) { it.songId }
+                val songs = played.filter { it.id in stillPlayed }
                 val zone = ZoneId.systemDefault()
                 val seed = LocalDate.now(zone).toEpochDay() * SEED_STEP + reshuffle
                 buildLocalHome(

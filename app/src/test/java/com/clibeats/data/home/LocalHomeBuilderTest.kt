@@ -192,4 +192,32 @@ class LocalHomeBuilderTest {
             buildLocalHome(emptyList(), emptyList(), emptyList(), now, zone, seed = 1, idPrefix = "you", online = true)
         assertThat(home.shelves).isEmpty()
     }
+
+    @Test
+    fun `plays hidden by a clear or a Most Played removal don't count`() {
+        val a = song("a", "A")
+        val b = song("b", "B")
+        val plays = listOf(at(a, 10 * day), at(a, 2 * day), at(b, 3 * day), at(b, 1 * day))
+        val clearedAt = now - 5 * day
+        val resets = mapOf(b.id to now - 2 * day)
+
+        val kept = playsAfterClears(plays, clearedAt, resets)
+
+        assertThat(kept).containsExactly(at(a, 2 * day), at(b, 1 * day))
+        assertThat(playsAfterClears(plays, now, emptyMap())).isEmpty()
+    }
+
+    @Test
+    fun `after everything is cleared the online rows are gone`() {
+        val songs = (1..12).map { song("c$it", "Artist ${it % 3}", album = "Album ${it % 2}") }
+        val plays = songs.map { at(it, day) }
+        val kept = playsAfterClears(plays, now, emptyMap())
+        val stillPlayed = kept.mapTo(HashSet()) { it.songId }
+
+        val home =
+            buildLocalHome(songs.filter { it.id in stillPlayed }, emptyList(), kept, now, zone, 7, "you", online = true)
+
+        assertThat(home.shelves).isEmpty()
+        assertThat(home.collections).isEmpty()
+    }
 }
