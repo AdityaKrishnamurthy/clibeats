@@ -23,6 +23,20 @@ class AppPreferences
     constructor(
         private val dataStore: DataStore<Preferences>,
     ) {
+        companion object {
+            /** Settings → Storage and Cache: artwork sizes (MB); the first is the default. */
+            val ARTWORK_CACHE_OPTIONS_MB = listOf(128, 256, 512, 1024, 2048)
+
+            /** Settings → Storage and Cache: song cache sizes (MB); the first is the default. */
+            val SONG_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 2560, 3072)
+
+            /** [mb] if it's offered, else the next size up (the largest when it's bigger than all). */
+            internal fun snapToOption(
+                mb: Int,
+                options: List<Int>,
+            ): Int = options.firstOrNull { it >= mb } ?: options.last()
+        }
+
         private object Keys {
             val ACTIVE_PROVIDER_ID = stringPreferencesKey("active_provider_id")
             val CACHE_MAX_MB = intPreferencesKey("cache_max_mb")
@@ -214,10 +228,10 @@ class AppPreferences
                 prefs[Keys.ACTIVE_PROVIDER_ID]
             }
 
-        /** Song cache limit in MB: 512 at least (256 was an option once; it's raised to 512). */
+        /** Song cache limit in MB, one of [SONG_CACHE_OPTIONS_MB] (a size no longer offered moves up to the next). */
         val cacheMaxMb: Flow<Int> =
             dataStore.data.map { prefs ->
-                (prefs[Keys.CACHE_MAX_MB] ?: DEFAULT_SONG_CACHE_MB).coerceAtLeast(DEFAULT_SONG_CACHE_MB)
+                snapToOption(prefs[Keys.CACHE_MAX_MB] ?: DEFAULT_SONG_CACHE_MB, SONG_CACHE_OPTIONS_MB)
             }
 
         val highQualityStreaming: Flow<Boolean> =
@@ -225,10 +239,10 @@ class AppPreferences
                 prefs[Keys.HIGH_QUALITY_STREAMING] ?: true
             }
 
-        /** Artwork cache limit in MB: 128 at least (64 was an option once; it's raised to 128). */
+        /** Artwork cache limit in MB, one of [ARTWORK_CACHE_OPTIONS_MB] (a size no longer offered moves up). */
         val artworkCacheMb: Flow<Int> =
             dataStore.data.map { prefs ->
-                (prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB).coerceAtLeast(DEFAULT_ARTWORK_CACHE_MB)
+                snapToOption(prefs[Keys.ARTWORK_CACHE_MB] ?: DEFAULT_ARTWORK_CACHE_MB, ARTWORK_CACHE_OPTIONS_MB)
             }
 
         /** False until the first-run onboarding is finished (new installs only). */
@@ -236,7 +250,7 @@ class AppPreferences
             dataStore.data.map { prefs -> prefs[Keys.ONBOARDING_DONE] ?: false }
 
         suspend fun setArtworkCacheMb(mb: Int) {
-            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = mb.coerceAtLeast(DEFAULT_ARTWORK_CACHE_MB) }
+            dataStore.edit { it[Keys.ARTWORK_CACHE_MB] = snapToOption(mb, ARTWORK_CACHE_OPTIONS_MB) }
         }
 
         suspend fun setOnboardingDone() {
@@ -298,7 +312,7 @@ class AppPreferences
         }
 
         suspend fun setCacheMaxMb(maxMb: Int) {
-            dataStore.edit { it[Keys.CACHE_MAX_MB] = maxMb.coerceAtLeast(DEFAULT_SONG_CACHE_MB) }
+            dataStore.edit { it[Keys.CACHE_MAX_MB] = snapToOption(maxMb, SONG_CACHE_OPTIONS_MB) }
         }
 
         suspend fun setAutoQueueRelated(enabled: Boolean) {

@@ -70,6 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.clibeats.BuildConfig
+import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.TuiBlock
@@ -113,8 +114,6 @@ private fun trimZeros(number: String): String = if ('.' in number) number.trimEn
 private const val GITHUB_URL = "https://github.com/Omprakash-p06/clibeats"
 private const val ADITYA_GITHUB_URL = "https://github.com/AdityaKrishnamurthy"
 private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
-private val ARTWORK_CACHE_OPTIONS = listOf(128, 256, 512, 1024)
-private val SONG_CACHE_OPTIONS = listOf(512, 1024, 1536, 2048, 2560, 3072)
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val LOCAL_HINT = "Tags (title / artist / album) are read from the files. FLAC, MP3, WAV, M4A, OGG, OPUS."
@@ -470,7 +469,7 @@ fun SettingsScreen(
                 CacheRow(
                     label = "ARTWORK",
                     usedBytes = cacheUsage.artworkBytes,
-                    options = ARTWORK_CACHE_OPTIONS,
+                    options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
                     selectedMb = artworkCacheMb,
                     onSelect = viewModel::setArtworkCacheMb,
                     onClear = { confirmClearArtwork = true },
@@ -478,7 +477,7 @@ fun SettingsScreen(
                 CacheRow(
                     label = "SONGS",
                     usedBytes = cacheUsage.songBytes,
-                    options = SONG_CACHE_OPTIONS,
+                    options = AppPreferences.SONG_CACHE_OPTIONS_MB,
                     selectedMb = uiState.cacheMaxMb,
                     onSelect = viewModel::setSongCacheMb,
                     onClear = { confirmClearSongs = true },
