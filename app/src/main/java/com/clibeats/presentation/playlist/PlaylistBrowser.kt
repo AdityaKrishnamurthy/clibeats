@@ -467,7 +467,7 @@ private fun playAction(entry: PlaylistEntry): (() -> Unit)? = entry.onPlay?.take
  * dimmed backing so it reads over any artwork.
  */
 @Composable
-private fun PlayButton(
+internal fun PlayButton(
     title: String,
     size: Dp,
     onClick: () -> Unit,

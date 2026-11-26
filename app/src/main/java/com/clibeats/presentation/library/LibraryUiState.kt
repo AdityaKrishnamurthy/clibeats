@@ -14,13 +14,46 @@ sealed interface LibraryUiState {
     ) : LibraryUiState
 }
 
+/** One artist in the Library: their songs (most played first), how often they were played, and a cover. */
 data class ArtistGroup(
     val name: String,
-    val trackCount: Int,
-)
+    val tracks: List<Track>,
+    val playCount: Int,
+    val artworkUrl: String?,
+) {
+    val trackCount: Int get() = tracks.size
+}
 
+/** One album in the Library: its songs, its main artist, how often they were played, and its cover. */
 data class AlbumGroup(
     val title: String,
     val artist: String,
-    val trackCount: Int,
-)
+    val tracks: List<Track>,
+    val playCount: Int,
+    val artworkUrl: String?,
+) {
+    val trackCount: Int get() = tracks.size
+
+    /** Stable id for lists and for reopening (titles repeat across artists). */
+    val key: String get() = "${title.lowercase()}|${artist.lowercase()}"
+}
+
+/** How Artists and Albums are ordered. */
+enum class GroupSort(
+    val label: String,
+) {
+    MOST_PLAYED("MOST PLAYED"),
+    MOST_SONGS("MOST SONGS"),
+    A_TO_Z("A–Z"),
+}
+
+/** An artist or album opened from the Library (its songs are looked up live, so they stay current). */
+sealed interface OpenedGroup {
+    data class Artist(
+        val name: String,
+    ) : OpenedGroup
+
+    data class Album(
+        val key: String,
+    ) : OpenedGroup
+}

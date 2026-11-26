@@ -6,14 +6,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Track
+import com.clibeats.domain.repository.HistoryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.SongRepository
+import com.clibeats.presentation.playlist.PlaylistViewMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -35,6 +38,7 @@ class LibraryViewModel
         private val songRepository: SongRepository,
         private val playbackRepository: PlaybackRepository,
         private val appPreferences: AppPreferences? = null,
+        private val historyRepository: HistoryRepository? = null,
     ) : ViewModel() {
         private val _mode = MutableStateFlow(LibraryMode.ONLINE)
         val mode: StateFlow<LibraryMode> = _mode.asStateFlow()
@@ -54,6 +58,36 @@ class LibraryViewModel
                 .map { it.isNotEmpty() }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
 
+        private val _sort = MutableStateFlow(GroupSort.MOST_PLAYED)
+
+        /** How Artists and Albums are ordered (most played first by default). */
+        val sort: StateFlow<GroupSort> = _sort.asStateFlow()
+
+        fun setSort(sort: GroupSort) {
+            _sort.value = sort
+        }
+
+        /** Artists / Albums layout (grids, list, details); remembered across launches. */
+        val groupView: StateFlow<PlaylistViewMode> =
+            (appPreferences?.libraryGroupView ?: flowOf(null))
+                .map { name -> name?.let(PlaylistViewMode::fromName) ?: PlaylistViewMode.GRID_LARGE }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, PlaylistViewMode.GRID_LARGE)
+
+        fun setGroupView(mode: PlaylistViewMode) {
+            viewModelScope.launch { appPreferences?.setLibraryGroupView(mode.name) }
+        }
+
+        private val _opened = MutableStateFlow<OpenedGroup?>(null)
+
+        /** The artist or album open over the list; null when none is. */
+        val opened: StateFlow<OpenedGroup?> = _opened.asStateFlow()
+
+        fun open(group: OpenedGroup?) {
+            _opened.value = group
+        }
+
+        private val playCounts = historyRepository?.getPlayCounts() ?: flowOf(emptyMap())
+
         @OptIn(ExperimentalCoroutinesApi::class)
         val uiState: StateFlow<LibraryUiState> =
             _mode
@@ -66,24 +100,15 @@ class LibraryViewModel
                         LibraryMode.LOCAL -> songRepository.getLocalTracksAsFlow()
                         LibraryMode.PLAYLISTS -> flowOf(emptyList()) // shown by PlaylistScreen
                     }
-                }.map { tracks ->
+                }.let { tracksFlow -> combine(tracksFlow, playCounts, _sort, ::Triple) }
+                .map { (tracks, counts, sort) ->
                     if (tracks.isEmpty()) {
                         LibraryUiState.Empty
                     } else {
-                        val artists =
-                            tracks.groupBy { it.artist.ifBlank { "Unknown Artist" } }
-                                .map { (artist, list) -> ArtistGroup(artist, list.size) }
-                                .sortedBy { it.name.lowercase() }
-
-                        val albums =
-                            tracks.groupBy { (it.album.ifBlank { "Unknown Album" }) to it.artist }
-                                .map { (key, list) -> AlbumGroup(key.first, key.second, list.size) }
-                                .sortedBy { it.title.lowercase() }
-
                         LibraryUiState.Success(
                             tracks = tracks,
-                            artists = artists,
-                            albums = albums,
+                            artists = buildArtists(tracks, counts, sort),
+                            albums = buildAlbums(tracks, counts, sort),
                         )
                     }
                 }.stateIn(
@@ -99,6 +124,7 @@ class LibraryViewModel
 
         fun setMode(mode: LibraryMode) {
             _mode.value = mode
+            _opened.value = null
             viewModelScope.launch { appPreferences?.setLibrarySection(mode.name) }
         }
 
@@ -106,6 +132,15 @@ class LibraryViewModel
         fun nextMode() {
             val all = LibraryMode.entries
             setMode(all[(all.indexOf(_mode.value) + 1) % all.size])
+        }
+
+        /** Plays an artist's or album's songs from [index]; "Playing from" shows its name. */
+        fun playGroup(
+            tracks: List<Track>,
+            index: Int,
+            source: String,
+        ) {
+            if (tracks.isNotEmpty()) playbackRepository.playFrom(tracks, index, source)
         }
 
         @Suppress("UnusedParameter")

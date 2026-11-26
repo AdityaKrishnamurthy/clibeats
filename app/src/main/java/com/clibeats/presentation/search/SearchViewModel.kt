@@ -197,6 +197,22 @@ class SearchViewModel
             val repo = homeFeedRepository ?: return
             _opened.value = OpenedCollection(item)
             openJob?.cancel()
+            // A Spotify Top 50 from Home: its songs are found on YouTube Music as it opens, shown as they come.
+            if (item.browseId.startsWith(HomeFeedRepository.SPOTIFY_PREFIX)) {
+                openJob =
+                    viewModelScope.launch {
+                        repo.spotifyChart(item.browseId.removePrefix(HomeFeedRepository.SPOTIFY_PREFIX)).collect { p ->
+                            _opened.value =
+                                OpenedCollection(
+                                    item,
+                                    tracks = p.tracks.takeIf { it.isNotEmpty() || p.done },
+                                    failed = p.done && p.tracks.isEmpty(),
+                                    progress = if (p.done) null else "finding songs ${p.tried}/${p.total}…",
+                                )
+                        }
+                    }
+                return
+            }
             openJob =
                 viewModelScope.launch {
                     val page = repo.collection(item.browseId)

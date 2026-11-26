@@ -20,7 +20,26 @@
   playlists matching what you typed (e.g. "tamil hits", "workout", "lofi").
 - Tap one to open it in the same view as Home cards: **▶ PLAY**, **SHUFFLE**, **+ SAVE** (saves it as one of
   your playlists), the Find box and hold to select. Back returns to your results.
+- Playlists that are on your **Home** page come first when they match (Top 50s, charts, your languages'
+  playlists), marked "On your Home", then the rest.
 - Local search is unchanged (songs on the phone only).
+- Search results show two buttons per song, **Play next** and **Add to playlist**; swipe right to queue.
+
+## Library: Artists and Albums
+
+- **Grid, list or details** (the same four views as Playlists, remembered), with covers: artists round, albums
+  square. **Sort** by most played, most songs or A–Z.
+- Each shows its **songs and how often you played them** ("12 songs · 48 plays").
+- Group credits are split, so "A.R. Rahman, Ravi Basrur & Karthik" counts for each of them, and a long name no
+  longer squeezes the count into a column of letters.
+- **Tap** an artist or album to open its songs (most played first for an artist) with ▶ PLAY, ⤨ SHUFFLE, Find
+  and hold to select; **▶** on the card plays it straight away. Works in Online and Local.
+- Songs without an album name aren't listed under Albums.
+
+## Now Playing
+
+- **PLAYING FROM** is softened toward white (black on Light) until it reads clearly, instead of the raw cover
+  colour (a hot-pink cover made it hard to read).
 
 ## Settings
 

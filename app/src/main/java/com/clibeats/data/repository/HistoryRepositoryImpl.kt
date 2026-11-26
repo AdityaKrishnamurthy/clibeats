@@ -23,6 +23,9 @@ class HistoryRepositoryImpl
     constructor(
         private val historyDao: HistoryDao,
     ) : HistoryRepository {
+        override fun getPlayCounts(): Flow<Map<String, Int>> =
+            historyDao.getAllAsFlow().map { plays -> plays.groupingBy { it.songId }.eachCount() }
+
         override fun getRecentHistoryAsFlow(limit: Int): Flow<List<HistoryEntity>> = historyDao.getRecentAsFlow(limit)
 
         override fun getMostPlayedTracks(limit: Int): Flow<List<Track>> =

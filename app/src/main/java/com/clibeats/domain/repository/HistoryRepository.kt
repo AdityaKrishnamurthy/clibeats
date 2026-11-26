@@ -6,8 +6,12 @@ package com.clibeats.domain.repository
 import com.clibeats.data.local.entity.HistoryEntity
 import com.clibeats.domain.model.Track
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
 
 interface HistoryRepository {
+    /** How many times each song was played (song id -> plays), all time. */
+    fun getPlayCounts(): Flow<Map<String, Int>> = flowOf(emptyMap())
+
     fun getRecentHistoryAsFlow(limit: Int = 50): Flow<List<HistoryEntity>>
 
     fun getRecentlyPlayedTracks(limit: Int = 50): Flow<List<Track>>

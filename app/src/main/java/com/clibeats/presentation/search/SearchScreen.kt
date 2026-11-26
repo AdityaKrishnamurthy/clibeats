@@ -27,7 +27,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
-import androidx.compose.material.icons.automirrored.outlined.QueueMusic
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -429,17 +428,7 @@ private fun SearchResultsList(
                                 modifier = Modifier.size(18.dp),
                             )
                         }
-                        IconButton(
-                            onClick = { onAddToQueue(track) },
-                            modifier = Modifier.size(28.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Outlined.QueueMusic,
-                                contentDescription = "Add to queue",
-                                tint = CliBeatsTextSecondary,
-                                modifier = Modifier.size(18.dp),
-                            )
-                        }
+                        // No queue button: swiping the row right adds it to the queue.
                     }
                 },
             )

@@ -34,6 +34,7 @@ class AppPreferences
             val THEME_MODE = stringPreferencesKey("theme_mode")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
+            val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
             val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
             val AUTOPLAY_ENABLED = booleanPreferencesKey("autoplay_enabled")
@@ -344,6 +345,13 @@ class AppPreferences
                 it[Keys.HOME_LANGUAGES] = names
                 it[Keys.HOME_LANGUAGES_ASKED] = true
             }
+        }
+
+        /** Library Artists / Albums layout (a PlaylistViewMode name); null = default. */
+        val libraryGroupView: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_GROUP_VIEW] }
+
+        suspend fun setLibraryGroupView(name: String) {
+            dataStore.edit { it[Keys.LIBRARY_GROUP_VIEW] = name }
         }
 
         suspend fun setPlaylistView(name: String) {
