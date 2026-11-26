@@ -1,3 +1,29 @@
+# CLIBeats v2.7.0 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Target SDK:** Android 15 (API 35) · **Download:** `CLIBeats-v2.7.0.apk` (verify with `SHA256SUMS.txt`)
+
+## Queue ordering & autoplay persistence
+
+- **Add to queue during radio**: Queuing a song while an autoplay suggestion is playing now inserts it after your previously queued tracks and strictly before remaining radio suggestions.
+- **Persistent radio boundaries**: Room database v5 adds `is_radio` on `queue_items` so autoplay markers survive app restarts and process death cleanly.
+
+## Synced lyrics & Now Playing
+
+- **LRCLIB synced lyrics**: Toggle synced lyrics right inside Now Playing with auto-scroll highlighting, cached offline in `lyrics_cache`, and tap any lyric line to seek to its timestamp.
+- **Smoother scrubber & reduced recompositions**: Playback position ticks are isolated from track metadata changes, eliminating unnecessary full-screen redraws during playback.
+
+## Background downloads & faster local library scans
+
+- **Resumable WorkManager downloads**: Track downloads run via WorkManager's foreground data-sync worker with chunk-level HTTP `Range` checkpoints (`.chunks` + `.part`) so interrupted transfers resume cleanly across app backgrounding.
+- **Two-pass parallel scanner**: Local music folders insert playable song rows immediately and extract artwork and tags across 4 parallel IO workers.
+
+## Navigation, detail views & settings
+
+- **Unified back-stack router**: Replaced swipe pager navigation with isolated per-tab stacks (`Home`, `Search`, `Library`, `Downloads`/`Queue`/`Settings`), `< cd ..` breadcrumbs, and dedicated **Artist** and **Album** detail views reachable from song menus and Library browsers.
+- **Settings & privacy hardening**: Removed the redundant Active Provider block from Settings, added a **Mirror to Downloads/** toggle to opt out of mirroring plaintext `clibeats-backup.json` to shared storage, enforced HTTPS-only network security config, excluded sensitive local databases/preferences from Android Auto Backup & Device Transfer, and capped history retention at 3,000 rows with daily pruning.
+
+---
+
 # CLIBeats v2.6.1 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.1.apk` (verify with `SHA256SUMS.txt`)

@@ -2,11 +2,9 @@
 
 package com.clibeats.presentation.settings
 
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.download.TrackDownloadManager
 import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
-import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.repository.SongRepository
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.Dispatchers
@@ -30,8 +28,6 @@ import org.mockito.kotlin.whenever
 class SettingsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var appPreferences: AppPreferences
-    private lateinit var cacheManager: CacheManager
-    private lateinit var providerRegistry: ProviderRegistry
     private lateinit var playlistExchangeManager: PlaylistExchangeManager
     private lateinit var downloadManager: TrackDownloadManager
     private lateinit var viewModel: SettingsViewModel
@@ -40,21 +36,17 @@ class SettingsViewModelTest {
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
         appPreferences = mock()
-        cacheManager = mock()
-        providerRegistry = mock()
         playlistExchangeManager = mock()
         downloadManager = mock()
 
-        whenever(appPreferences.activeProviderId).thenReturn(flowOf("youtube_music"))
         whenever(appPreferences.cacheMaxMb).thenReturn(flowOf(512))
         whenever(appPreferences.highQualityStreaming).thenReturn(flowOf(true))
+        whenever(appPreferences.mirrorBackupsToDownloads).thenReturn(flowOf(true))
         whenever(appPreferences.themeMode).thenReturn(flowOf("DARK"))
         whenever(appPreferences.accentColorName).thenReturn(flowOf("GREEN"))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
         whenever(appPreferences.localMusicTreeUris).thenReturn(flowOf(emptyList()))
         whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
-        whenever(cacheManager.getAllCachedAsFlow()).thenReturn(flowOf(emptyList()))
-        whenever(providerRegistry.providers).thenReturn(emptyList())
         whenever(downloadManager.getDownloadedSongItems()).thenReturn(flowOf(emptyList()))
         whenever(downloadManager.getTotalDownloadedSizeBytes()).thenReturn(flowOf(0L))
 
@@ -64,8 +56,6 @@ class SettingsViewModelTest {
         viewModel =
             SettingsViewModel(
                 appPreferences = appPreferences,
-                cacheManager = cacheManager,
-                providerRegistry = providerRegistry,
                 playlistExchangeManager = playlistExchangeManager,
                 songRepository = songRepository,
                 downloadManager = downloadManager,
@@ -80,23 +70,26 @@ class SettingsViewModelTest {
     @Test
     fun `initial state reflects preferences`() =
         runTest(testDispatcher) {
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.uiState.collect()
+            }
             testDispatcher.scheduler.advanceUntilIdle()
             val state = viewModel.uiState.value
-            assertThat(state.activeProviderId).isEqualTo("youtube_music")
             assertThat(state.cacheMaxMb).isEqualTo(512)
             assertThat(state.highQualityStreaming).isTrue()
+            assertThat(state.mirrorBackupsToDownloads).isTrue()
         }
 
     @Test
-    fun `setActiveProvider delegates to appPreferences`() =
+    fun `setMirrorBackupsToDownloads delegates to appPreferences`() =
         runTest(testDispatcher) {
-            viewModel.setActiveProvider("audius")
+            viewModel.setMirrorBackupsToDownloads(false)
             testDispatcher.scheduler.advanceUntilIdle()
-            verify(appPreferences).setActiveProviderId("audius")
+            verify(appPreferences).setMirrorBackupsToDownloads(false)
         }
 
     @Test
-    fun `setSongCacheMb delegates to appPreferences and cacheManager`() =
+    fun `setSongCacheMb delegates to appPreferences`() =
         runTest(testDispatcher) {
             viewModel.setSongCacheMb(1024)
             testDispatcher.scheduler.advanceUntilIdle()
