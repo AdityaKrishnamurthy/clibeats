@@ -1,4 +1,4 @@
-package com.clibeats.presentation.component
+package com.clibeats.util
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull

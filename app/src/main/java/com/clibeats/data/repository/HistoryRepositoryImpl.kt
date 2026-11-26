@@ -12,6 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -23,6 +24,8 @@ class HistoryRepositoryImpl
     constructor(
         private val historyDao: HistoryDao,
     ) : HistoryRepository {
+        private val lastPrunedAtMs = AtomicLong(0L)
+
         override fun getPlayCounts(): Flow<Map<String, Int>> =
             historyDao.getAllAsFlow().map { plays -> plays.groupingBy { it.songId }.eachCount() }
 
@@ -68,17 +71,29 @@ class HistoryRepositoryImpl
         override suspend fun recordPlay(
             songId: String,
             providerId: String,
-        ) = historyDao.insert(
-            HistoryEntity(
-                songId = songId,
-                playedAt = System.currentTimeMillis(),
-                providerId = providerId,
-            ),
-        )
+        ) {
+            val now = System.currentTimeMillis()
+            historyDao.insert(
+                HistoryEntity(
+                    songId = songId,
+                    playedAt = now,
+                    providerId = providerId,
+                ),
+            )
+            val prev = lastPrunedAtMs.get()
+            if (now - prev >= PRUNE_INTERVAL_MS && lastPrunedAtMs.compareAndSet(prev, now)) {
+                historyDao.pruneToLatest(MAX_HISTORY_ROWS)
+            }
+        }
 
         override suspend fun clearHistoryBefore(epochMs: Long) = historyDao.clearBefore(epochMs)
 
         override suspend fun clearAllHistory() = historyDao.clearAll()
+
+        companion object {
+            const val MAX_HISTORY_ROWS = 3_000
+            private const val PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000L
+        }
     }
 
 private fun SongEntity.toDomainTrack(): Track =

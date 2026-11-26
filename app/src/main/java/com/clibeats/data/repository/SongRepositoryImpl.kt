@@ -43,6 +43,16 @@ class SongRepositoryImpl
 
         override suspend fun getTrackById(id: String): Track? = songDao.getById(id)?.toDomain()
 
+        override suspend fun getTracksByArtist(artistName: String): List<Track> {
+            val entities = songDao.getByArtist(artistName)
+            return entities.map { it.toDomain() }
+        }
+
+        override suspend fun getTracksByAlbum(
+            albumName: String,
+            artistName: String,
+        ): List<Track> = songDao.getByAlbum(albumName, artistName).map { it.toDomain() }
+
         override suspend fun upsertTrack(track: Track) {
             val existing = songDao.getById(track.id)
             songDao.upsert(track.toEntity(existing?.localPath, existing?.cachedAt))

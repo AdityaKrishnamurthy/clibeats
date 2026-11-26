@@ -59,8 +59,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.clibeats.domain.model.Playlist
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -68,6 +66,8 @@ import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 
 /** How the Playlists overview is laid out. Saved by name. */
 enum class PlaylistViewMode(

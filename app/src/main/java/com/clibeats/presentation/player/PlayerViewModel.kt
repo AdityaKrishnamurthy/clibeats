@@ -196,6 +196,19 @@ class PlayerViewModel
             }
         }
 
+        /** Playback state without 500 ms position ticks, so UI chrome does not recompose twice a second. */
+        val playbackMetadata: StateFlow<PlaybackState> =
+            playbackState
+                .map { it.copy(positionMs = 0L, bufferedPositionMs = 0L) }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.Eagerly, playbackState.value)
+
+        val positionMs: StateFlow<Long> =
+            playbackState
+                .map { it.positionMs }
+                .distinctUntilChanged()
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), 0L)
+
         /** Where the music is playing (null in previews/tests). */
         val audioOutput: StateFlow<AudioOutput>? = audioOutputMonitor?.current
 

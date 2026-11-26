@@ -98,6 +98,28 @@ interface SongDao {
     @Query("SELECT * FROM songs WHERE provider_id = 'local'")
     suspend fun getLocalSongs(): List<SongEntity>
 
+    @Query(
+        """
+        SELECT * FROM songs
+        WHERE LOWER(TRIM(artist)) = LOWER(TRIM(:artistName))
+        ORDER BY title COLLATE NOCASE ASC
+        """,
+    )
+    suspend fun getByArtist(artistName: String): List<SongEntity>
+
+    @Query(
+        """
+        SELECT * FROM songs
+        WHERE LOWER(TRIM(album)) = LOWER(TRIM(:albumName))
+          AND (:artistName = '' OR LOWER(TRIM(artist)) = LOWER(TRIM(:artistName)))
+        ORDER BY title COLLATE NOCASE ASC
+        """,
+    )
+    suspend fun getByAlbum(
+        albumName: String,
+        artistName: String = "",
+    ): List<SongEntity>
+
     @Query("DELETE FROM songs WHERE id IN (:ids)")
     suspend fun deleteByIds(ids: List<String>)
 

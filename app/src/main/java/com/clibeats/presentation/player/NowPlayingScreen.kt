@@ -58,7 +58,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -91,16 +90,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.clibeats.domain.model.AudioOutput
 import com.clibeats.domain.model.PlaybackState
 import com.clibeats.domain.model.RepeatMode
-import com.clibeats.presentation.component.ARTWORK_FULL_PX
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
 import com.clibeats.presentation.component.AddToPlaylistDialog
 import com.clibeats.presentation.component.HintedControl
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.layout.playingFromLabel
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
@@ -108,6 +105,9 @@ import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.util.ARTWORK_FULL_PX
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -119,11 +119,12 @@ fun NowPlayingScreen(
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
 ) {
-    val state by viewModel.playbackState.collectAsState()
-    val hint by viewModel.hint.collectAsState()
-    val sleepTimer by viewModel.sleepTimer.collectAsState()
-    val isLiked by viewModel.isCurrentLiked.collectAsState()
-    val audioOutput = viewModel.audioOutput?.collectAsState()?.value
+    val state by viewModel.playbackMetadata.collectAsStateWithLifecycle()
+    val positionState = viewModel.positionMs.collectAsStateWithLifecycle()
+    val hint by viewModel.hint.collectAsStateWithLifecycle()
+    val sleepTimer by viewModel.sleepTimer.collectAsStateWithLifecycle()
+    val isLiked by viewModel.isCurrentLiked.collectAsStateWithLifecycle()
+    val audioOutput = viewModel.audioOutput?.collectAsStateWithLifecycle()?.value
     // Coming back from the system output switcher: show the device that was picked. The switcher is a
     // system pop-up over this screen (no pause/resume), so also re-check when this window gets focus back.
     LifecycleResumeEffect(Unit) {
@@ -215,11 +216,11 @@ fun NowPlayingScreen(
     // ── Lyrics: 0 = the big cover, 1 = lyrics (the cover shrinks into a row above the controls) ──
     // The finger moves this value directly; the snap animation runs only after letting go, so the two never
     // fight (which used to leave it stuck halfway).
-    val lyricsState by viewModel.lyrics.collectAsState()
-    val showTranslation by viewModel.showTranslation.collectAsState()
-    val showPronunciation by viewModel.showPronunciation.collectAsState()
-    val extrasLoading by viewModel.extrasLoading.collectAsState()
-    val lyricsOpen by viewModel.lyricsOpen.collectAsState()
+    val lyricsState by viewModel.lyrics.collectAsStateWithLifecycle()
+    val showTranslation by viewModel.showTranslation.collectAsStateWithLifecycle()
+    val showPronunciation by viewModel.showPronunciation.collectAsStateWithLifecycle()
+    val extrasLoading by viewModel.extrasLoading.collectAsStateWithLifecycle()
+    val lyricsOpen by viewModel.lyricsOpen.collectAsStateWithLifecycle()
     var lyricsProgress by remember { mutableFloatStateOf(if (viewModel.lyricsOpen.value) 1f else 0f) }
     var settleJob by remember { mutableStateOf<Job?>(null) }
     var swiping by remember { mutableStateOf(false) }
@@ -377,6 +378,7 @@ fun NowPlayingScreen(
                             isLocalSong = track?.providerId == "local",
                             onSeek = viewModel::seekTo,
                             livePosition = viewModel::livePositionMs,
+                            positionTicks = positionState,
                             extras =
                                 LyricsExtras(
                                     showTranslation = showTranslation,
@@ -511,7 +513,7 @@ fun NowPlayingScreen(
                 // ── Waveform seek: scrub without interrupting playback, snaps back to "now"; controls on top ──
                 WaveformScrubber(
                     trackKey = track?.id,
-                    positionMs = state.positionMs,
+                    positionMsProvider = { positionState.value },
                     durationMs = state.durationMs,
                     onSeek = viewModel::seekTo,
                 ) {

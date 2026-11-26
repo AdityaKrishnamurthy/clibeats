@@ -13,6 +13,7 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -49,10 +50,12 @@ class HistoryRepositoryImplTest {
         }
 
     @Test
-    fun `recordPlay inserts HistoryEntity into historyDao`() =
+    fun `recordPlay inserts HistoryEntity and prunes history at most once per day`() =
         runTest {
             repository.recordPlay("s1", "ytmusic")
-            verify(historyDao).insert(any())
+            repository.recordPlay("s2", "ytmusic")
+            verify(historyDao, times(2)).insert(any())
+            verify(historyDao, times(1)).pruneToLatest(HistoryRepositoryImpl.MAX_HISTORY_ROWS)
         }
 
     @Test

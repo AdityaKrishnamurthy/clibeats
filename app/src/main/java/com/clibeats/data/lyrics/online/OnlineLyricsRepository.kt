@@ -113,14 +113,19 @@ class OnlineLyricsRepository
         }
 
         private suspend fun saveNotFound(trackId: String) {
-            runCatching { lyricsCacheDao.insert(LyricsCacheEntity(trackId, null, null, System.currentTimeMillis())) }
+            val row = LyricsCacheEntity(trackId, null, NOT_FOUND_MARK, System.currentTimeMillis())
+            runCatching { lyricsCacheDao.insert(row) }
         }
 
         private suspend fun readSaved(trackId: String): Pair<Lyrics?, Long>? {
             val row = runCatching { lyricsCacheDao.getById(trackId) }.getOrNull() ?: return null
-            val lyrics =
-                row.syncedLrc?.let { runCatching { json.decodeFromString(Lyrics.serializer(), it) }.getOrNull() }
-            return lyrics to row.fetchedAt
+            if (row.syncedLrc == null) {
+                // Ours: "not found" (marked). Anything else was saved by an older version: search again.
+                return if (row.plainLyrics == NOT_FOUND_MARK) null to row.fetchedAt else null
+            }
+            val lyrics = runCatching { json.decodeFromString(Lyrics.serializer(), row.syncedLrc) }.getOrNull()
+            // Not our format (e.g. raw LRC from v2.7.0's LRCLIB-only lyrics): search again for the best version.
+            return lyrics?.let { it to row.fetchedAt }
         }
 
         // ── searching ──
@@ -310,6 +315,7 @@ class OnlineLyricsRepository
             const val SOURCE_TIMEOUT_MS = 9_000L
             const val YOUTUBE_PREFERENCE = 3
             const val MEMORY_SIZE = 64
+            const val NOT_FOUND_MARK = "[not found]"
             const val NOT_FOUND_RETRY_MS = 3L * 24 * 60 * 60 * 1000
             const val USER_AGENT = "CLIBeats (Android music player; lyrics)"
             val LYRICS_PLUS_SERVERS = listOf("https://lyricsplus.prjktla.my.id", "https://lyricsplus.binimum.org")

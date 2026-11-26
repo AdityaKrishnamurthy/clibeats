@@ -54,6 +54,12 @@ interface HistoryDao {
     @Query("DELETE FROM history WHERE played_at < :beforeEpochMs")
     suspend fun clearBefore(beforeEpochMs: Long)
 
+    @Query(
+        "DELETE FROM history WHERE id NOT IN " +
+            "(SELECT id FROM history ORDER BY played_at DESC LIMIT :keepCount)",
+    )
+    suspend fun pruneToLatest(keepCount: Int)
+
     @Query("DELETE FROM history")
     suspend fun clearAll()
 }

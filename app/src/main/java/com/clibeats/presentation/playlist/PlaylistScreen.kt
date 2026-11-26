@@ -40,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +49,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Playlist
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.AddToPlaylistDialog
@@ -78,8 +78,8 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel = hiltViewModel(),
 ) {
     val trackActions: TrackActionsViewModel = hiltViewModel()
-    val state by viewModel.uiState.collectAsState()
-    val viewMode by viewModel.viewMode.collectAsState()
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
     // Here, not in the list: opening a playlist removes the list, and coming back should land where you were.
     val browserGridState = rememberLazyGridState()
     var showCreateDialog by remember { mutableStateOf(false) }
@@ -87,10 +87,10 @@ fun PlaylistScreen(
     var addToPlaylistTrack by remember { mutableStateOf<Track?>(null) }
     var coverChangePlaylist by remember { mutableStateOf<Playlist?>(null) }
     var pendingClear by remember { mutableStateOf<ClearTarget?>(null) }
-    val downloadedIds by trackActions.downloadedTrackIds.collectAsState()
-    val downloads by trackActions.downloads.collectAsState()
-    val pendingIds by trackActions.pendingTrackIds.collectAsState()
-    val playingId by trackActions.playingTrackId.collectAsState()
+    val downloadedIds by trackActions.downloadedTrackIds.collectAsStateWithLifecycle()
+    val downloads by trackActions.downloads.collectAsStateWithLifecycle()
+    val pendingIds by trackActions.pendingTrackIds.collectAsStateWithLifecycle()
+    val playingId by trackActions.playingTrackId.collectAsStateWithLifecycle()
     // Several songs picked in a playlist, going to "add to playlist".
     var bulkAddTracks by remember { mutableStateOf<List<Track>?>(null) }
     val selection =

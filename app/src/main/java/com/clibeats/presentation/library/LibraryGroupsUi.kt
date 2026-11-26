@@ -45,8 +45,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
-import com.clibeats.presentation.component.ARTWORK_THUMB_PX
-import com.clibeats.presentation.component.artworkUrlFor
 import com.clibeats.presentation.playlist.PlayButton
 import com.clibeats.presentation.playlist.PlaylistViewMode
 import com.clibeats.presentation.playlist.ViewModeBar
@@ -56,6 +54,8 @@ import com.clibeats.presentation.theme.CliBeatsDivider
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
+import com.clibeats.util.ARTWORK_THUMB_PX
+import com.clibeats.util.artworkUrlFor
 
 /** One artist or album as the Library shows it, whatever the view. */
 internal data class GroupEntry(

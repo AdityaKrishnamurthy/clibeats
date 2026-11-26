@@ -68,6 +68,7 @@ class RadioAutoplayTest {
         Dispatchers.setMain(testDispatcher)
 
         whenever(playerAdapter.queueFlow).thenReturn(queueFlow)
+        whenever(playerAdapter.radioTrackIds).thenReturn(MutableStateFlow(emptySet()))
         whenever(playerAdapter.playbackState).thenReturn(playbackStateFlow)
         whenever(networkMonitor.isOnline).thenReturn(isOnlineFlow)
 
@@ -102,13 +103,19 @@ class RadioAutoplayTest {
                 PlaybackRepositoryImpl(
                     playerAdapter = playerAdapter,
                     streamResolver = streamResolver,
-                    queueDao = queueDao,
+                    queuePersistence = QueuePersistenceCoordinator(queueDao, songDao, appPreferences),
+                    radioAutoplay =
+                        RadioAutoplayCoordinator(
+                            appPreferences = appPreferences,
+                            historyRepository = historyRepository,
+                            providerRegistry = providerRegistry,
+                            networkMonitor = networkMonitor,
+                        ),
                     songDao = songDao,
-                    appPreferences = appPreferences,
-                    ioDispatcher = testDispatcher,
                     historyRepository = historyRepository,
-                    providerRegistry = providerRegistry,
-                    networkMonitor = networkMonitor,
+                    imageLoader = dagger.Lazy { mock() },
+                    appContext = mock(),
+                    ioDispatcher = testDispatcher,
                 )
 
             playbackStateFlow.value =
@@ -132,13 +139,19 @@ class RadioAutoplayTest {
                 PlaybackRepositoryImpl(
                     playerAdapter = playerAdapter,
                     streamResolver = streamResolver,
-                    queueDao = queueDao,
+                    queuePersistence = QueuePersistenceCoordinator(queueDao, songDao, appPreferences),
+                    radioAutoplay =
+                        RadioAutoplayCoordinator(
+                            appPreferences = appPreferences,
+                            historyRepository = historyRepository,
+                            providerRegistry = providerRegistry,
+                            networkMonitor = networkMonitor,
+                        ),
                     songDao = songDao,
-                    appPreferences = appPreferences,
-                    ioDispatcher = testDispatcher,
                     historyRepository = historyRepository,
-                    providerRegistry = providerRegistry,
-                    networkMonitor = networkMonitor,
+                    imageLoader = dagger.Lazy { mock() },
+                    appContext = mock(),
+                    ioDispatcher = testDispatcher,
                 )
 
             playbackStateFlow.value =

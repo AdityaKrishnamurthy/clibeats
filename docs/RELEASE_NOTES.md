@@ -1,3 +1,98 @@
+# CLIBeats v2.7.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.7.1.apk` (verify with `SHA256SUMS.txt`)
+
+Lyrics, redone: syllable by syllable, for your own files and for YouTube Music, with translations and
+pronunciations.
+
+## Lyrics
+
+- **Syllable sync.** Lyrics with word timing fill in syllable by syllable as they're sung; line-synced lyrics light
+  up line by line; songs with only the words show them as text. The line being sung stays in view; scroll yourself
+  and it waits a few seconds before following again. Tap a line to jump there.
+- **Swipe between cover and lyrics.** Swipe up on the cover (or tap the lyrics button) and the cover shrinks into a
+  small row above the controls; swipe up on that row to bring it back, swipe down to close Now Playing. Lyrics stay
+  open when you reopen the player from the mini player.
+- **Your own files.** Local songs read their lyrics from the file itself (FLAC, Opus/Ogg, MP3 and M4A tags) or from a
+  `.lrc` file with the same name beside the song. Local songs are never searched for online.
+- **YouTube Music songs.** Lyrics are looked up from several sources at once — LyricsPlus, BetterLyrics, LRCLIB,
+  YouTube Music itself and lyrics.ovh — and the best is kept: syllable sync first, then line sync, then plain.
+  Versions that don't match the song (a different length, or another language's version) are skipped.
+- **Saved, and offline for downloads.** Found lyrics are kept on the phone; a downloaded song saves its lyrics when
+  the download finishes, so they show without a connection.
+- **文A Translate and abc Pronunciation.** Two buttons at the top of the lyrics: the meaning of each line in your
+  phone's language, and how non-Latin lines (Japanese, Hindi, Korean, Kannada…) are pronounced, in Latin letters.
+  On syllable-synced songs the pronunciation fills in along with the line. Both can be on together and are
+  remembered; a song's translations are saved, so switching back and forth is instant.
+- **A clearer typeface.** Lyrics use Poppins, big and rounded, for every language.
+
+## Fixes
+
+- **Download notifications.** Two songs downloading at once each keep their own notification, and progress updates
+  only when the percentage changes.
+
+---
+
+# CLIBeats v2.7.0 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.7.0.apk` (verify with `SHA256SUMS.txt`)
+· **Size:** about 5.8 MB
+
+Synced lyrics, a sleep timer, and downloads that pick up where they stopped.
+
+## Synced lyrics
+
+- **Lyrics in Now Playing.** A new lyrics button swaps the cover for the song's words, scrolling to the line being
+  sung and highlighting it in your accent colour. Tap any line to jump to that moment.
+- Lyrics come from LRCLIB and are kept on the phone, so a song you've played once shows them again without a
+  connection. A song with no lyrics shows `[ NO SYNCED LYRICS AVAILABLE ]`; one tap brings the cover back.
+
+## Sleep timer
+
+- **Falls asleep with you.** The bedtime icon at the bottom of Now Playing offers **15, 30, 45 or 60 minutes**, or
+  **End of track**. The time left shows beside the icon, and **Off** cancels it.
+
+## Queue
+
+- **Your songs stay ahead of the radio.** Queuing a song while a suggestion is playing puts it after the songs you
+  already queued and before the suggestions still to come, instead of at the very end of the queue.
+- **The radio line survives a restart.** The queue remembers which songs are suggestions, so after closing and
+  reopening the app your songs still come first and `∞ FROM RADIO` still marks where they end.
+
+## Downloads
+
+- **Interrupted downloads resume.** Downloads run in the background and keep the part already fetched, so a song
+  stopped by a closed app or a dropped connection carries on from where it stopped instead of starting over. Two
+  songs still download at once.
+
+## Library
+
+- **Artist and album pages.** Tapping an artist or album now opens a page of its own — "Artist · 12 tracks" — with
+  ▶ PLAY, ⤨ SHUFFLE, the Find box, hold to select, and the back arrow returning you where you came from.
+- **Faster scans.** Songs appear in the library as they're found, and covers and tags are read in parallel
+  afterwards, so a large folder is playable while it finishes.
+
+## Settings
+
+- **Backup mirroring is your choice.** A new toggle in Settings → Backup stops the daily backup being copied to
+  `Download/CLIBeats`; the copy kept inside the app is always made.
+- **Tidier Settings.** Theme, Local Library, Storage and Cache, Audio Quality and Backup each have their own block,
+  and the old Active Provider row is gone (Online or Local is still chosen in Search).
+- **History stops at 3,000 plays.** Older entries are trimmed daily, so the app stays light.
+
+## Privacy
+
+- **HTTPS only.** The app now refuses plain HTTP connections.
+- **Backups leave out private data.** The local database, downloaded audio and preferences are excluded from
+  Android's cloud backup and device transfer.
+
+## Fixes
+
+- **A smoother scrubber.** Dragging the progress bar no longer redraws the whole screen twice a second; the cover,
+  title and controls stay put.
+
+---
+
 # CLIBeats v2.6.1 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.6.1.apk` (verify with `SHA256SUMS.txt`)

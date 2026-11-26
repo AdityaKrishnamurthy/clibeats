@@ -116,6 +116,8 @@ internal fun LyricsPanel(
     onSeek: (Long) -> Unit,
     /** The player's exact position now (read every frame). */
     livePosition: () -> Long,
+    /** The position as the player reports it (a few times a second), to follow seeks while paused. */
+    positionTicks: State<Long>,
     extras: LyricsExtras,
     modifier: Modifier = Modifier,
 ) {
@@ -141,7 +143,7 @@ internal fun LyricsPanel(
                 is LyricsState.Loaded ->
                     when (val lyrics = state.lyrics) {
                         is Lyrics.Synced -> {
-                            val position = rememberPlaybackPosition(playback, livePosition)
+                            val position = rememberPlaybackPosition(playback, livePosition, positionTicks)
                             SyncedLyrics(lyrics, position, onSeek, extras)
                         }
                         is Lyrics.Plain -> PlainLyrics(lyrics, extras)
@@ -276,8 +278,9 @@ private fun LyricsMessage(
 private fun rememberPlaybackPosition(
     playback: PlaybackState,
     livePosition: () -> Long,
+    positionTicks: State<Long>,
 ): State<Long> {
-    val position = remember { mutableLongStateOf(playback.positionMs) }
+    val position = remember { mutableLongStateOf(livePosition()) }
     val trackId = playback.currentTrack?.id
     LaunchedEffect(trackId, playback.isPlaying) {
         position.longValue = livePosition()
@@ -287,7 +290,10 @@ private fun rememberPlaybackPosition(
         }
     }
     // Paused: still follow seeks (the waveform, a tapped line).
-    LaunchedEffect(playback.positionMs) { if (!playback.isPlaying) position.longValue = livePosition() }
+    LaunchedEffect(playback.isPlaying) {
+        if (playback.isPlaying) return@LaunchedEffect
+        snapshotFlow { positionTicks.value }.collect { position.longValue = livePosition() }
+    }
     return position
 }
 

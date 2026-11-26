@@ -6,7 +6,6 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.clibeats.data.backup.LibrarySnapshotManager
-import com.clibeats.data.cache.CacheManager
 import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.cache.MediaCaches
 import com.clibeats.data.download.TrackDownloadManager
@@ -15,7 +14,6 @@ import com.clibeats.data.playlist.PlaylistExchangeManager
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.data.scan.LocalMusicScanner
 import com.clibeats.data.scan.ScanStatus
-import com.clibeats.domain.provider.ProviderRegistry
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.domain.repository.SongRepository
 import com.clibeats.presentation.theme.Accent
@@ -39,8 +37,6 @@ class SettingsViewModel
     @Inject
     constructor(
         private val appPreferences: AppPreferences,
-        private val cacheManager: CacheManager,
-        private val providerRegistry: ProviderRegistry,
         private val playlistExchangeManager: PlaylistExchangeManager,
         private val songRepository: SongRepository,
         private val snapshotManager: LibrarySnapshotManager? = null,
@@ -81,8 +77,6 @@ class SettingsViewModel
         fun setSongCacheMb(mb: Int) {
             viewModelScope.launch {
                 appPreferences.setCacheMaxMb(mb)
-                cacheManager.maxCacheSizeBytes = mb * BYTES_IN_MB
-                runCatching { cacheManager.evictLruIfNeeded() }
                 runCatching { mediaCaches?.setSongLimitMb(mb) }
             }
         }
@@ -96,7 +90,6 @@ class SettingsViewModel
 
         fun clearSongCache() {
             viewModelScope.launch {
-                runCatching { cacheManager.clearAllCache() }
                 runCatching { mediaCaches?.clearSongs() }
             }
         }
@@ -152,37 +145,22 @@ class SettingsViewModel
             runCatching { playbackRepository?.refreshLocalTracks() }
         }
 
-        private data class RawSettings(
-            val providerId: String?,
-            val cacheMaxMb: Int,
-            val highQualityStreaming: Boolean,
-            val themeModeName: String,
-            val accentColorName: String,
-        )
-
         val uiState: StateFlow<SettingsUiState> =
             combine(
-                appPreferences.activeProviderId,
                 appPreferences.cacheMaxMb,
                 appPreferences.highQualityStreaming,
+                appPreferences.mirrorBackupsToDownloads,
                 appPreferences.themeMode,
                 appPreferences.accentColorName,
-            ) { providerId, cacheMaxMb, highQuality, modeName, accentName ->
-                RawSettings(providerId, cacheMaxMb, highQuality, modeName, accentName)
-            }.combine(cacheManager.getAllCachedAsFlow()) { raw, cachedEntities ->
+            ) { cacheMaxMb, highQuality, mirrorBackups, modeName, accentName ->
                 SettingsUiState(
-                    activeProviderId = raw.providerId ?: ProviderRegistry.DEFAULT_PROVIDER_ID,
-                    providers =
-                        providerRegistry.providers.map { provider ->
-                            ProviderOption(provider.providerId, provider.displayName)
-                        },
-                    cacheMaxMb = raw.cacheMaxMb,
-                    highQualityStreaming = raw.highQualityStreaming,
-                    currentCacheSizeBytes = cachedEntities.sumOf { it.fileSizeBytes },
+                    cacheMaxMb = cacheMaxMb,
+                    highQualityStreaming = highQuality,
+                    mirrorBackupsToDownloads = mirrorBackups,
                     themeMode =
-                        CliBeatsThemeMode.entries.firstOrNull { it.name == raw.themeModeName }
+                        CliBeatsThemeMode.entries.firstOrNull { it.name == modeName }
                             ?: CliBeatsThemeMode.DARK,
-                    accentColor = Accent.fromStored(raw.accentColorName),
+                    accentColor = Accent.fromStored(accentName),
                 )
             }.stateIn(
                 scope = viewModelScope,
@@ -193,9 +171,9 @@ class SettingsViewModel
         private val _exchangeMessage = MutableStateFlow<String?>(null)
         val exchangeMessage: StateFlow<String?> = _exchangeMessage.asStateFlow()
 
-        fun setActiveProvider(providerId: String) {
+        fun setMirrorBackupsToDownloads(enabled: Boolean) {
             viewModelScope.launch {
-                appPreferences.setActiveProviderId(providerId)
+                appPreferences.setMirrorBackupsToDownloads(enabled)
             }
         }
 
@@ -282,9 +260,5 @@ class SettingsViewModel
 
         fun clearShareFile() {
             _shareFile.value = null
-        }
-
-        companion object {
-            private const val BYTES_IN_MB = 1048576L
         }
     }

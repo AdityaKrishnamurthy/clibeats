@@ -15,7 +15,6 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +23,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.update.UpdateFrequency
 import com.clibeats.data.update.UpdateState
 import com.clibeats.presentation.component.TuiBlock
@@ -33,8 +33,8 @@ import com.clibeats.presentation.theme.LocalAccentColor
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun UpdateSection(viewModel: UpdateViewModel = hiltViewModel()) {
-    val state by viewModel.state.collectAsState()
-    val frequency by viewModel.frequency.collectAsState()
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val frequency by viewModel.frequency.collectAsStateWithLifecycle()
     val accent = LocalAccentColor.current
     val release = state.releaseOrNull()
 
