@@ -26,6 +26,11 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- Android Auto / AAOS: the head unit connects to PlaybackService's MediaLibrarySession. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <!-- singleTask: a link opened while CLIBeats runs goes to the running app (onNewIntent). -->
         <activity
             android:name=".MainActivity"

@@ -9,7 +9,6 @@ import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -27,6 +26,7 @@ import com.clibeats.domain.model.RepeatMode
 import com.clibeats.domain.repository.LibraryRepository
 import com.clibeats.domain.repository.PlaybackRepository
 import com.clibeats.playback.ArtworkBitmapLoader
+import com.clibeats.playback.PlayerMediaBridge
 import com.google.common.collect.ImmutableList
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
@@ -66,6 +66,8 @@ class PlaybackService : MediaLibraryService() {
     @Inject lateinit var imageLoader: ImageLoader
 
     @Inject lateinit var libraryRepository: LibraryRepository
+
+    @Inject lateinit var androidAutoBrowser: AndroidAutoBrowser
 
     /** Whether the playing song is in Favorites; drives the heart on the notification. */
     @Volatile private var currentLiked = false
@@ -262,7 +264,7 @@ class PlaybackService : MediaLibraryService() {
         }
 
     /** Runs [block] after the saved queue is restored into the shared player, as a ListenableFuture. */
-    private fun <T> afterRestore(block: () -> T): ListenableFuture<T> {
+    private fun <T> afterRestore(block: suspend () -> T): ListenableFuture<T> {
         val result = SettableFuture.create<T>()
         scope.launch {
             runCatching {
@@ -322,19 +324,10 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<MediaItem>> {
-            val rootId = if (params?.isRecent == true) RECENT_ROOT else ROOT
             Log.i(TAG, "libraryRoot recent=${params?.isRecent} from ${browser.packageName}")
-            val root =
-                MediaItem.Builder()
-                    .setMediaId(rootId)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle("CLIBeats")
-                            .setIsBrowsable(true)
-                            .setIsPlayable(false)
-                            .build(),
-                    ).build()
-            return Futures.immediateFuture(LibraryResult.ofItem(root, params))
+            return afterRestore {
+                LibraryResult.ofItem(androidAutoBrowser.libraryRoot(params?.isRecent == true), params)
+            }
         }
 
         override fun onGetChildren(
@@ -346,15 +339,16 @@ class PlaybackService : MediaLibraryService() {
             params: LibraryParams?,
         ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
             afterRestore {
-                // Recent root: the last played song (shown on the resume card). Otherwise: the queue.
+                // Recent root is the System UI resume card; everything else is the Auto browse tree.
                 val items = queueItems()
                 val children =
                     if (parentId == RECENT_ROOT) {
                         listOfNotNull(items.getOrNull(player.currentMediaItemIndex) ?: items.firstOrNull())
+                            .map(::asPlayable)
                     } else {
-                        items
+                        androidAutoBrowser.children(parentId, items, player.currentMediaItemIndex)
                     }
-                LibraryResult.ofItemList(ImmutableList.copyOf(children.map(::asPlayable)), params)
+                LibraryResult.ofItemList(ImmutableList.copyOf(children), params)
             }
 
         override fun onGetItem(
@@ -364,6 +358,7 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<LibraryResult<MediaItem>> =
             afterRestore {
                 queueItems().firstOrNull { it.mediaId == mediaId }?.let { LibraryResult.ofItem(asPlayable(it), null) }
+                    ?: androidAutoBrowser.item(mediaId)?.let { LibraryResult.ofItem(it, null) }
                     ?: LibraryResult.ofError(SessionError.ERROR_BAD_VALUE)
             }
 
@@ -392,8 +387,25 @@ class PlaybackService : MediaLibraryService() {
             if (mediaItems.all { it.localConfiguration != null }) {
                 return super.onSetMediaItems(mediaSession, controller, mediaItems, startIndex, startPositionMs)
             }
-            val requestedId = mediaItems.getOrNull(startIndex.coerceAtLeast(0))?.mediaId
-            return afterRestore { currentQueue(requestedId) }
+            val requestedIds = mediaItems.map { it.mediaId }
+            val index = startIndex.coerceIn(0, requestedIds.lastIndex.coerceAtLeast(0))
+            return afterRestore {
+                val inQueue = queueItems().associateBy { it.mediaId }
+                if (requestedIds.all(inQueue::containsKey)) {
+                    currentQueue(requestedIds.getOrNull(index))
+                } else {
+                    // A song from Recently Played, Playlists or Library: hand it to the normal queue
+                    // pipeline, and answer immediately with playable items so the head unit can start.
+                    val tracks = androidAutoBrowser.resolveTracks(requestedIds)
+                    if (tracks.isEmpty()) return@afterRestore currentQueue(requestedIds.getOrNull(index))
+                    playbackRepository.playFrom(tracks, index, "Android Auto")
+                    MediaSession.MediaItemsWithStartPosition(
+                        tracks.map { PlayerMediaBridge.buildMediaItem(it, downloadedPath = null) },
+                        index.coerceIn(tracks.indices),
+                        startPositionMs.coerceAtLeast(0L),
+                    )
+                }
+            }
         }
 
         override fun onAddMediaItems(
@@ -403,8 +415,36 @@ class PlaybackService : MediaLibraryService() {
         ): ListenableFuture<MutableList<MediaItem>> =
             afterRestore {
                 val byId = queueItems().associateBy { it.mediaId }
-                mediaItems.mapNotNull { it.takeIf { item -> item.localConfiguration != null } ?: byId[it.mediaId] }
-                    .toMutableList()
+                val missing = mediaItems.filter { it.localConfiguration == null && it.mediaId !in byId }
+                val browsed =
+                    androidAutoBrowser.resolveTracks(missing.map { it.mediaId })
+                        .associateBy { it.id }
+                        .mapValues { (_, track) -> PlayerMediaBridge.buildMediaItem(track, downloadedPath = null) }
+                mediaItems.mapNotNull { item ->
+                    item.takeIf { it.localConfiguration != null } ?: byId[item.mediaId] ?: browsed[item.mediaId]
+                }.toMutableList()
+            }
+
+        override fun onSearch(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<Void>> = Futures.immediateFuture(LibraryResult.ofVoid())
+
+        override fun onGetSearchResult(
+            session: MediaLibrarySession,
+            browser: MediaSession.ControllerInfo,
+            query: String,
+            page: Int,
+            pageSize: Int,
+            params: LibraryParams?,
+        ): ListenableFuture<LibraryResult<ImmutableList<MediaItem>>> =
+            afterRestore {
+                LibraryResult.ofItemList(
+                    ImmutableList.copyOf(androidAutoBrowser.search(query, pageSize.coerceAtLeast(1))),
+                    params,
+                )
             }
     }
 
@@ -415,9 +455,8 @@ class PlaybackService : MediaLibraryService() {
 
     private companion object {
         const val TAG = "CLIBeatsSession"
-        const val ROOT = "clibeats_root"
         const val SHARP_ARTWORK = "hq"
-        const val RECENT_ROOT = "clibeats_recent"
+        const val RECENT_ROOT = AndroidAutoBrowser.RECENT_ROOT
         const val REPEAT_ACTION = "clibeats.REPEAT"
         val REPEAT_COMMAND = SessionCommand(REPEAT_ACTION, Bundle.EMPTY)
         const val FAVORITE_ACTION = "clibeats.FAVORITE"
