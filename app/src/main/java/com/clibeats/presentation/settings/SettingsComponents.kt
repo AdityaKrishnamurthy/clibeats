@@ -55,7 +55,6 @@ enum class SettingsSection(
     STORAGE("Storage & cache"),
     DOWNLOADS("Downloads"),
     BACKUP("Backup"),
-    DISCORD("Discord"),
     UPDATES("Updates"),
 }
 

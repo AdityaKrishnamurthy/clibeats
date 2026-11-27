@@ -65,10 +65,20 @@ fun MainLayout(
     onTabSelected: (MainTab) -> Unit = {},
     onQueueClick: () -> Unit = {},
     onOpenEqualizer: () -> Unit = {},
+    /** True while the equalizer is on screen (it opens over the app, from Now Playing). */
+    equalizerOpen: Boolean = false,
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
+    // The equalizer was opened from Now Playing: closing it goes back there, not to the screen underneath.
+    var backToNowPlaying by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(equalizerOpen) {
+        if (!equalizerOpen && backToNowPlaying) {
+            backToNowPlaying = false
+            showNowPlaying = true
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavigationSuiteScaffold(
@@ -121,6 +131,7 @@ fun MainLayout(
                     onQueueClick()
                 },
                 onOpenEqualizer = {
+                    backToNowPlaying = true
                     showNowPlaying = false
                     onOpenEqualizer()
                 },

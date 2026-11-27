@@ -549,12 +549,12 @@ fun NowPlayingScreen(
                     )
                 }
 
-                // A little extra room so the action icons sit clear of the waveform.
-                Spacer(Modifier.height(52.dp))
+                // Room below the waveform; the volume row then sits between it and the action icons.
+                Spacer(Modifier.height(24.dp))
 
                 // ── Volume + equalizer: the two controls that belong with the song ──
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(

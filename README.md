@@ -160,8 +160,6 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Equalizer on Now Playing:** volume and an **[ EQ ]** shortcut beside the song; the screen has a terminal
   response graph, animated waveform, 10 draggable bands (31 Hz – 16 kHz), presets, pre-amp and RESET. Android 9+
   uses `DynamicsProcessing`, Android 8 the platform `Equalizer`; **SYSTEM EQ** opens the phone's effects panel.
-- **Discord:** opt-in "Listening to CLIBeats" card preview; publishing is gated on Discord's official Social SDK
-  (see `docs/DISCORD_PRESENCE.md`) and never uses a user token.
 
 ### Storage & performance
 - **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);

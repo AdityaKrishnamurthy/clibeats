@@ -43,7 +43,6 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GraphicEq
-import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Swipe
 import androidx.compose.material.icons.outlined.SystemUpdate
@@ -220,8 +219,6 @@ fun SettingsScreen(
     LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
     val gesturesViewModel: GesturesViewModel = hiltViewModel()
     val gestures by gesturesViewModel.gestures.collectAsStateWithLifecycle()
-    val discordViewModel: DiscordPresenceViewModel = hiltViewModel()
-    val discord by discordViewModel.state.collectAsStateWithLifecycle()
 
     // The main list, or one section's page over it. Back (or tapping Settings again) returns to the list.
     var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
@@ -266,7 +263,6 @@ fun SettingsScreen(
                             } else {
                                 "${downloadedItems.size} songs \u00b7 ${formatSize(downloadedBytes)}"
                             },
-                        discord = if (discord.enabled) "On \u00b7 Listening to CLIBeats" else "Off",
                         backup = lastBackupAt?.let { "Last saved ${backupTime(it)}" } ?: "Not saved yet",
                     ),
                 palette = themePalette,
@@ -341,7 +337,6 @@ fun SettingsScreen(
                                 onDeleteDownload = viewModel::deleteDownload,
                                 onClearAll = { confirmClearDownloads = true },
                             )
-                        SettingsSection.DISCORD -> DiscordSettingsBlock(discordViewModel)
                         SettingsSection.UPDATES -> UpdateSection()
                     }
                 }
@@ -370,7 +365,6 @@ private class SettingsSummary(
     val storage: String,
     val downloads: String,
     val backup: String,
-    val discord: String,
 )
 
 /** Settings' main list: the theme up top, then each section in a few groups, then About. */
@@ -455,11 +449,6 @@ private fun SettingsList(
             label = "App",
             rows =
                 listOf(
-                    {
-                        SettingsNavRow(Icons.Outlined.Headphones, "Discord", summary.discord) {
-                            onOpen(SettingsSection.DISCORD)
-                        }
-                    },
                     {
                         SettingsNavRow(
                             Icons.Outlined.SystemUpdate,
