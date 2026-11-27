@@ -48,8 +48,6 @@ data class ManualPick(
     val query: String,
     val searching: Boolean = true,
     val results: List<Track> = emptyList(),
-    /** The result tapped with [ + ]: chosen, but only saved once "Mark as found" is tapped. */
-    val chosen: Track? = null,
 )
 
 @Suppress("TooManyFunctions") // one small handler per screen action
@@ -164,15 +162,9 @@ class ImportViewModel
             if (playingId.value == track.id) playback.pause() else playback.playTrack(track)
         }
 
-        /** [ + ] on a result: chooses it (tapped again, un-chooses it). Nothing is saved yet. */
-        fun choose(track: Track) {
-            _manual.update { it?.copy(chosen = if (it.chosen?.id == track.id) null else track) }
-        }
-
-        /** "Mark as found": saves the chosen result as this song's match. */
-        fun confirmPick() {
+        /** [ + ] on a result: it becomes this song's match (the song stays in the list, ticked; Find can change it). */
+        fun pick(track: Track) {
             val pick = _manual.value ?: return
-            val track = pick.chosen ?: return
             _manual.value = null
             viewModelScope.launch { importer.resolveManually(pick.playlistIndex, pick.songIndex, track) }
         }

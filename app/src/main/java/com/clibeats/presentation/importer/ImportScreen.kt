@@ -101,7 +101,7 @@ private fun ImportDialogs(
             onPreview = viewModel::preview,
             pick = pick,
             onSearch = viewModel::search,
-            onPick = viewModel::choose,
+            onPick = viewModel::pick,
             onDismiss = viewModel::closeManual,
             seek =
                 PreviewSeek(
@@ -110,7 +110,6 @@ private fun ImportDialogs(
                     position = viewModel::livePositionMs,
                     onSeek = viewModel::seekTo,
                 ),
-            onConfirm = viewModel::confirmPick,
         )
     }
 }

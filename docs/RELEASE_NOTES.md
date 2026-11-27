@@ -4,10 +4,20 @@
 
 ## Playlist import
 
-- **Seek while checking a match.** In the Find sheet for a song that wasn't matched, the song you're previewing
-  gets a small seek bar right under it, so you can jump to any part to check it's the right version.
-- **Choose, then mark as found.** [ + ] now only chooses a result (✓); you can switch to another version of the
-  song at any time. The song is saved as found only when you tap **Mark as found**.
+- **Picked songs show as found.** After choosing a song with Find → [ + ], it stays where it was in the import
+  summary with a ✓ next to Find (tap Find again to change it), and the playlist counts it as found. When every
+  song is ticked, the playlist turns green.
+- **Seek while checking a match.** In the Find sheet, the song you're previewing gets a small seek bar right under
+  it, so you can jump to any part to check it's the right version.
+
+## Faster Home and Search
+
+- **Home loads instantly.** The Home page (charts, popular playlists, your languages' rows) is saved for a day, so
+  opening the app shows it at once instead of fetching everything again; it updates once a day, or straight away
+  with [ ↻ REFRESH ].
+- **Playlist covers in Search.** Some playlists' covers (their own custom covers) didn't load; they do now.
+- **Tapping Home closes an open playlist.** With a playlist open from Home, tapping the Home tab again goes back to
+  the Home page (another tap switches Online / Local as before).
 
 ---
 

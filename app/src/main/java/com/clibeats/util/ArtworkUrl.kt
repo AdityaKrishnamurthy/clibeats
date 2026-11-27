@@ -29,7 +29,10 @@ fun artworkUrlFor(
             } else {
                 url
             }
-        "ytimg.com" in url -> {
+        // A plain video thumbnail (/vi/<id>/…): pick the size. Anything else on ytimg (e.g. a playlist's own
+        // cover, /pl_c/…) is signed by its query string, so it's used exactly as given (cutting the query made
+        // some playlist covers fail to load).
+        "ytimg.com" in url && YTIMG_THUMB.containsMatchIn(url) -> {
             val name = if (sizePx <= YTIMG_HQ_MAX_PX) "hqdefault.jpg" else "maxresdefault.jpg"
             url.substringBefore('?').replace(YTIMG_THUMB, "$1$name")
         }

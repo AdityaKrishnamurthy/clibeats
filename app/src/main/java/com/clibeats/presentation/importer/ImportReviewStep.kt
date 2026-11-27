@@ -5,7 +5,6 @@ package com.clibeats.presentation.importer
 import android.content.Context
 import android.os.Build
 import android.widget.Toast
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -46,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -176,18 +174,25 @@ private fun LazyListScope.playlistDetails(
     onCopy: (List<ImportedSong>) -> Unit,
 ) {
     val missed = playlist.missed
-    if (missed.isNotEmpty()) {
+    // Songs that weren't matched, and those since picked with Find: they stay here (ticked) so a pick can be
+    // checked or changed; once every one is ticked the section turns green.
+    val byHand = playlist.results.filter { it.match == null || it.manual }.sortedBy { it.index }
+    if (byHand.isNotEmpty()) {
         importSectionHeader(
             "p${playlistIndex}_missed",
-            "✗ COULDN'T MATCH · ${missed.size}",
-            good = false,
-            action = "[ Copy ]" to { onCopy(missed) },
+            if (missed.isEmpty()) {
+                "✓ PICKED BY HAND · ${byHand.size}"
+            } else {
+                "✗ COULDN'T MATCH · ${missed.size} of ${byHand.size}"
+            },
+            good = missed.isEmpty(),
+            action = if (missed.isNotEmpty()) "[ Copy ]" to { onCopy(missed) } else null,
         )
-        items(missed, key = { "p${playlistIndex}_m${it.index}" }) { song ->
-            SpotifyRow(song, onFind = { onFind(playlistIndex, song) })
+        items(byHand, key = { "p${playlistIndex}_m${it.index}" }) { song ->
+            SpotifyRow(song, onFind = { onFind(playlistIndex, song) }, found = song.match != null)
         }
     }
-    val matched = playlist.matched.sortedBy { it.index }
+    val matched = playlist.matched.filterNot { it.manual }.sortedBy { it.index }
     if (matched.isNotEmpty()) {
         importSectionHeader("p${playlistIndex}_ok", "✓ MATCHED · ${matched.size}", good = true)
         items(matched, key = { "p${playlistIndex}_ok${it.index}" }) { MatchedRow(it) }
@@ -228,7 +233,6 @@ internal fun FindMatchSheet(
     onPick: (Track) -> Unit,
     onDismiss: () -> Unit,
     seek: PreviewSeek? = null,
-    onConfirm: () -> Unit = {},
 ) {
     var query by rememberSaveable(pick.songIndex, pick.playlistIndex) { mutableStateOf(pick.query) }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -246,7 +250,7 @@ internal fun FindMatchSheet(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text(
-                text = "Tap a song to play it, [ + ] to choose it, then Mark as found.",
+                text = "Tap a song to play it, then [ + ] to add it.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CliBeatsTextSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -287,13 +291,7 @@ internal fun FindMatchSheet(
                     LazyColumn(modifier = Modifier.fillMaxWidth().height(420.dp)) {
                         items(pick.results, key = { it.id }) { track ->
                             val playing = track.id == playingId
-                            val chosen = pick.chosen?.id == track.id
-                            Column(
-                                modifier =
-                                    Modifier.background(
-                                        if (chosen) CliBeatsAccent.copy(alpha = CHOSEN_ALPHA) else Color.Transparent,
-                                    ),
-                            ) {
+                            Column {
                                 Row(
                                     modifier =
                                         Modifier
@@ -331,14 +329,14 @@ internal fun FindMatchSheet(
                                         )
                                     }
                                     Text(
-                                        text = if (chosen) "[ ✓ ]" else "[ + ]",
+                                        text = "[ + ]",
                                         style = MaterialTheme.typography.labelLarge,
                                         color = CliBeatsAccent,
                                         modifier =
                                             Modifier
                                                 .clickable(
                                                     role = Role.Button,
-                                                    onClickLabel = if (chosen) "Unchoose" else "Choose ${track.title}",
+                                                    onClickLabel = "Add ${track.title}",
                                                 ) {
                                                     onPick(track)
                                                 }.padding(horizontal = 12.dp, vertical = 10.dp),
@@ -351,13 +349,6 @@ internal fun FindMatchSheet(
                             }
                         }
                     }
-            }
-            Box(modifier = Modifier.padding(16.dp)) {
-                CliButton(
-                    text = pick.chosen?.let { "Mark as found: ${it.title}" } ?: "Choose a song with [ + ]",
-                    primary = pick.chosen != null,
-                    onClick = { if (pick.chosen != null) onConfirm() },
-                )
             }
         }
     }
@@ -422,5 +413,3 @@ private fun PreviewSeekBar(
         )
     }
 }
-
-private const val CHOSEN_ALPHA = 0.14f

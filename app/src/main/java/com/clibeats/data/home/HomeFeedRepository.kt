@@ -85,6 +85,7 @@ class HomeFeedRepository
          * language). Falls back to the copy on disk when YouTube Music can't be reached; null when there's
          * nothing to show.
          */
+        @Suppress("CyclomaticComplexMethod")
         suspend fun feed(
             moodParams: String? = null,
             languages: Set<HomeLanguage> = emptySet(),
@@ -95,6 +96,15 @@ class HomeFeedRepository
                 if (refresh) {
                     spotifyLists.clear()
                     matchedCharts.clear()
+                }
+                // The whole page (feed, charts, popular playlists, language rows) is kept for a day: opening Home
+                // shows it at once without asking again. Refresh, a new day, or other languages load it anew.
+                val pageKey = languages.map { it.name }.sorted().joinToString(",")
+                if (moodParams == null && !refresh) {
+                    savedPage(pageKey)?.let { saved ->
+                        lastHomePlaylists = homePlaylists(saved.shelves)
+                        return@withContext saved
+                    }
                 }
                 coroutineScope {
                     // The extra rows load alongside the feed.
@@ -113,7 +123,10 @@ class HomeFeedRepository
                     val trending = extra.trending?.let { HomeLanguageFilter.filter(listOf(it), languages) }.orEmpty()
                     val ordered = trending + listOfNotNull(extra.charts) + extra.languages + shelves
                     if (moodParams == null && ordered.isNotEmpty()) lastHomePlaylists = homePlaylists(ordered)
-                    ordered.takeIf { it.isNotEmpty() }?.let { HomeFeed(main?.moods.orEmpty(), it) }
+                    val page = ordered.takeIf { it.isNotEmpty() }?.let { HomeFeed(main?.moods.orEmpty(), it) }
+                    // Only a fresh page from YouTube Music is kept for the day (not the offline copy).
+                    if (moodParams == null && page != null && !pages.isNullOrEmpty()) savePage(pageKey, page)
+                    page
                 }
             }
 
@@ -305,6 +318,34 @@ class HomeFeedRepository
                 shelves = pages.flatMap { it.homeShelves() }.distinctBy { it.title },
             )
 
+        @kotlinx.serialization.Serializable
+        private data class SavedPage(
+            val key: String,
+            val savedAt: Long,
+            val feed: HomeFeed,
+        )
+
+        private val pageFile: File get() = File(context.filesDir, PAGE_FILE)
+
+        /** Today's saved page for these languages, if it's less than a day old. */
+        private fun savedPage(key: String): HomeFeed? =
+            runCatching {
+                val saved = json.decodeFromString(SavedPage.serializer(), pageFile.readText())
+                val age = System.currentTimeMillis() - saved.savedAt
+                saved.feed.takeIf { saved.key == key && age in 0 until PAGE_MAX_AGE_MS && it.shelves.isNotEmpty() }
+            }.getOrNull()
+
+        private fun savePage(
+            key: String,
+            feed: HomeFeed,
+        ) {
+            runCatching {
+                pageFile.writeText(
+                    json.encodeToString(SavedPage.serializer(), SavedPage(key, System.currentTimeMillis(), feed)),
+                )
+            }
+        }
+
         private fun save(pages: List<JsonElement>) {
             runCatching { cacheFile.writeText(json.encodeToString(JsonElement.serializer(), JsonArray(pages))) }
         }
@@ -318,6 +359,8 @@ class HomeFeedRepository
             /** Card ids of Spotify charts start with this (the rest is the Spotify playlist id). */
             const val SPOTIFY_PREFIX = "spotify:"
             private const val CACHE_FILE = "home_feed.json"
+            private const val PAGE_FILE = "home_page_day.json"
+            private const val PAGE_MAX_AGE_MS = 24L * 60 * 60 * 1000
             private const val MAX_CONTINUATIONS = 4
             private const val GENRES_ID = "FEmusic_moods_and_genres"
             private const val GENRE_SONGS = "Songs"
