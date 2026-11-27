@@ -26,6 +26,11 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- Android Auto / AAOS: the head unit connects to PlaybackService's MediaLibrarySession. -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+
         <!-- singleTask: a link opened while CLIBeats runs goes to the running app (onNewIntent). -->
         <activity
             android:name=".MainActivity"
@@ -88,6 +93,11 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
                 <!-- Lets Android 11+ show the "resume playback" card after the app is closed. -->
                 <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+            <!-- Android Auto voice search ("Hey Google, play … on CLIBeats"). -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
 

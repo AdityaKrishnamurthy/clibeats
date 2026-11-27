@@ -31,6 +31,7 @@ import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -81,37 +82,43 @@ internal fun StorageSettingsBlock(
 ) {
     val accent = LocalAccentColor.current
     TuiBlock(title = "Storage and Cache", isActive = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(
-                text =
-                    "TOTAL USED  " +
-                        formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
-                style = MaterialTheme.typography.labelMedium,
-                color = accent,
-            )
-            CacheRow(
-                label = "ARTWORK",
-                usedBytes = cacheUsage.artworkBytes,
-                options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
-                selectedMb = artworkCacheMb,
-                onSelect = onArtworkLimitChange,
-                onClear = onClearArtworkCache,
-            )
-            CacheRow(
-                label = "SONGS",
-                usedBytes = cacheUsage.songBytes,
-                options = AppPreferences.SONG_CACHE_OPTIONS_MB,
-                selectedMb = songCacheMb,
-                onSelect = onSongLimitChange,
-                onClear = onClearSongCache,
-            )
-            DownloadsRow(
-                usedBytes = downloadedBytes,
-                songs = downloadedCount,
-                onManage = onManageDownloads,
-                onClearAll = onClearDownloads,
-            )
-            LyricsRow(lyrics)
+        TuiExpandable(
+            summary =
+                formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes) +
+                    " used · caches, downloads & lyrics",
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text =
+                        "TOTAL USED  " +
+                            formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent,
+                )
+                CacheRow(
+                    label = "ARTWORK",
+                    usedBytes = cacheUsage.artworkBytes,
+                    options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
+                    selectedMb = artworkCacheMb,
+                    onSelect = onArtworkLimitChange,
+                    onClear = onClearArtworkCache,
+                )
+                CacheRow(
+                    label = "SONGS",
+                    usedBytes = cacheUsage.songBytes,
+                    options = AppPreferences.SONG_CACHE_OPTIONS_MB,
+                    selectedMb = songCacheMb,
+                    onSelect = onSongLimitChange,
+                    onClear = onClearSongCache,
+                )
+                DownloadsRow(
+                    usedBytes = downloadedBytes,
+                    songs = downloadedCount,
+                    onManage = onManageDownloads,
+                    onClearAll = onClearDownloads,
+                )
+                LyricsRow(lyrics)
+            }
         }
     }
 }

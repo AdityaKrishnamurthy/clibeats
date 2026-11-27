@@ -69,6 +69,10 @@ sealed interface AppRoute {
     data object Queue : AppRoute {
         override val breadcrumb: String = "~/queue"
     }
+
+    data object Equalizer : AppRoute {
+        override val breadcrumb: String = "~/equalizer"
+    }
 }
 
 private fun String.slug(): String =

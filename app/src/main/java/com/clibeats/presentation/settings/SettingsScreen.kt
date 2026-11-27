@@ -283,6 +283,7 @@ fun SettingsScreen(
             onImport = { importLauncher.launch(IMPORT_MIME_TYPES) },
             onShareSnapshot = viewModel::shareSnapshot,
         )
+        DiscordSettingsBlock()
         UpdateSection()
         AboutSettingsBlock()
     }
