@@ -10,11 +10,17 @@ Android Auto, a 10-band equalizer, and a Discord presence preview.
 - Selections start through the normal queue, and voice search covers the same library.
 - Android Auto requires **Unknown sources** for sideloaded apps (phone → Android Auto → Developer settings).
 
-## Equalizer
-- **10 bands** (31 Hz – 16 kHz), six presets, a pre-amp and a limiter so boosted bass does not clip.
+## Equalizer and volume
+- **Volume** and a **[ EQ ]** shortcut now sit on the Now Playing screen, next to the song.
+- The equalizer opens to a terminal **response graph** over an animated waveform, with **10 draggable vertical
+  sliders** (31 Hz – 16 kHz), six presets, a pre-amp and **RESET**.
 - Android 9+ uses `DynamicsProcessing`; Android 8 falls back to the platform `Equalizer`.
 - **SYSTEM EQ** opens the phone's audio-effects panel; standard session broadcasts let Wavelet/OEM EQ apps bind.
-- Reachable from Settings → Playback → **EQUALIZER**; everything is saved (and restored with backups).
+- Everything is saved (and restored with backups).
+
+## Cleaner Settings
+- Long sections (Local Music, Gestures, Storage, Backup, Discord) now show a one-line summary and expand only
+  when tapped; the equalizer moved out of Settings to where the music is.
 
 ## Discord
 - Opt-in **Listening to CLIBeats** preview in Settings → Discord.

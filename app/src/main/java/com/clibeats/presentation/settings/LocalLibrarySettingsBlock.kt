@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiButton
+import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.LocalAccentColor
 
 private const val LOCAL_HINT =
@@ -43,34 +44,43 @@ internal fun LocalLibrarySettingsBlock(
     onRescan: () -> Unit,
 ) {
     TuiBlock(title = "Local Music", isActive = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (localFolders.isEmpty()) {
-                Text(
-                    text = "FOLDERS : none chosen",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+        TuiExpandable(
+            summary =
+                if (localFolders.isEmpty()) {
+                    "No folders · add local music"
+                } else {
+                    "${localFolders.size} folders · $localTrackCount tracks"
+                },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (localFolders.isEmpty()) {
+                    Text(
+                        text = "FOLDERS : none chosen",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+                localFolders.forEach { folder ->
+                    LocalFolderRow(folder = folder, onRemoveFolder = onRemoveFolder)
+                }
+                LocalScanStatusText(
+                    localFolders = localFolders,
+                    scanStatus = scanStatus,
+                    localTrackCount = localTrackCount,
                 )
-            }
-            localFolders.forEach { folder ->
-                LocalFolderRow(folder = folder, onRemoveFolder = onRemoveFolder)
-            }
-            LocalScanStatusText(
-                localFolders = localFolders,
-                scanStatus = scanStatus,
-                localTrackCount = localTrackCount,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TuiButton(
-                    text = "+ ADD FOLDER",
-                    onClick = onAddFolder,
-                    modifier = Modifier.weight(1f),
-                )
-                TuiButton(
-                    text = "RESCAN",
-                    onClick = onRescan,
-                    enabled = localFolders.isNotEmpty() && scanStatus !is ScanStatus.Scanning,
-                    modifier = Modifier.weight(1f),
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TuiButton(
+                        text = "+ ADD FOLDER",
+                        onClick = onAddFolder,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TuiButton(
+                        text = "RESCAN",
+                        onClick = onRescan,
+                        enabled = localFolders.isNotEmpty() && scanStatus !is ScanStatus.Scanning,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
             }
         }
     }

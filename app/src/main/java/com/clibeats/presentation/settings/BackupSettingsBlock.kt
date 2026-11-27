@@ -1,4 +1,10 @@
-@file:Suppress("ktlint:standard:function-naming", "FunctionNaming")
+@file:Suppress(
+    "ktlint:standard:function-naming",
+    "FunctionNaming",
+    "ArgumentListWrapping",
+    "MaxLineLength",
+    "MaximumLineLength",
+)
 
 package com.clibeats.presentation.settings
 
@@ -16,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiButton
+import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.LocalAccentColor
 
 @Suppress("LongParameterList", "LongMethod")
@@ -32,55 +39,59 @@ internal fun BackupSettingsBlock(
 ) {
     val accent = LocalAccentColor.current
     TuiBlock(title = "Backup", isActive = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // 1. The automatic backup and when it last ran.
-            Column {
-                Text("AUTOMATIC BACKUP · DAILY", style = MaterialTheme.typography.titleSmall, color = accent)
-                Text(
-                    text =
-                        lastBackupAt?.let { "Last saved ${backupTime(it)}" }
-                            ?: "Not saved yet — it saves once a day when you open the app",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+        TuiExpandable(
+            summary = "Daily · " + (lastBackupAt?.let { "last saved ${backupTime(it)}" } ?: "not saved yet"),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // 1. The automatic backup and when it last ran.
+                Column {
+                    Text("AUTOMATIC BACKUP · DAILY", style = MaterialTheme.typography.titleSmall, color = accent)
+                    Text(
+                        text =
+                            lastBackupAt?.let { "Last saved ${backupTime(it)}" }
+                                ?: "Not saved yet — it saves once a day when you open the app",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text =
+                            "Saves your playlists, ♥ Favorites, saved albums & artists, play history " +
+                                "(Most played, Recently played), which songs are downloaded, and all your settings. " +
+                                "Each day's backup replaces the last. The music files, caches and lyrics aren't " +
+                                "included.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    TuiButton(
+                        text = "BACK UP NOW",
+                        onClick = onBackUpNow,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                // 2. Keeping a copy that survives uninstalling.
+                MirrorDownloadsToggleRow(
+                    mirrorBackupsToDownloads = mirrorBackupsToDownloads,
+                    onToggle = onToggleMirrorBackups,
                 )
-                Text(
-                    text =
-                        "Saves your playlists, ♥ Favorites, saved albums & artists, play history " +
-                            "(Most played, Recently played), which songs are downloaded, and all your settings. " +
-                            "Each day's backup replaces the last. The music files, caches and lyrics aren't " +
-                            "included.",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                TuiButton(
-                    text = "BACK UP NOW",
-                    onClick = onBackUpNow,
-                    modifier = Modifier.padding(top = 8.dp),
-                )
-            }
-            // 2. Keeping a copy that survives uninstalling.
-            MirrorDownloadsToggleRow(
-                mirrorBackupsToDownloads = mirrorBackupsToDownloads,
-                onToggle = onToggleMirrorBackups,
-            )
-            // 3. Your own copies: save, restore, send.
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("YOUR COPIES", style = MaterialTheme.typography.titleSmall, color = accent)
-                BackupAction("SAVE A COPY…", "Save the backup file anywhere: Downloads, Drive, a USB stick", onExport)
-                BackupAction(
-                    "RESTORE…",
-                    "Pick a backup file to bring everything back (downloads are offered again)",
-                    onImport,
-                )
-                BackupAction("SHARE", "Send the backup to another phone or app", onShareSnapshot)
-            }
-            exchangeMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // 3. Your own copies: save, restore, send.
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("YOUR COPIES", style = MaterialTheme.typography.titleSmall, color = accent)
+                    BackupAction("SAVE A COPY…", "Save the backup file anywhere: Downloads, Drive, a USB stick", onExport)
+                    BackupAction(
+                        "RESTORE…",
+                        "Pick a backup file to bring everything back (downloads are offered again)",
+                        onImport,
+                    )
+                    BackupAction("SHARE", "Send the backup to another phone or app", onShareSnapshot)
+                }
+                exchangeMessage?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
         }
     }

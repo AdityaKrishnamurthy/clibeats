@@ -1,4 +1,10 @@
-@file:Suppress("FunctionNaming", "ktlint:standard:function-naming")
+@file:Suppress(
+    "FunctionNaming",
+    "ktlint:standard:function-naming",
+    "ArgumentListWrapping",
+    "MaxLineLength",
+    "MaximumLineLength",
+)
 
 package com.clibeats.presentation.settings
 
@@ -29,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.GestureSettings
 import com.clibeats.domain.model.SwipeAction
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** Settings → Gestures: turn each swipe on or off, and go back to the defaults (all on). */
@@ -37,43 +44,45 @@ internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel(
     val gestures by viewModel.gestures.collectAsStateWithLifecycle()
     val accent = LocalAccentColor.current
     TuiBlock(title = "Gestures", isActive = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // Top right of the box: back to the default gestures.
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = "SONG SWIPES",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                val isDefault = gestures == GestureSettings()
-                Text(
-                    text = "[ ↺ RESET ]",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isDefault) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else accent,
-                    modifier =
-                        Modifier
-                            .clickable(enabled = !isDefault, role = Role.Button, onClick = viewModel::reset)
-                            .padding(8.dp),
-                )
-            }
-            SwipeActionRow("SWIPE SONG RIGHT →", gestures.songSwipeRight, SwipeAction.SONG_CHOICES) { action ->
-                viewModel.update { it.copy(songSwipeRight = action) }
-            }
-            SwipeActionRow("← SWIPE SONG LEFT", gestures.songSwipeLeft, SwipeAction.SONG_CHOICES) { action ->
-                viewModel.update { it.copy(songSwipeLeft = action) }
-            }
-            SwipeActionRow("QUEUE: SWIPE RIGHT →", gestures.queueSwipeRight, SwipeAction.QUEUE_CHOICES) { action ->
-                viewModel.update { it.copy(queueSwipeRight = action) }
-            }
-            GestureRow("SWIPE BETWEEN TABS", "Swipe left / right to change tab", gestures.tabSwipe) {
-                viewModel.update { it.copy(tabSwipe = !it.tabSwipe) }
-            }
-            GestureRow("NOW PLAYING: SWIPE DOWN", "Close Now Playing", gestures.nowPlayingSwipeDown) {
-                viewModel.update { it.copy(nowPlayingSwipeDown = !it.nowPlayingSwipeDown) }
-            }
-            GestureRow("NOW PLAYING: SWIPE UP", "Switch between cover and lyrics", gestures.nowPlayingSwipeUp) {
-                viewModel.update { it.copy(nowPlayingSwipeUp = !it.nowPlayingSwipeUp) }
+        TuiExpandable(summary = "Swipe actions · reset to defaults") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // Top right of the box: back to the default gestures.
+                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "SONG SWIPES",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    val isDefault = gestures == GestureSettings()
+                    Text(
+                        text = "[ ↺ RESET ]",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (isDefault) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else accent,
+                        modifier =
+                            Modifier
+                                .clickable(enabled = !isDefault, role = Role.Button, onClick = viewModel::reset)
+                                .padding(8.dp),
+                    )
+                }
+                SwipeActionRow("SWIPE SONG RIGHT →", gestures.songSwipeRight, SwipeAction.SONG_CHOICES) { action ->
+                    viewModel.update { it.copy(songSwipeRight = action) }
+                }
+                SwipeActionRow("← SWIPE SONG LEFT", gestures.songSwipeLeft, SwipeAction.SONG_CHOICES) { action ->
+                    viewModel.update { it.copy(songSwipeLeft = action) }
+                }
+                SwipeActionRow("QUEUE: SWIPE RIGHT →", gestures.queueSwipeRight, SwipeAction.QUEUE_CHOICES) { action ->
+                    viewModel.update { it.copy(queueSwipeRight = action) }
+                }
+                GestureRow("SWIPE BETWEEN TABS", "Swipe left / right to change tab", gestures.tabSwipe) {
+                    viewModel.update { it.copy(tabSwipe = !it.tabSwipe) }
+                }
+                GestureRow("NOW PLAYING: SWIPE DOWN", "Close Now Playing", gestures.nowPlayingSwipeDown) {
+                    viewModel.update { it.copy(nowPlayingSwipeDown = !it.nowPlayingSwipeDown) }
+                }
+                GestureRow("NOW PLAYING: SWIPE UP", "Switch between cover and lyrics", gestures.nowPlayingSwipeUp) {
+                    viewModel.update { it.copy(nowPlayingSwipeUp = !it.nowPlayingSwipeUp) }
+                }
             }
         }
     }

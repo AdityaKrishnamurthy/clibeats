@@ -46,8 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.BuildConfig
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.TuiBlock
-import com.clibeats.presentation.navigation.AppRoute
-import com.clibeats.presentation.navigation.LocalAppNavigator
 import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.update.UpdateSection
 
@@ -270,36 +268,6 @@ fun SettingsScreen(
                     text = if (uiState.highQualityStreaming) "[ ON ]" else "[ OFF ]",
                     style = MaterialTheme.typography.labelMedium,
                     color = if (uiState.highQualityStreaming) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        val navigator = LocalAppNavigator.current
-        TuiBlock(title = "Playback", isActive = true) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable(role = Role.Button) { navigator(AppRoute.Equalizer) }
-                        .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "EQUALIZER",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accent,
-                    )
-                    Text(
-                        text = "10 bands, presets and pre-amp for every output",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Text(
-                    text = "[ OPEN ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accent,
                 )
             }
         }

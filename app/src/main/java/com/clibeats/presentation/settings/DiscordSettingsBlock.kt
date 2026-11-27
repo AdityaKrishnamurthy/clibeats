@@ -26,6 +26,7 @@ import com.clibeats.data.discord.DiscordActivity
 import com.clibeats.data.discord.DiscordSdkStatus
 import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiButton
+import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
 import java.util.Locale
@@ -37,48 +38,56 @@ internal fun DiscordSettingsBlock(viewModel: DiscordPresenceViewModel = hiltView
     val accent = LocalAccentColor.current
 
     TuiBlock(title = "Discord", isActive = state.enabled) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-                    Text(
-                        text = "SHOW WHAT YOU'RE PLAYING",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accent,
-                    )
-                    Text(
-                        text = "Adds a Listening activity to your Discord profile while CLIBeats plays.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        TuiExpandable(
+            summary =
+                when {
+                    !state.enabled -> "Off · preview only, no account needed"
+                    state.sdkStatus == DiscordSdkStatus.READY -> "On · publishing through the Social SDK"
+                    else -> "On · preview only (SDK required)"
+                },
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = "SHOW WHAT YOU'RE PLAYING",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = accent,
+                        )
+                        Text(
+                            text = "Adds a Listening activity to your Discord profile while CLIBeats plays.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    TuiButton(
+                        text = if (state.enabled) "TURN OFF" else "TURN ON",
+                        onClick = { viewModel.setEnabled(!state.enabled) },
                     )
                 }
-                TuiButton(
-                    text = if (state.enabled) "TURN OFF" else "TURN ON",
-                    onClick = { viewModel.setEnabled(!state.enabled) },
+                state.activity?.let { activity ->
+                    DiscordPreview(activity = activity, enabled = state.enabled)
+                } ?: Text(
+                    text = "Play a song to see the card that would be published.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CliBeatsTextSecondary,
                 )
-            }
-            state.activity?.let { activity ->
-                DiscordPreview(activity = activity, enabled = state.enabled)
-            } ?: Text(
-                text = "Play a song to see the card that would be published.",
-                style = MaterialTheme.typography.labelSmall,
-                color = CliBeatsTextSecondary,
-            )
-            when (state.sdkStatus) {
-                DiscordSdkStatus.READY ->
-                    Text(
-                        text = "[ SDK READY ] Publishing through the official Discord Social SDK.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = accent,
-                    )
-                DiscordSdkStatus.SDK_REQUIRED ->
-                    Text(
-                        text =
-                            "[ SDK REQUIRED ] This build previews the card only: Discord's Android Rich " +
-                                "Presence needs the official Social SDK AAR. No user token is used — self-bots " +
-                                "violate Discord's Terms. See docs/DISCORD_PRESENCE.md.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                when (state.sdkStatus) {
+                    DiscordSdkStatus.READY ->
+                        Text(
+                            text = "[ SDK READY ] Publishing through the official Discord Social SDK.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accent,
+                        )
+                    DiscordSdkStatus.SDK_REQUIRED ->
+                        Text(
+                            text =
+                                "[ SDK REQUIRED ] Preview only — add Discord's official Social SDK AAR to publish. " +
+                                    "No user token or self-bot is used. docs/DISCORD_PRESENCE.md",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                }
             }
         }
     }
