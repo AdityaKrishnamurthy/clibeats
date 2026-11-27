@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 
 // ── Static fallback colours (used before theme is resolved) ────────────────
 
@@ -51,60 +52,76 @@ val CliBeatsBorderInactiveLight = Color(0xFFB5B5B0)
  * Builds the Material3 colour scheme from the given [accent] and [mode].
  * Call this whenever either changes (theme engine drives it).
  */
+@Suppress("LongMethod")
 fun buildCliBeatsColorScheme(
     accent: Color,
     mode: CliBeatsThemeMode,
+    palette: ThemePalette = ThemePalette.CLASSIC,
 ) = if (mode == CliBeatsThemeMode.LIGHT) {
+    val classic = palette == ThemePalette.CLASSIC
+    val background = palette.lightBackground
+    val surface = palette.lightSurface
+    val variant = palette.lightSurfaceVariant
     lightColorScheme(
-        background = CliBeatsBackgroundLight,
-        surface = CliBeatsSurfaceLight,
-        surfaceVariant = CliBeatsSurfaceVariantLight,
+        background = background,
+        surface = surface,
+        surfaceVariant = variant,
         primary = accent,
         onPrimary = Color(0xFFFFFFFF),
-        secondaryContainer = CliBeatsSurfaceVariantLight,
+        secondaryContainer = variant,
         onSecondaryContainer = accent,
         onBackground = CliBeatsTextPrimaryLight,
         onSurface = CliBeatsTextPrimaryLight,
         onSurfaceVariant = CliBeatsTextSecondaryLight,
-        outline = CliBeatsDividerLight,
-        outlineVariant = CliBeatsBorderInactiveLight,
+        outline = if (classic) CliBeatsDividerLight else lerp(variant, Color.Black, 0.08f),
+        outlineVariant = if (classic) CliBeatsBorderInactiveLight else lerp(variant, Color.Black, 0.18f),
         // Dialogs, menus and sheets read these; unset they fall back to Material's purple-grey.
-        surfaceTint = CliBeatsSurfaceLight,
-        surfaceBright = CliBeatsSurfaceLight,
-        surfaceDim = CliBeatsBackgroundLight,
-        surfaceContainerLowest = CliBeatsSurfaceLight,
-        surfaceContainerLow = CliBeatsSurfaceLight,
-        surfaceContainer = CliBeatsSurfaceLight,
-        surfaceContainerHigh = CliBeatsSurfaceLight,
-        surfaceContainerHighest = CliBeatsSurfaceVariantLight,
+        surfaceTint = surface,
+        surfaceBright = surface,
+        surfaceDim = background,
+        surfaceContainerLowest = surface,
+        surfaceContainerLow = surface,
+        surfaceContainer = surface,
+        surfaceContainerHigh = surface,
+        surfaceContainerHighest = variant,
         error = CliBeatsDestructive,
         errorContainer = Color(0xFFFDE7E7),
     )
 } else {
-    val background = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsBackgroundAmoled else CliBeatsBackgroundDark
-    val surface = if (mode == CliBeatsThemeMode.AMOLED) CliBeatsSurfaceAmoled else CliBeatsSurfaceDark
+    val classic = palette == ThemePalette.CLASSIC
+    val amoled = mode == CliBeatsThemeMode.AMOLED
+    // AMOLED: pure black behind everything, the theme's tint kept faintly in the panels.
+    val background = if (amoled) CliBeatsBackgroundAmoled else palette.darkBackground
+    val surface =
+        when {
+            amoled && classic -> CliBeatsSurfaceAmoled
+            amoled -> lerp(palette.darkSurface, Color.Black, 0.55f)
+            else -> palette.darkSurface
+        }
+    val variant =
+        if (amoled && !classic) lerp(palette.darkSurfaceVariant, Color.Black, 0.35f) else palette.darkSurfaceVariant
     darkColorScheme(
         background = background,
         surface = surface,
-        surfaceVariant = CliBeatsSurfaceVariantDark,
+        surfaceVariant = variant,
         primary = accent,
         onPrimary = Color(0xFF000000),
-        secondaryContainer = CliBeatsSurfaceVariantDark,
+        secondaryContainer = variant,
         onSecondaryContainer = accent,
         onBackground = CliBeatsTextPrimaryDark,
         onSurface = CliBeatsTextPrimaryDark,
         onSurfaceVariant = CliBeatsTextSecondaryDark,
-        outline = CliBeatsDividerDark,
-        outlineVariant = CliBeatsBorderInactiveDark,
+        outline = if (classic) CliBeatsDividerDark else lerp(variant, Color.White, 0.08f),
+        outlineVariant = if (classic) CliBeatsBorderInactiveDark else lerp(variant, Color.White, 0.14f),
         // Dialogs, menus and sheets read these; unset they fall back to Material's purple-grey.
         surfaceTint = surface,
-        surfaceBright = CliBeatsSurfaceVariantDark,
+        surfaceBright = variant,
         surfaceDim = background,
         surfaceContainerLowest = background,
         surfaceContainerLow = surface,
         surfaceContainer = surface,
         surfaceContainerHigh = surface,
-        surfaceContainerHighest = CliBeatsSurfaceVariantDark,
+        surfaceContainerHighest = variant,
         error = CliBeatsDestructive,
         errorContainer = CliBeatsDestructiveSurface,
     )

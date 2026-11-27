@@ -5,16 +5,19 @@ package com.clibeats.presentation.settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,6 +32,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.component.TuiBlock
@@ -36,37 +40,62 @@ import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.presentation.theme.ThemePalette
 
+@Suppress("LongParameterList")
 @Composable
 internal fun ThemeSettingsBlock(
     uiState: SettingsUiState,
+    palette: ThemePalette,
+    onPaletteChange: (ThemePalette) -> Unit,
     onThemeModeChange: (CliBeatsThemeMode) -> Unit,
     onAccentColorChange: (AccentColor) -> Unit,
     onCustomAccentChange: (Color) -> Unit,
 ) {
-    val accent = LocalAccentColor.current
-    TuiBlock(title = "Theme — ${uiState.themeMode.displayName}", isActive = true) {
-        Column {
-            CliBeatsThemeMode.entries.forEach { mode ->
-                val isSelected = uiState.themeMode == mode
-                Row(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { onThemeModeChange(mode) }
-                            .padding(vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = if (isSelected) "(•) " else "( ) ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = mode.displayName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
+    val systemDark = isSystemInDarkTheme()
+    val shownDark = uiState.themeMode.resolve(systemDark) != CliBeatsThemeMode.LIGHT
+    val title = "Theme — ${palette.displayName} · ${uiState.themeMode.displayName}"
+    TuiBlock(title = title, isActive = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SectionLabel("COLOR SCHEME")
+            CliBeatsThemeMode.entries.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { mode ->
+                        SchemeCard(
+                            mode = mode,
+                            palette = palette,
+                            selected = uiState.themeMode == mode,
+                            onClick = { onThemeModeChange(mode) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            SectionLabel("THEMES")
+            ThemePalette.entries.chunked(2).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    row.forEach { option ->
+                        PaletteCard(
+                            palette = option,
+                            selected = option == palette,
+                            shownDark = shownDark,
+                            onClick = { onPaletteChange(option) },
+                            onPickLight = {
+                                onPaletteChange(option)
+                                onThemeModeChange(CliBeatsThemeMode.LIGHT)
+                            },
+                            onPickDark = {
+                                onPaletteChange(option)
+                                // AMOLED stays AMOLED (it's the dark version on black).
+                                if (uiState.themeMode != CliBeatsThemeMode.AMOLED) {
+                                    onThemeModeChange(CliBeatsThemeMode.DARK)
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
         }
@@ -172,3 +201,180 @@ private fun RowScope.AccentSwatch(
 }
 
 private const val ACCENTS_PER_ROW = 5
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/** A little picture of the app in that scheme (the System card is half light, half dark). */
+@Composable
+private fun SchemeCard(
+    mode: CliBeatsThemeMode,
+    palette: ThemePalette,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = LocalAccentColor.current
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier =
+            modifier
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) accent else MaterialTheme.colorScheme.outlineVariant,
+                    shape = shape,
+                )
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .padding(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(6.dp))) {
+            when (mode) {
+                CliBeatsThemeMode.SYSTEM -> {
+                    MiniApp(previewColors(palette, CliBeatsThemeMode.LIGHT), accent, Modifier.weight(1f))
+                    MiniApp(previewColors(palette, CliBeatsThemeMode.DARK), accent, Modifier.weight(1f))
+                }
+                else -> MiniApp(previewColors(palette, mode), accent, Modifier.weight(1f))
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = mode.displayName,
+            style = MaterialTheme.typography.labelMedium,
+            color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+private class PreviewColors(
+    val background: Color,
+    val panel: Color,
+    val line: Color,
+)
+
+private fun previewColors(
+    palette: ThemePalette,
+    mode: CliBeatsThemeMode,
+): PreviewColors =
+    when (mode) {
+        CliBeatsThemeMode.LIGHT ->
+            PreviewColors(palette.lightBackground, palette.lightSurfaceVariant, Color(0x22000000))
+        CliBeatsThemeMode.AMOLED ->
+            PreviewColors(Color.Black, lerp(palette.darkSurface, Color.Black, 0.4f), Color(0x22FFFFFF))
+        else -> PreviewColors(palette.darkBackground, palette.darkSurfaceVariant, Color(0x22FFFFFF))
+    }
+
+@Composable
+private fun MiniApp(
+    colors: PreviewColors,
+    accent: Color,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxHeight().background(colors.background).padding(6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Box(Modifier.fillMaxWidth(0.7f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line))
+        Box(Modifier.fillMaxWidth(0.5f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line))
+        Spacer(Modifier.weight(1f))
+        Row(
+            modifier = Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(4.dp)).background(colors.panel),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.End,
+        ) {
+            Box(Modifier.padding(end = 3.dp).size(8.dp).clip(CircleShape).background(accent))
+        }
+    }
+}
+
+/** A theme: its light and dark versions as two orbs; the one in use has a ring. */
+@Suppress("LongParameterList")
+@Composable
+private fun PaletteCard(
+    palette: ThemePalette,
+    selected: Boolean,
+    shownDark: Boolean,
+    onClick: () -> Unit,
+    onPickLight: () -> Unit,
+    onPickDark: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val accent = LocalAccentColor.current
+    val shape = RoundedCornerShape(10.dp)
+    Column(
+        modifier =
+            modifier
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                .border(
+                    width = if (selected) 2.dp else 1.dp,
+                    color = if (selected) accent else MaterialTheme.colorScheme.outlineVariant,
+                    shape = shape,
+                )
+                .clickable(role = Role.RadioButton, onClick = onClick)
+                .padding(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+        ) {
+            Orb(
+                brush = lightOrb(palette),
+                ringed = selected && !shownDark,
+                ring = accent,
+                label = "${palette.displayName} light",
+                onClick = onPickLight,
+            )
+            Orb(
+                brush = darkOrb(palette),
+                ringed = selected && shownDark,
+                ring = accent,
+                label = "${palette.displayName} dark",
+                onClick = onPickDark,
+            )
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = palette.displayName,
+            style = MaterialTheme.typography.titleSmall,
+            color = if (selected) accent else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+@Composable
+private fun Orb(
+    brush: Brush,
+    ringed: Boolean,
+    ring: Color,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .size(54.dp)
+                .then(if (ringed) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+                .padding(4.dp)
+                .clip(CircleShape)
+                .background(brush)
+                .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                .clickable(role = Role.RadioButton, onClickLabel = label, onClick = onClick),
+    )
+}
+
+private fun lightOrb(palette: ThemePalette): Brush =
+    Brush.linearGradient(listOf(Color.White, lerp(Color.White, palette.swatch, 0.45f), palette.lightSurfaceVariant))
+
+private fun darkOrb(palette: ThemePalette): Brush =
+    Brush.linearGradient(
+        listOf(palette.darkBackground, lerp(palette.darkSurfaceVariant, palette.swatch, 0.55f), Color.Black),
+    )

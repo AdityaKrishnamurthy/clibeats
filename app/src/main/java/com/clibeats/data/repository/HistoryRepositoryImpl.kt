@@ -29,6 +29,11 @@ class HistoryRepositoryImpl
         override fun getPlayCounts(): Flow<Map<String, Int>> =
             historyDao.getAllAsFlow().map { plays -> plays.groupingBy { it.songId }.eachCount() }
 
+        override fun getLastPlayed(): Flow<Map<String, Long>> =
+            historyDao.getAllAsFlow().map { plays ->
+                plays.groupBy { it.songId }.mapValues { (_, list) -> list.maxOf { it.playedAt } }
+            }
+
         override fun getRecentHistoryAsFlow(limit: Int): Flow<List<HistoryEntity>> = historyDao.getRecentAsFlow(limit)
 
         override fun getMostPlayedTracks(limit: Int): Flow<List<Track>> =

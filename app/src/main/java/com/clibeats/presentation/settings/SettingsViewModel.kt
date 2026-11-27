@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -193,6 +194,29 @@ class SettingsViewModel
         fun setHighQualityStreaming(enabled: Boolean) {
             viewModelScope.launch {
                 appPreferences.setHighQualityStreaming(enabled)
+            }
+        }
+
+        /** Settings → Theme: the palette in use. */
+        val themePalette: StateFlow<com.clibeats.presentation.theme.ThemePalette> =
+            appPreferences.themePalette
+                .map { com.clibeats.presentation.theme.ThemePalette.fromName(it) }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, com.clibeats.presentation.theme.ThemePalette.CLASSIC)
+
+        /**
+         * Picks a theme; its colour becomes the accent (Classic goes back to the original green). The accent can
+         * still be changed below afterwards.
+         */
+        fun setThemePalette(palette: com.clibeats.presentation.theme.ThemePalette) {
+            viewModelScope.launch {
+                appPreferences.setThemePalette(palette.name)
+                val accent =
+                    if (palette == com.clibeats.presentation.theme.ThemePalette.CLASSIC) {
+                        AccentColor.GREEN.name
+                    } else {
+                        Accent.toHex(palette.swatch)
+                    }
+                appPreferences.setAccentColorName(accent)
             }
         }
 

@@ -15,6 +15,7 @@ import javax.inject.Inject
 data class ThemeState(
     val mode: CliBeatsThemeMode = CliBeatsThemeMode.DARK,
     val accent: Accent = Accent.DEFAULT,
+    val palette: ThemePalette = ThemePalette.CLASSIC,
 )
 
 /**
@@ -35,12 +36,14 @@ class ThemeViewModel
             combine(
                 appPreferences.themeMode,
                 appPreferences.accentColorName,
-            ) { modeName, accentName ->
+                appPreferences.themePalette,
+            ) { modeName, accentName, paletteName ->
                 ThemeState(
                     mode =
                         CliBeatsThemeMode.entries.firstOrNull { it.name == modeName }
                             ?: CliBeatsThemeMode.DARK,
                     accent = Accent.fromStored(accentName),
+                    palette = ThemePalette.fromName(paletteName),
                 )
             }.stateIn(
                 scope = viewModelScope,

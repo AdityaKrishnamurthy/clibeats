@@ -46,10 +46,13 @@ class AppPreferences
             val SAVED_REPEAT_MODE = stringPreferencesKey("saved_repeat_mode")
             val SAVED_SHUFFLE_ENABLED = booleanPreferencesKey("saved_shuffle_enabled")
             val THEME_MODE = stringPreferencesKey("theme_mode")
+            val THEME_PALETTE = stringPreferencesKey("theme_palette")
             val ACCENT_COLOR_NAME = stringPreferencesKey("accent_color_name")
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
             val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
             val LYRICS_TRANSLATE = booleanPreferencesKey("lyrics_translate")
+            val LIBRARY_ARTIST_SORT = stringPreferencesKey("library_artist_sort")
+            val LIBRARY_ALBUM_SORT = stringPreferencesKey("library_album_sort")
             val GESTURE_SONG_RIGHT = stringPreferencesKey("gesture_song_right_action")
             val GESTURE_SONG_LEFT = stringPreferencesKey("gesture_song_left_action")
             val GESTURE_TABS = booleanPreferencesKey("gesture_tab_swipe")
@@ -343,6 +346,13 @@ class AppPreferences
             dataStore.edit { it[Keys.HIGH_QUALITY_STREAMING] = enabled }
         }
 
+        /** Settings → Theme: the palette (Classic, Berry, Grove, …), saved by name. */
+        val themePalette: Flow<String?> = dataStore.data.map { it[Keys.THEME_PALETTE] }
+
+        suspend fun setThemePalette(name: String) {
+            dataStore.edit { it[Keys.THEME_PALETTE] = name }
+        }
+
         suspend fun setThemeMode(mode: String) {
             dataStore.edit { it[Keys.THEME_MODE] = mode }
         }
@@ -414,6 +424,17 @@ class AppPreferences
 
         /** Library Artists / Albums layout (a PlaylistViewMode name); null = default. */
         val libraryGroupView: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_GROUP_VIEW] }
+
+        /** Library sort for Artists and for Albums, each remembered on its own. */
+        val libraryArtistSort: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_ARTIST_SORT] }
+        val libraryAlbumSort: Flow<String?> = dataStore.data.map { it[Keys.LIBRARY_ALBUM_SORT] }
+
+        suspend fun setLibrarySort(
+            albums: Boolean,
+            name: String,
+        ) {
+            dataStore.edit { it[if (albums) Keys.LIBRARY_ALBUM_SORT else Keys.LIBRARY_ARTIST_SORT] = name }
+        }
 
         suspend fun setLibraryGroupView(name: String) {
             dataStore.edit { it[Keys.LIBRARY_GROUP_VIEW] = name }

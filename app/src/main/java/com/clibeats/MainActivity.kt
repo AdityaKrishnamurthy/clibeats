@@ -74,7 +74,8 @@ class MainActivity : ComponentActivity() {
             val themeViewModel: ThemeViewModel = hiltViewModel()
             val themeState by themeViewModel.themeState.collectAsStateWithLifecycle()
             val onboardingDone by themeViewModel.onboardingDone.collectAsStateWithLifecycle()
-            val isLight = themeState.mode == CliBeatsThemeMode.LIGHT
+            val isLight =
+                themeState.mode.resolve(androidx.compose.foundation.isSystemInDarkTheme()) == CliBeatsThemeMode.LIGHT
 
             DisposableEffect(isLight) {
                 val transparent = android.graphics.Color.TRANSPARENT
@@ -88,7 +89,7 @@ class MainActivity : ComponentActivity() {
                 onDispose {}
             }
 
-            CliBeatsTheme(accent = themeState.accent.color, mode = themeState.mode) {
+            CliBeatsTheme(accent = themeState.accent.color, mode = themeState.mode, palette = themeState.palette) {
                 when (onboardingDone) {
                     null -> Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
                     false -> OnboardingScreen(currentTheme = themeState.mode)

@@ -58,13 +58,23 @@ class LibraryViewModel
                 .map { it.isNotEmpty() }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000L), true)
 
-        private val _sort = MutableStateFlow(GroupSort.MOST_PLAYED)
+        private fun sortFlow(saved: kotlinx.coroutines.flow.Flow<String?>?): StateFlow<GroupSort> =
+            (saved ?: flowOf(null))
+                .map { name -> GroupSort.entries.firstOrNull { it.name == name } ?: GroupSort.RECENT }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, GroupSort.RECENT)
 
-        /** How Artists and Albums are ordered (most played first by default). */
-        val sort: StateFlow<GroupSort> = _sort.asStateFlow()
+        /** How Artists are ordered (recently played first unless changed; remembered). */
+        val artistSort: StateFlow<GroupSort> = sortFlow(appPreferences?.libraryArtistSort)
 
-        fun setSort(sort: GroupSort) {
-            _sort.value = sort
+        /** How Albums are ordered (recently played first unless changed; remembered separately). */
+        val albumSort: StateFlow<GroupSort> = sortFlow(appPreferences?.libraryAlbumSort)
+
+        fun setArtistSort(sort: GroupSort) {
+            viewModelScope.launch { appPreferences?.setLibrarySort(albums = false, sort.name) }
+        }
+
+        fun setAlbumSort(sort: GroupSort) {
+            viewModelScope.launch { appPreferences?.setLibrarySort(albums = true, sort.name) }
         }
 
         /** Artists / Albums layout (grids, list, details); remembered across launches. */
@@ -99,6 +109,7 @@ class LibraryViewModel
         }
 
         private val playCounts = historyRepository?.getPlayCounts() ?: flowOf(emptyMap())
+        private val lastPlayed = historyRepository?.getLastPlayed() ?: flowOf(emptyMap())
 
         @OptIn(ExperimentalCoroutinesApi::class)
         val uiState: StateFlow<LibraryUiState> =
@@ -112,16 +123,23 @@ class LibraryViewModel
                         LibraryMode.LOCAL -> songRepository.getLocalTracksAsFlow()
                         LibraryMode.PLAYLISTS -> flowOf(emptyList()) // shown by PlaylistScreen
                     }
-                }.let { tracksFlow -> combine(tracksFlow, playCounts, _sort, ::Triple) }
-                .map { (tracks, counts, sort) ->
-                    if (tracks.isEmpty()) {
-                        LibraryUiState.Empty
-                    } else {
-                        LibraryUiState.Success(
-                            tracks = tracks,
-                            artists = buildArtists(tracks, counts, sort),
-                            albums = buildAlbums(tracks, counts, sort),
-                        )
+                }.let { tracksFlow ->
+                    combine(
+                        tracksFlow,
+                        playCounts,
+                        lastPlayed,
+                        artistSort,
+                        albumSort,
+                    ) { tracks, counts, last, aSort, alSort ->
+                        if (tracks.isEmpty()) {
+                            LibraryUiState.Empty
+                        } else {
+                            LibraryUiState.Success(
+                                tracks = tracks,
+                                artists = buildArtists(tracks, counts, aSort, last),
+                                albums = buildAlbums(tracks, counts, alSort, last),
+                            )
+                        }
                     }
                 }.stateIn(
                     scope = viewModelScope,

@@ -44,6 +44,7 @@ class SettingsViewModelTest {
         whenever(appPreferences.mirrorBackupsToDownloads).thenReturn(flowOf(true))
         whenever(appPreferences.themeMode).thenReturn(flowOf("DARK"))
         whenever(appPreferences.accentColorName).thenReturn(flowOf("GREEN"))
+        whenever(appPreferences.themePalette).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
         whenever(appPreferences.localMusicTreeUris).thenReturn(flowOf(emptyList()))
         whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))

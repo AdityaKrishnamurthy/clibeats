@@ -2,6 +2,20 @@
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.2.apk` (verify with `SHA256SUMS.txt`)
 
+## Themes
+
+- **Color scheme cards.** Settings → Theme shows System, Light, Dark and AMOLED as little previews of the app.
+  **System** follows your phone's light / dark setting.
+- **Themes.** Six themes — Classic, Berry, Grove, Ocean, Ember and Iris — each tint the whole app (backgrounds,
+  panels, borders), not just the accent, in a light and a dark version shown as two orbs. Tap a theme to use it,
+  or tap one of its orbs to pick that version straight away; AMOLED keeps pure black with the theme's tint in the
+  panels. Picking a theme sets its accent, and the accent colours below still work on top.
+
+## Library
+
+- **Recent for Artists and Albums.** A new RECENT sort (Online and Local) puts the artists and albums you played
+  most recently first. It's the default; Artists and Albums each remember their own sort.
+
 ## Playlist import
 
 - **Picked songs show as found.** After choosing a song with Find → [ + ], it stays where it was in the import

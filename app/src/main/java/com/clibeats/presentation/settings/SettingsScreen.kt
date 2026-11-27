@@ -217,8 +217,11 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val themePalette by viewModel.themePalette.collectAsStateWithLifecycle()
         ThemeSettingsBlock(
             uiState = uiState,
+            palette = themePalette,
+            onPaletteChange = viewModel::setThemePalette,
             onThemeModeChange = viewModel::setThemeMode,
             onAccentColorChange = viewModel::setAccentColor,
             onCustomAccentChange = viewModel::setCustomAccent,
