@@ -21,7 +21,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.clibeats.data.scan.ScanStatus
-import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.LocalAccentColor
 
 private const val LOCAL_HINT =
@@ -44,7 +43,7 @@ internal fun LocalLibrarySettingsBlock(
     onRescan: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    TuiBlock(title = "Local Music", isActive = true) {
+    SettingsPanel {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (localFolders.isEmpty()) {
                 Text(

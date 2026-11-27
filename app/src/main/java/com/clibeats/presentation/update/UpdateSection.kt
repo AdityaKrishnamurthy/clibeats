@@ -26,7 +26,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.update.UpdateFrequency
 import com.clibeats.data.update.UpdateState
-import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.settings.SettingsPanel
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** Settings → Updates: auto-check frequency, manual check, and download / install. */
@@ -38,7 +38,7 @@ fun UpdateSection(viewModel: UpdateViewModel = hiltViewModel()) {
     val accent = LocalAccentColor.current
     val release = state.releaseOrNull()
 
-    TuiBlock(title = "Updates", isActive = true) {
+    SettingsPanel {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(

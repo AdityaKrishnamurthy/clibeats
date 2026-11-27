@@ -29,7 +29,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.GestureSettings
 import com.clibeats.domain.model.SwipeAction
-import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** Settings → Gestures: turn each swipe on or off, and go back to the defaults (all on). */
@@ -37,7 +36,7 @@ import com.clibeats.presentation.theme.LocalAccentColor
 internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel()) {
     val gestures by viewModel.gestures.collectAsStateWithLifecycle()
     val accent = LocalAccentColor.current
-    TuiBlock(title = "Gestures", isActive = true) {
+    SettingsPanel {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             // Top right of the box: back to the default gestures.
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -135,10 +134,6 @@ private fun GestureRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(
-            text = if (on) "[ ON ]" else "[ OFF ]",
-            style = MaterialTheme.typography.labelMedium,
-            color = if (on) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        SettingsSwitch(checked = on, onCheckedChange = { onToggle() })
     }
 }

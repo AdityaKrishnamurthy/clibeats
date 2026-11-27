@@ -2,6 +2,7 @@
 
 package com.clibeats.presentation.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -14,13 +15,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
@@ -30,7 +35,6 @@ import androidx.compose.ui.unit.dp
 import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.preferences.AppPreferences
-import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -56,14 +60,9 @@ internal fun formatSize(bytes: Long): String {
 internal fun formatMb(mb: Int): String =
     if (mb >= MB_PER_GB && mb % MB_PER_GB == 0) "${mb / MB_PER_GB} GB" else formatSize(mb * BYTES_PER_MB)
 
-private fun downloadsLabel(
-    bytes: Long,
-    songs: Int,
-): String = "DOWNLOADS  ${formatSize(bytes)} · $songs ${if (songs == 1) "song" else "songs"}"
-
 private fun trimZeros(number: String): String = if ('.' in number) number.trimEnd('0').trimEnd('.') else number
 
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun StorageSettingsBlock(
     cacheUsage: CacheUsage,
@@ -80,39 +79,63 @@ internal fun StorageSettingsBlock(
     lyrics: LyricsStorage = LyricsStorage(),
 ) {
     val accent = LocalAccentColor.current
-    TuiBlock(title = "Storage and Cache", isActive = true) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SettingsPanel {
             Text(
-                text =
-                    "TOTAL USED  " +
-                        formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
-                style = MaterialTheme.typography.labelMedium,
+                text = "Total used",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text = formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
+                style = MaterialTheme.typography.headlineSmall,
                 color = accent,
             )
-            CacheRow(
-                label = "ARTWORK",
-                usedBytes = cacheUsage.artworkBytes,
-                options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
-                selectedMb = artworkCacheMb,
-                onSelect = onArtworkLimitChange,
-                onClear = onClearArtworkCache,
+            Text(
+                text =
+                    "Songs ${formatSize(cacheUsage.songBytes)} \u00b7 Covers ${formatSize(cacheUsage.artworkBytes)} " +
+                        "\u00b7 Downloads ${formatSize(downloadedBytes)} \u00b7 Lyrics ${formatSize(lyrics.bytes)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+        SettingsPanel(label = "Cache") {
             CacheRow(
-                label = "SONGS",
+                label = "Songs",
+                hint = "kept while streaming, so replays use no data",
                 usedBytes = cacheUsage.songBytes,
                 options = AppPreferences.SONG_CACHE_OPTIONS_MB,
                 selectedMb = songCacheMb,
                 onSelect = onSongLimitChange,
                 onClear = onClearSongCache,
             )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            CacheRow(
+                label = "Cover art",
+                hint = "album and song pictures",
+                usedBytes = cacheUsage.artworkBytes,
+                options = AppPreferences.ARTWORK_CACHE_OPTIONS_MB,
+                selectedMb = artworkCacheMb,
+                onSelect = onArtworkLimitChange,
+                onClear = onClearArtworkCache,
+            )
+            Text(
+                text =
+                    "When a cache is full, what you haven't played or seen for the longest is removed " +
+                        "automatically to make room. Downloads are never removed.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        SettingsPanel(label = "Downloads") {
             DownloadsRow(
                 usedBytes = downloadedBytes,
                 songs = downloadedCount,
                 onManage = onManageDownloads,
                 onClearAll = onClearDownloads,
             )
-            LyricsRow(lyrics)
         }
+        SettingsPanel(label = "Lyrics") { LyricsRow(lyrics) }
     }
 }
 
@@ -124,31 +147,54 @@ internal class LyricsStorage(
     val onClear: () -> Unit = {},
 )
 
+/** A size line and a small text button at its end (Clear, Manage...). */
+@Suppress("LongParameterList")
 @Composable
-private fun LyricsRow(lyrics: LyricsStorage) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+private fun SizeLine(
+    title: String,
+    value: String,
+    action: String?,
+    actionColor: Color,
+    actionDescription: String,
+    onAction: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             Text(
-                text = "LYRICS  ${formatSize(lyrics.bytes)} · ${lyrics.songs} / ${lyrics.limit} songs",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
+                text = value,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (lyrics.songs > 0) {
-                Text(
-                    text = "[ CLEAR ]",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier =
-                        Modifier
-                            .semantics { contentDescription = "Clear saved lyrics" }
-                            .clickable(role = Role.Button, onClick = lyrics.onClear)
-                            .padding(8.dp),
-                )
+        }
+        if (action != null) {
+            TextButton(
+                onClick = onAction,
+                modifier = Modifier.semantics { contentDescription = actionDescription },
+            ) {
+                Text(action, style = MaterialTheme.typography.labelMedium, color = actionColor)
             }
         }
+    }
+}
+
+private fun thousands(n: Int): String = String.format(java.util.Locale.US, "%,d", n)
+
+@Composable
+private fun LyricsRow(lyrics: LyricsStorage) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SizeLine(
+            title = "${thousands(lyrics.songs)} of ${thousands(lyrics.limit)} songs",
+            value = formatSize(lyrics.bytes),
+            action = if (lyrics.songs > 0) "Clear" else null,
+            actionColor = MaterialTheme.colorScheme.error,
+            actionDescription = "Clear saved lyrics",
+            onAction = lyrics.onClear,
+        )
+        UsageBar(fraction = if (lyrics.limit > 0) lyrics.songs.toFloat() / lyrics.limit else 0f)
         Text(
-            text = "oldest dropped past ${lyrics.limit} · downloaded songs keep theirs",
+            text =
+                "Past ${thousands(lyrics.limit)} songs the oldest are dropped. Downloaded songs always keep theirs.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -160,6 +206,7 @@ private fun LyricsRow(lyrics: LyricsStorage) {
 @Composable
 private fun CacheRow(
     label: String,
+    hint: String,
     usedBytes: Long,
     options: List<Int>,
     selectedMb: Int,
@@ -167,41 +214,35 @@ private fun CacheRow(
     onClear: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "$label  ${formatSize(usedBytes)} / ${formatMb(selectedMb)}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "[ CLEAR ]",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.error,
-                modifier =
-                    Modifier
-                        .semantics { contentDescription = "Clear ${label.lowercase()} cache" }
-                        .clickable(role = Role.Button, onClick = onClear)
-                        .padding(8.dp),
-            )
-        }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SizeLine(
+            title = label,
+            value = "${formatSize(usedBytes)} of ${formatMb(selectedMb)} \u00b7 $hint",
+            action = "Clear",
+            actionColor = MaterialTheme.colorScheme.error,
+            actionDescription = "Clear ${label.lowercase()} cache",
+            onAction = onClear,
+        )
+        UsageBar(fraction = usedBytes.toFloat() / (selectedMb * BYTES_PER_MB).coerceAtLeast(1L))
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             options.forEach { mb ->
                 val isSelected = mb == selectedMb
+                val shape = RoundedCornerShape(50)
                 Text(
                     text = formatMb(mb),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isSelected) accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isSelected) readableOn(accent) else MaterialTheme.colorScheme.onSurface,
                     modifier =
                         Modifier
-                            .border(1.dp, if (isSelected) accent else MaterialTheme.colorScheme.outlineVariant)
+                            .clip(shape)
+                            .background(if (isSelected) accent else Color.Transparent)
+                            .border(1.dp, if (isSelected) accent else MaterialTheme.colorScheme.outlineVariant, shape)
                             .semantics { selected = isSelected }
                             .clickable(role = Role.RadioButton) { onSelect(mb) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                            .padding(horizontal = 14.dp, vertical = 7.dp),
                 )
             }
         }
@@ -216,43 +257,30 @@ private fun DownloadsRow(
     onClearAll: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = downloadsLabel(usedBytes, songs),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f),
-            )
+    SizeLine(
+        title = if (songs == 1) "1 song" else "$songs songs",
+        value =
             if (songs > 0) {
-                Text(
-                    text = "[ CLEAR ALL ]",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier =
-                        Modifier
-                            .semantics { contentDescription = "Delete all downloaded songs" }
-                            .clickable(role = Role.Button, onClick = onClearAll)
-                            .padding(8.dp),
-                )
-            }
+                "${formatSize(usedBytes)} \u00b7 saved for offline, no size limit"
+            } else {
+                "Nothing downloaded yet"
+            },
+        action = if (songs > 0) "Manage" else null,
+        actionColor = accent,
+        actionDescription = "Manage downloaded songs",
+        onAction = onManage,
+    )
+    if (songs > 0) {
+        TextButton(
+            onClick = onClearAll,
+            modifier = Modifier.semantics { contentDescription = "Delete all downloaded songs" },
+        ) {
+            Text(
+                "Delete all downloads",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
         }
-        Text(
-            text = "↓ MANAGE",
-            style = MaterialTheme.typography.labelSmall,
-            color = accent,
-            modifier =
-                Modifier
-                    .border(1.dp, accent)
-                    .semantics { contentDescription = "Manage downloaded songs" }
-                    .clickable(role = Role.Button, onClick = onManage)
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-        )
-        Text(
-            text = if (songs > 0) "saved for offline · no size limit" else "nothing downloaded yet",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 

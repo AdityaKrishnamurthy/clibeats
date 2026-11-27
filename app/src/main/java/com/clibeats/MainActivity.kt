@@ -161,6 +161,7 @@ private fun AppContent() {
     var pendingSearchToggle by remember { mutableStateOf<Job?>(null) }
     var toggleHomeSource by remember { mutableStateOf(false) }
     var toggleLibraryMode by remember { mutableStateOf(false) }
+    var settingsToList by remember { mutableStateOf(false) }
 
     val onTabSelected: (MainTab) -> Unit = { tab ->
         val wasAtRoot = router.activeTab == tab && router.isAtTabRoot(tab)
@@ -184,7 +185,8 @@ private fun AppContent() {
             when (tab) {
                 MainTab.HOME -> toggleHomeSource = true
                 MainTab.LIBRARY -> toggleLibraryMode = true
-                MainTab.SEARCH, MainTab.SETTINGS -> Unit
+                MainTab.SETTINGS -> settingsToList = true
+                MainTab.SEARCH -> Unit
             }
         }
     }
@@ -285,7 +287,11 @@ private fun AppContent() {
                                         toggleModeRequested = toggleLibraryMode,
                                         onToggleModeHandled = { toggleLibraryMode = false },
                                     )
-                                AppRoute.Settings -> SettingsScreen()
+                                AppRoute.Settings ->
+                                    SettingsScreen(
+                                        backToListRequested = settingsToList,
+                                        onBackToListHandled = { settingsToList = false },
+                                    )
                                 is AppRoute.ArtistDetail ->
                                     ArtistDetailScreen(route = tabRoute, onBack = { router.popBack() })
                                 is AppRoute.AlbumDetail ->

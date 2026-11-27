@@ -26,6 +26,8 @@ import com.clibeats.presentation.component.Notices
 import com.clibeats.presentation.component.isLocalFilePlaylist
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -40,6 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 
 /** Sleep timer state: off, a countdown, or "pause when the current track ends". */
@@ -72,7 +75,7 @@ sealed interface LyricsState {
     ) : LyricsState
 }
 
-@Suppress("LongParameterList", "TooManyFunctions")
+@Suppress("LongParameterList", "TooManyFunctions", "LargeClass")
 @HiltViewModel
 class PlayerViewModel
     @Inject
@@ -89,7 +92,12 @@ class PlayerViewModel
         private val onlineLyrics: OnlineLyricsRepository? = null,
         private val translator: LyricsTranslator? = null,
         private val appPreferences: AppPreferences? = null,
+        lyricsPrefetcher: com.clibeats.data.lyrics.LyricsPrefetcher? = null,
     ) : ViewModel() {
+        init {
+            lyricsPrefetcher?.start()
+        }
+
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
         /** Show each lyric line's translation under it (remembered). */
@@ -143,8 +151,16 @@ class PlayerViewModel
                                 emit(track to LyricsState.Idle)
                                 return@transformLatest
                             }
-                            emit(track to LyricsState.Loading)
-                            emit(track to loadLyrics(track))
+                            // Usually already fetched in the background: show it at once, with no loading flash.
+                            val result =
+                                coroutineScope {
+                                    val load = async { loadLyrics(track) }
+                                    withTimeoutOrNull(INSTANT_MS) { load.await() } ?: run {
+                                        emit(track to LyricsState.Loading)
+                                        load.await()
+                                    }
+                                }
+                            emit(track to result)
                         }
                 }
 
@@ -463,6 +479,9 @@ class PlayerViewModel
             const val NOTICE_MS = 1_800L
             const val LOCAL_PROVIDER = "local"
             const val ENRICHED_KEPT = 30
+
+            /** Lyrics ready within this long show straight away, without the loading line. */
+            const val INSTANT_MS = 250L
         }
     }
 
