@@ -71,4 +71,12 @@ class BackupContentsTest {
         assertThat(kept).containsExactly("a" to 50L, "b" to 40L, "c" to 20L, "d" to 1L).inOrder()
         assertThat(historyToKeep(plays, max = 100)).isEqualTo(plays)
     }
+
+    @Test
+    fun `plays cleared from every list are not backed up`() {
+        // Never cleared somewhere: everything still shows there.
+        assertThat(visibleSince(500L, 0L, 300L)).isEqualTo(0L)
+        // Cleared in all three: only plays after the earliest clear still show anywhere.
+        assertThat(visibleSince(500L, 400L, 300L)).isEqualTo(300L)
+    }
 }

@@ -141,7 +141,14 @@ class PlaylistExchangeManager
          * so every song in Library → Online and Recently played comes back. Each song once, plays pointing at it.
          */
         private suspend fun playHistory(): Pair<List<CliBeatsTrack>, List<CliBeatsPlay>> {
-            val all = database.historyDao().getAllAsFlow().first()
+            // Plays cleared everywhere they show (Home's Recently played, Library → Online, Most played) stay out.
+            val since =
+                visibleSince(
+                    appPreferences.homeRecentsClearedAt.first(),
+                    appPreferences.libraryHistoryClearedAt.first(),
+                    appPreferences.mostPlayedClearedAt.first(),
+                )
+            val all = database.historyDao().getAllAsFlow().first().filter { it.playedAt > since }
             val kept = historyToKeep(all.map { it.songId to it.playedAt }, MAX_HISTORY).toHashSet()
             val plays = all.filter { (it.songId to it.playedAt) in kept }
             if (plays.isEmpty()) return emptyList<CliBeatsTrack>() to emptyList()
@@ -451,3 +458,6 @@ internal fun historyToKeep(
     val older = plays.drop(max).filter { seen.add(it.first) }
     return recent + older
 }
+
+/** Plays after this still show somewhere: the earliest of the "cleared at" times (0 when one was never cleared). */
+internal fun visibleSince(vararg clearedAt: Long): Long = clearedAt.minOrNull()?.coerceAtLeast(0L) ?: 0L
