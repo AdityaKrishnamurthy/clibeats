@@ -101,10 +101,14 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   a playlist from earlier searches.
 - **Reorder** the queue, ♥ Favorites and your own playlists: drag a song's ≡ handle, or hold its cover and drag.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
-- **Library backup:** saved automatically once a day (playlists, Favorites, saved albums and artists, settings), also to
-  `Download/CLIBeats/Playlists` on Android 10+ so it survives an uninstall. Setup offers to restore it; **SHARE
-  BACKUP** in Settings sends a copy anywhere, and the trash button deletes the saved backups. Android's own backup
-  also restores the library on a new phone.
+- **Full backup:** saved automatically once a day, each day's replacing the last: playlists, Favorites, saved albums
+  and artists, play history (Most played, Recently played), which songs are downloaded, and every setting. A copy goes
+  to `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` on Android 10+ so it survives an uninstall; setup offers to
+  restore it. Settings → **Backup**: back up now, save a copy anywhere, restore, share. Restoring offers to download
+  the downloaded songs again. Android's own backup also restores the library on a new phone.
+- **Playlist views:** details, bigger details, grid or bigger grid (one icon cycles them, remembered); one-tap sort
+  (Title / Artist, A→Z / Z→A) with a small pop-up.
+- **Library Artists & Albums:** sort by Recent (default), Most played, Most songs or A–Z, each remembered.
 
 ### Import playlists
 - **Library → Playlists → `[ ↓ IMPORT ]`** — choose **Spotify**, **YouTube Music** or **Others** (Apple Music,
@@ -136,6 +140,11 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   name — and follows changes as they happen. Tap it to open Android's output switcher.
 - Repeat · previous · play/pause · next · shuffle, then sleep timer · queue · add to playlist · ♥.
 - Dark or colourless covers use your theme colour for the highlights.
+- **Lyrics:** swipe up on the cover (or tap the lyrics button) for syllable-synced, line-synced or plain lyrics.
+  Local songs read the file's tags or a `.lrc` beside it; YouTube Music songs search LyricsPlus, BetterLyrics, LRCLIB,
+  YouTube Music and lyrics.ovh at once and keep the best (syllable > line > plain). **文A Translate** and **abc
+  Pronunciation** add each line's meaning and romanization. Lyrics load only when opened, are saved (downloads keep
+  theirs offline), and Settings → Storage shows their size (2,000 songs kept).
 
 ### System integration
 - **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
@@ -155,8 +164,9 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 ### Interface
 - Terminal-style UI (JetBrains Mono, bracketed controls, bordered blocks).
-- **Themes:** Dark · AMOLED · **Light**, with nine accent colours plus a **custom colour picker** (hue, saturation,
-  brightness or a hex code); dialogs and menus follow the theme.
+- **Themes:** a big **THEME** heading in Settings opens the colour scheme (System · Light · Dark · AMOLED, shown as
+  previews) and six themes — Classic, Berry, Grove, Ocean, Ember, Iris — each tinting the whole app in a light and a
+  dark version, plus **Create theme** from any colour. Nine accent colours and a **custom colour picker** work on top.
 - **Mini player seek:** touch or drag the bar; a bubble shows the exact time, and it lands on that second.
 - **First-run setup** (new installs): theme → music folder → default source (Online / Local).
 - **App icon:** round logo (terminal prompt and spectrum bars) that fits round, squircle and square icon shapes, with a themed (monochrome) variant on Android 13+.
@@ -170,8 +180,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Gesture | Action |
 |---|---|
 | Tap | Play |
-| **Swipe right** | Add to queue |
-| **Swipe left** | Add to ♥ Favorites |
+| **Swipe right** | Add to queue (changeable in Settings → Gestures) |
+| **Swipe left** | Add to ♥ Favorites (changeable in Settings → Gestures) |
 | **Hold** | Menu: Play next · Add to queue · Add to playlist · Add to favorites |
 | Drag ≡, or hold the cover and drag | Reorder (queue, ♥ Favorites, your playlists) |
 
@@ -179,7 +189,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 
 | Gesture | Action |
 |---|---|
-| **Swipe right** on a song | Remove it, with **Undo** |
+| **Swipe right** on a song | Remove it, with **Undo** (changeable in Settings → Gestures) |
 | Queue button in the mini player | Open the queue · tap again to go back |
 
 **Bottom bar**
@@ -187,9 +197,13 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Gesture | Action |
 |---|---|
 | Swipe left / right outside a song row | Next / previous tab |
-| Tap **Home** again | Switch Online ↔ Local |
+| Tap **Home** again | Close a playlist opened from Home, then switch Online ↔ Local |
 | Tap **Search** again · **double-tap** | Switch Online ↔ Local · open the keyboard |
 | Tap **Library** again | Leave the open playlist / artist / album, then Artists or Albums → Tracks, then Playlists → Online → Local |
+
+Every swipe can be changed or turned off in **Settings → Gestures**: song swipes can add to queue, play next, add
+to ♥ Favorites, add to a playlist or do nothing; the Queue's swipe can remove (default) or do any of those; tab
+swiping and Now Playing's swipes can be switched off. The ↺ icon restores the defaults.
 
 **Player**
 
@@ -198,6 +212,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 | Tap the mini player | Open Now Playing |
 | Touch / drag the mini player's bar | Seek, with the exact time shown |
 | **Drag down** on the cover (Now Playing) | Close the player |
+| **Swipe up** on the cover (Now Playing) | Switch between cover and lyrics |
 | **Drag** across the waveform | Scrub; near the current time it snaps back |
 | Previous: tap · tap again | Restart the song · the song before |
 | Next after going back | Return to the song you went back from |

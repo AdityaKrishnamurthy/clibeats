@@ -1,6 +1,8 @@
-# CLIBeats v2.8.2 — Release Notes
+# CLIBeats v2.8.5 — Release Notes
 
-**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.2.apk` (verify with `SHA256SUMS.txt`)
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.5.apk` (verify with `SHA256SUMS.txt`)
+
+New themes, a full backup of the app, Recent for Artists and Albums, and a faster Home.
 
 ## Themes
 
