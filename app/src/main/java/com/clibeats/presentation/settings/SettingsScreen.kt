@@ -283,7 +283,11 @@ fun SettingsScreen(
                 )
             }
         }
+        val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
+        LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
         BackupSettingsBlock(
+            lastBackupAt = lastBackupAt,
+            onBackUpNow = viewModel::backUpNow,
             mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
             exchangeMessage = exchangeMessage,
             onToggleMirrorBackups = viewModel::setMirrorBackupsToDownloads,

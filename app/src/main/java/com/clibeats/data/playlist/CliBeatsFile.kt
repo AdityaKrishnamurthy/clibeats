@@ -11,7 +11,9 @@ import kotlinx.serialization.json.Json
  * new device can attempt provider resolution on import. No server required.
  *
  * Version 2 adds optional `prefs`, `albums` and `artists` so a folder snapshot can
- * restore the whole library. Every new field has a default, so v1 files still read.
+ * restore the whole library. Version 3 makes it a full backup of the app: every setting (`settings`), the play
+ * history (Most played, Recently played) and the list of downloaded songs (offered for download again on restore).
+ * Every new field has a default, so older files still read.
  */
 @Serializable
 data class CliBeatsFile(
@@ -21,9 +23,16 @@ data class CliBeatsFile(
     val prefs: CliBeatsPrefs? = null,
     val albums: List<CliBeatsAlbum> = emptyList(),
     val artists: List<CliBeatsArtist> = emptyList(),
+    /** Every app setting by its stored name (not caches, positions or device-specific folders). */
+    val settings: Map<String, CliBeatsSetting> = emptyMap(),
+    /** The songs the play history refers to; [history] points into this list. */
+    val historyTracks: List<CliBeatsTrack> = emptyList(),
+    val history: List<CliBeatsPlay> = emptyList(),
+    /** Songs that were downloaded (the audio isn't in the backup; they can be downloaded again). */
+    val downloads: List<CliBeatsTrack> = emptyList(),
 ) {
     companion object {
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 
@@ -89,3 +98,17 @@ object CliBeatsFileCodec {
 
     fun decode(raw: String): CliBeatsFile = json.decodeFromString(raw)
 }
+
+/** One setting: its type (b, i, l, f, s, ss) and its value as text (a string set as a JSON array). */
+@Serializable
+data class CliBeatsSetting(
+    val type: String,
+    val value: String,
+)
+
+/** One play: [track] is an index into `historyTracks`; [at] when it was played (epoch ms). */
+@Serializable
+data class CliBeatsPlay(
+    val track: Int,
+    val at: Long,
+)

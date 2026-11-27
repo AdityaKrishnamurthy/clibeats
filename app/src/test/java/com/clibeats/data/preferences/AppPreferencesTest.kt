@@ -73,4 +73,52 @@ class AppPreferencesTest {
             assertEquals(2048, AppPreferences.snapToOption(1536, AppPreferences.SONG_CACHE_OPTIONS_MB))
             assertEquals(3072, AppPreferences.snapToOption(9999, AppPreferences.SONG_CACHE_OPTIONS_MB))
         }
+
+    @Test
+    fun settings_backupRoundTripsEveryKindAndSkipsInstallOnlyOnes() =
+        runTest {
+            appPreferences.setThemePalette("BERRY")
+            appPreferences.setThemeMode("AMOLED")
+            appPreferences.setCacheMaxMb(2048)
+            appPreferences.setHomeLanguages(setOf("HINDI", "JAPANESE"))
+            appPreferences.setLibrarySort(albums = true, "A_TO_Z")
+            appPreferences.setGestures(
+                com.clibeats.domain.model.GestureSettings(
+                    songSwipeRight = com.clibeats.domain.model.SwipeAction.PLAY_NEXT,
+                    tabSwipe = false,
+                ),
+            )
+            appPreferences.setOnboardingDone()
+            val exported = appPreferences.exportSettings()
+            // The setup flag stays with this install (restoring from setup must not skip it).
+            assertEquals(false, exported.containsKey("onboarding_done"))
+
+            // A fresh install gets them all back.
+            val other = AppPreferences(createTestDataStore())
+            other.importSettings(exported)
+            assertEquals("BERRY", other.themePalette.first())
+            assertEquals("AMOLED", other.themeMode.first())
+            assertEquals(2048, other.cacheMaxMb.first())
+            assertEquals(setOf("HINDI", "JAPANESE"), other.homeLanguages.first())
+            assertEquals("A_TO_Z", other.libraryAlbumSort.first())
+            val gestures = other.gestures.first()
+            assertEquals(com.clibeats.domain.model.SwipeAction.PLAY_NEXT, gestures.songSwipeRight)
+            assertEquals(false, gestures.tabSwipe)
+            assertEquals(false, other.onboardingDone.first())
+        }
+
+    @Test
+    fun settings_importSkipsMalformedEntries() =
+        runTest {
+            appPreferences.importSettings(
+                mapOf(
+                    "cache_max_mb" to ("i" to "not a number"),
+                    "theme_mode" to ("s" to "LIGHT"),
+                    "home_languages" to ("ss" to "{broken"),
+                    "weird" to ("zz" to "1"),
+                ),
+            )
+            assertEquals("LIGHT", appPreferences.themeMode.first())
+            assertEquals(512, appPreferences.cacheMaxMb.first())
+        }
 }

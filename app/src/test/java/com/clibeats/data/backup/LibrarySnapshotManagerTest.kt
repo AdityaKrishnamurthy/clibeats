@@ -74,10 +74,11 @@ class LibrarySnapshotManagerTest {
             val skipped = manager.snapshotIfDue(force = false)
             assertThat(skipped.getOrNull()).isNull()
 
-            // Forced run rotates existing file to .prev.json before exporting.
+            // A forced run replaces the backup in place: still one file, no spare copy.
             val forced = manager.snapshotIfDue(force = true)
             assertThat(forced.getOrNull()).isEqualTo(manager.latestFile)
-            assertThat(File(manager.latestFile.parentFile, "clibeats-backup.prev.json").isFile).isTrue()
+            assertThat(File(manager.latestFile.parentFile, "clibeats-backup.prev.json").isFile).isFalse()
+            assertThat(manager.latestFile.parentFile?.listFiles()?.size).isEqualTo(1)
         }
 
     @Test

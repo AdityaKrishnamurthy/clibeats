@@ -215,6 +215,22 @@ private fun AppContent() {
         swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
     }
 
+    // After restoring a backup: offer to download again the songs that were downloaded there.
+    val restoreDownloads: com.clibeats.presentation.settings.RestoreDownloadsViewModel = hiltViewModel()
+    val toRedownload by restoreDownloads.pending.collectAsStateWithLifecycle()
+    if (toRedownload.isNotEmpty()) {
+        val songs = toRedownload
+        com.clibeats.presentation.component.CliConfirmDialog(
+            command = "restore --downloads",
+            message =
+                "Your backup had ${songs.size} downloaded ${if (songs.size == 1) "song" else "songs"}. " +
+                    "Download ${if (songs.size == 1) "it" else "them"} again now? They'll show in Downloaded " +
+                    "as they finish.",
+            confirmLabel = "Download all",
+            onConfirm = { restoreDownloads.downloadAll(songs) },
+            onDismiss = restoreDownloads::dismiss,
+        )
+    }
     // A song swiped with "Add to playlist" (Settings → Gestures): the playlist picker.
     val gesturesViewModel: com.clibeats.presentation.settings.GesturesViewModel = hiltViewModel()
     val playlistPick by gesturesViewModel.playlistPick.collectAsStateWithLifecycle()

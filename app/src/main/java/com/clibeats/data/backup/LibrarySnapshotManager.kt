@@ -31,7 +31,7 @@ import javax.inject.Singleton
  *   (it doesn't own the file any more), so onboarding opens the file picker on it.
  *
  * A snapshot is written at most once a day and never for an empty library, so a wipe or a failed scan
- * can't overwrite a good backup. The previous internal copy is kept as `.prev.json`.
+ * can't overwrite a good backup. Each day's backup replaces the one before: there is only ever one file.
  */
 @Singleton
 class LibrarySnapshotManager
@@ -67,12 +67,12 @@ class LibrarySnapshotManager
 
                     val file = exchange.buildFile()
                     // Never write an empty library (first run, wiped library): it would replace a good backup.
-                    if (file.playlists.isEmpty() && file.albums.isEmpty() && file.artists.isEmpty()) {
-                        return@runCatching null
-                    }
-                    withContext(Dispatchers.IO) {
-                        if (latest.isFile) latest.copyTo(previousFile, overwrite = true)
-                    }
+                    val nothing =
+                        file.playlists.isEmpty() && file.albums.isEmpty() && file.artists.isEmpty() &&
+                            file.history.isEmpty() && file.downloads.isEmpty()
+                    if (nothing) return@runCatching null
+                    // One backup only: today's replaces yesterday's (an older spare copy is removed).
+                    withContext(Dispatchers.IO) { if (previousFile.isFile) previousFile.delete() }
                     exchange.exportToFile(latest).getOrThrow()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                         appPreferences.mirrorBackupsToDownloads.first()

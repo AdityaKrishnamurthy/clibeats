@@ -86,4 +86,31 @@ class CliBeatsFileCodecTest {
 
         assertThat(decoded.playlists[0].tracks[0].title).isEqualTo("T")
     }
+
+    @Test
+    fun `full backup v3 keeps settings, history and downloads, and old files still read`() {
+        val song = CliBeatsTrack("youtube_music", "abc", "Idol", "YOASOBI", "", 213_000L)
+        val file =
+            CliBeatsFile(
+                settings =
+                    mapOf(
+                        "theme_palette" to CliBeatsSetting("s", "BERRY"),
+                        "home_languages" to CliBeatsSetting("ss", "[\"HINDI\"]"),
+                    ),
+                historyTracks = listOf(song),
+                history = listOf(CliBeatsPlay(0, 1_700_000_000_000L), CliBeatsPlay(0, 1_700_000_100_000L)),
+                downloads = listOf(song),
+            )
+        val back = CliBeatsFileCodec.decode(CliBeatsFileCodec.encode(file))
+        assertThat(back.version).isEqualTo(3)
+        assertThat(back.settings["theme_palette"]).isEqualTo(CliBeatsSetting("s", "BERRY"))
+        assertThat(back.history).hasSize(2)
+        assertThat(back.historyTracks.single().title).isEqualTo("Idol")
+        assertThat(back.downloads.single().sourceId).isEqualTo("abc")
+
+        val old = CliBeatsFileCodec.decode("""{"version":2,"playlists":[]}""")
+        assertThat(old.settings).isEmpty()
+        assertThat(old.history).isEmpty()
+        assertThat(old.downloads).isEmpty()
+    }
 }

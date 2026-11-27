@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 // Indentation: detekt 1.23.6 misparses ktlint_official @Inject constructor() style (false positive).
-@Suppress("Indentation", "TooManyFunctions")
+@Suppress("Indentation", "TooManyFunctions", "LargeClass")
 class AppPreferences
     @Inject
     constructor(
@@ -84,6 +84,60 @@ class AppPreferences
             val UPDATE_DOWNLOAD_VERSION = stringPreferencesKey("update_download_version")
             val UPDATE_DOWNLOAD_SHA256 = stringPreferencesKey("update_download_sha256")
             val MIRROR_BACKUPS_TO_DOWNLOADS = booleanPreferencesKey("mirror_backups_to_downloads")
+        }
+
+        /**
+         * Every setting for a backup, by stored name: type tag and value as text. Leaves out what belongs to this
+         * install or device (queue position, local folder permissions, update checks, recent searches).
+         */
+        suspend fun exportSettings(): Map<String, Pair<String, String>> {
+            val all = dataStore.data.first().asMap()
+            return all.mapNotNull { (key, value) ->
+                if (key.name in NOT_BACKED_UP) return@mapNotNull null
+                val typed =
+                    when (value) {
+                        is Boolean -> "b" to value.toString()
+                        is Int -> "i" to value.toString()
+                        is Long -> "l" to value.toString()
+                        is Float -> "f" to value.toString()
+                        is String -> "s" to value
+                        is Set<*> ->
+                            "ss" to
+                                kotlinx.serialization.json.JsonArray(
+                                    value.filterIsInstance<String>().map {
+                                        kotlinx.serialization.json.JsonPrimitive(it)
+                                    },
+                                ).toString()
+                        else -> null
+                    } ?: return@mapNotNull null
+                key.name to typed
+            }.toMap()
+        }
+
+        /** Applies settings from a backup (unknown or malformed entries are skipped). */
+        suspend fun importSettings(settings: Map<String, Pair<String, String>>) {
+            dataStore.edit { prefs ->
+                settings.forEach { (name, typed) ->
+                    if (name in NOT_BACKED_UP || name.length > MAX_SETTING_NAME) return@forEach
+                    val (type, value) = typed
+                    runCatching {
+                        when (type) {
+                            "b" -> prefs[booleanPreferencesKey(name)] = value.toBooleanStrict()
+                            "i" -> prefs[intPreferencesKey(name)] = value.toInt()
+                            "l" -> prefs[longPreferencesKey(name)] = value.toLong()
+                            "f" ->
+                                prefs[androidx.datastore.preferences.core.floatPreferencesKey(name)] = value.toFloat()
+                            "s" -> prefs[stringPreferencesKey(name)] = value
+                            "ss" ->
+                                prefs[stringSetPreferencesKey(name)] =
+                                    kotlinx.serialization.json.Json.parseToJsonElement(value)
+                                        .let { it as kotlinx.serialization.json.JsonArray }
+                                        .map { (it as kotlinx.serialization.json.JsonPrimitive).content }
+                                        .toSet()
+                        }
+                    }
+                }
+            }
         }
 
         /** Home "Recently played" only shows plays after this time ([ CLEAR ] on Home moves it). */
@@ -486,3 +540,24 @@ private fun swipeAction(
     val all = com.clibeats.domain.model.SwipeAction.entries
     return all.firstOrNull { it.name == saved } ?: default
 }
+
+/** Settings that stay with this install: playback position, folder permissions, update state, recent searches. */
+private val NOT_BACKED_UP =
+    setOf(
+        "last_queue_index",
+        "last_playback_position",
+        "local_music_tree_uri",
+        "local_music_tree_uris",
+        // Restoring from the setup screen must not close setup before a folder and source are picked.
+        "onboarding_done",
+        "recent_search_tracks",
+        "update_last_check_at",
+        "update_etag",
+        "update_cached_release",
+        "update_snooze_until",
+        "update_download_id",
+        "update_download_version",
+        "update_download_sha256",
+    )
+
+private const val MAX_SETTING_NAME = 100

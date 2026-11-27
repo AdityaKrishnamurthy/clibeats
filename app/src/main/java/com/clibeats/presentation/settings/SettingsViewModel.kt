@@ -267,6 +267,31 @@ class SettingsViewModel
         private val _shareFile = MutableStateFlow<File?>(null)
         val shareFile: StateFlow<File?> = _shareFile.asStateFlow()
 
+        private val _lastBackupAt = MutableStateFlow<Long?>(null)
+
+        /** When the automatic backup was last saved (null: none yet). */
+        val lastBackupAt: StateFlow<Long?> = _lastBackupAt.asStateFlow()
+
+        fun refreshLastBackup() {
+            val manager = snapshotManager ?: return
+            viewModelScope.launch {
+                _lastBackupAt.value =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        manager.latestFile.takeIf { it.isFile && it.length() > 0L }?.lastModified()
+                    }
+            }
+        }
+
+        /** Saves a fresh automatic backup now (it replaces the previous one). */
+        fun backUpNow() {
+            val manager = snapshotManager ?: return
+            viewModelScope.launch {
+                val saved = manager.snapshotIfDue(force = true).getOrNull()
+                _exchangeMessage.value = if (saved != null) "Backup saved" else "Nothing to back up yet"
+                refreshLastBackup()
+            }
+        }
+
         /** Takes a fresh snapshot and exposes it for ACTION_SEND (Drive, email, nearby, ...). */
         fun shareSnapshot() {
             val manager = snapshotManager ?: return
@@ -286,6 +311,7 @@ class SettingsViewModel
             val manager = snapshotManager ?: return
             viewModelScope.launch {
                 val removed = manager.clearBackups()
+                refreshLastBackup()
                 _exchangeMessage.value =
                     when (removed) {
                         0 -> "No backups to delete"

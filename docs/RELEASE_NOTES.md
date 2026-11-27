@@ -15,6 +15,18 @@
 - **Create theme.** [ + Create theme ] makes a theme from any colour you pick: light and dark versions, softly
   tinted with it.
 
+## Backup
+
+- **A full backup of the app.** Settings → Backup (renamed from Playlist Exchange) now saves everything worth
+  keeping: playlists, ♥ Favorites, saved albums and artists, your play history (so Most played and Recently played
+  come back), which songs were downloaded, and all your settings — theme, gestures, languages, sorts and the rest.
+  Caches, the music files and lyrics stay out.
+- **One backup, replaced daily.** The automatic backup saves once a day and replaces the previous one; Settings
+  shows when it last saved, with [ BACK UP NOW ].
+- **Downloads come back too.** Restoring a backup offers to download again the songs that were downloaded.
+- **Clearer Backup settings.** Each option now says what it does: keep a copy in Downloads (survives uninstalling),
+  save a copy anywhere, restore, share, delete.
+
 ## Library
 
 - **Recent for Artists and Albums.** A new RECENT sort (Online and Local) puts the artists and albums you played
