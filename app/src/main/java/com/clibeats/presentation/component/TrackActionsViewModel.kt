@@ -31,6 +31,7 @@ class TrackActionsViewModel
         private val downloadManager: TrackDownloadManager,
         private val notices: Notices,
         private val appPreferences: com.clibeats.data.preferences.AppPreferences? = null,
+        private val playlistPicks: PlaylistPicks? = null,
     ) : ViewModel() {
         private val gestures =
             (appPreferences?.gestures ?: kotlinx.coroutines.flow.flowOf(com.clibeats.domain.model.GestureSettings()))
@@ -42,7 +43,7 @@ class TrackActionsViewModel
         /** Swiping a song left: whatever Settings → Gestures says (add to ♥ Favorites by default). */
         fun swipeLeft(track: Track) = perform(gestures.value.songSwipeLeft, track)
 
-        private fun perform(
+        fun perform(
             action: com.clibeats.domain.model.SwipeAction,
             track: Track,
         ) {
@@ -50,7 +51,8 @@ class TrackActionsViewModel
                 com.clibeats.domain.model.SwipeAction.QUEUE -> addToQueue(track)
                 com.clibeats.domain.model.SwipeAction.PLAY_NEXT -> playNext(track)
                 com.clibeats.domain.model.SwipeAction.FAVORITE -> favorite(track)
-                com.clibeats.domain.model.SwipeAction.OFF -> Unit
+                com.clibeats.domain.model.SwipeAction.ADD_TO_PLAYLIST -> playlistPicks?.request(track)
+                com.clibeats.domain.model.SwipeAction.REMOVE, com.clibeats.domain.model.SwipeAction.OFF -> Unit
             }
         }
 

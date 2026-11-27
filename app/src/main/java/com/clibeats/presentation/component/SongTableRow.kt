@@ -81,7 +81,8 @@ fun SongTableRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     onSwipeRight: (() -> Unit)? = null,
-    swipeRightLabel: String = "+ QUEUE",
+    /** The hint behind the row when swiping right; by default the song swipe action's. */
+    swipeRightLabel: String? = null,
     onLongPress: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
     /** The right swipe isn't one of the song swipe actions (e.g. the Queue's remove), so ignore that setting. */
@@ -138,7 +139,9 @@ fun SongTableRow(
         }
 
     Box(modifier = modifier.fillMaxWidth().then(swipeModifier)) {
-        if (dragX != 0f) SwipeHint(dragX, swipeRightLabel)
+        if (dragX != 0f) {
+            SwipeHint(dragX, swipeRightLabel ?: gestureSettings.songSwipeRight.hint, gestureSettings.songSwipeLeft.hint)
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -316,10 +319,11 @@ private const val SWIPE_MAX_FACTOR = 1.5f
 private fun BoxScope.SwipeHint(
     dragX: Float,
     rightLabel: String,
+    leftLabel: String,
 ) {
     val right = dragX > 0f
     Text(
-        text = if (right) rightLabel else "♥ FAVORITE",
+        text = if (right) rightLabel else leftLabel,
         style = MaterialTheme.typography.labelMedium,
         color = CliBeatsAccent,
         modifier =

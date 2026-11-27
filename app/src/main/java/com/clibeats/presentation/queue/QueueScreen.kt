@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.clibeats.domain.model.SwipeAction
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.CliConfirmDialog
 import com.clibeats.presentation.component.LocalGestureSettings
@@ -346,6 +347,9 @@ private fun ReorderableUpcomingList(
     val radioIds by viewModel.radioTrackIds.collectAsStateWithLifecycle()
     // The first radio song gets a "from radio" line above it: your queued songs above, suggestions below.
     val firstRadio = upcoming.indexOfFirst { it.id in radioIds }
+    // Swiping right: remove by default; Settings → Gestures can pick another action.
+    val queueSwipe = LocalGestureSettings.current.queueSwipeRight
+    val trackActions: com.clibeats.presentation.component.TrackActionsViewModel = hiltViewModel()
     ReorderableList(
         items = upcoming,
         itemId = { it.id },
@@ -370,13 +374,13 @@ private fun ReorderableUpcomingList(
                 onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
                 // Remove has its own switch in Settings → Gestures (not the song swipe actions).
                 onSwipeRight =
-                    if (LocalGestureSettings.current.queueSwipeRemove) {
-                        { onRemove(queueIndex, track) }
-                    } else {
-                        null
+                    when (queueSwipe) {
+                        SwipeAction.OFF -> null
+                        SwipeAction.REMOVE -> ({ onRemove(queueIndex, track) })
+                        else -> ({ trackActions.perform(queueSwipe, track) })
                     },
                 swipeRightAlwaysOn = true,
-                swipeRightLabel = "✕ REMOVE",
+                swipeRightLabel = queueSwipe.hint,
                 // Position counted from now (playing = 1), in front of the cover.
                 leading = {
                     Text(

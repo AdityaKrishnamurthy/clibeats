@@ -56,14 +56,14 @@ internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel(
                     )
                 }
             }
-            SwipeActionRow("SWIPE SONG RIGHT →", gestures.songSwipeRight) { action ->
+            SwipeActionRow("SWIPE SONG RIGHT →", gestures.songSwipeRight, SwipeAction.SONG_CHOICES) { action ->
                 viewModel.update { it.copy(songSwipeRight = action) }
             }
-            SwipeActionRow("← SWIPE SONG LEFT", gestures.songSwipeLeft) { action ->
+            SwipeActionRow("← SWIPE SONG LEFT", gestures.songSwipeLeft, SwipeAction.SONG_CHOICES) { action ->
                 viewModel.update { it.copy(songSwipeLeft = action) }
             }
-            GestureRow("QUEUE: SWIPE SONG RIGHT", "Remove the song from the queue", gestures.queueSwipeRemove) {
-                viewModel.update { it.copy(queueSwipeRemove = !it.queueSwipeRemove) }
+            SwipeActionRow("QUEUE: SWIPE RIGHT →", gestures.queueSwipeRight, SwipeAction.QUEUE_CHOICES) { action ->
+                viewModel.update { it.copy(queueSwipeRight = action) }
             }
             GestureRow("SWIPE BETWEEN TABS", "Swipe left / right to change tab", gestures.tabSwipe) {
                 viewModel.update { it.copy(tabSwipe = !it.tabSwipe) }
@@ -83,6 +83,7 @@ internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel(
 private fun SwipeActionRow(
     title: String,
     action: SwipeAction,
+    choices: List<SwipeAction>,
     onPick: (SwipeAction) -> Unit,
 ) {
     val accent = LocalAccentColor.current
@@ -99,7 +100,7 @@ private fun SwipeActionRow(
                 color = if (action == SwipeAction.OFF) MaterialTheme.colorScheme.onSurfaceVariant else accent,
             )
             DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                SwipeAction.entries.forEach { option ->
+                choices.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(if (option == action) "● ${option.label}" else "   ${option.label}") },
                         onClick = {

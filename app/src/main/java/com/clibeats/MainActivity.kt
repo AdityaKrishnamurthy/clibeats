@@ -214,7 +214,15 @@ private fun AppContent() {
         swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
     }
 
+    // A song swiped with "Add to playlist" (Settings → Gestures): the playlist picker.
     val gesturesViewModel: com.clibeats.presentation.settings.GesturesViewModel = hiltViewModel()
+    val playlistPick by gesturesViewModel.playlistPick.collectAsStateWithLifecycle()
+    playlistPick?.let { track ->
+        com.clibeats.presentation.component.AddToPlaylistDialog(
+            track = track,
+            onDismiss = gesturesViewModel::playlistPicked,
+        )
+    }
     val gestures by gesturesViewModel.gestures.collectAsStateWithLifecycle()
     CompositionLocalProvider(
         LocalAppNavigator provides { next -> router.navigate(next) },
