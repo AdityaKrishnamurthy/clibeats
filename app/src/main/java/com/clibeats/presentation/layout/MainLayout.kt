@@ -64,6 +64,7 @@ fun MainLayout(
     activeTab: MainTab = MainTab.HOME,
     onTabSelected: (MainTab) -> Unit = {},
     onQueueClick: () -> Unit = {},
+    onOpenEqualizer: () -> Unit = {},
     playerViewModel: PlayerViewModel = hiltViewModel(),
     content: @Composable () -> Unit = {},
 ) {
@@ -118,6 +119,10 @@ fun MainLayout(
                 onOpenQueue = {
                     showNowPlaying = false
                     onQueueClick()
+                },
+                onOpenEqualizer = {
+                    showNowPlaying = false
+                    onOpenEqualizer()
                 },
             )
         }

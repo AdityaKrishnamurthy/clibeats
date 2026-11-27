@@ -252,6 +252,7 @@ private fun AppContent() {
             onQueueClick = {
                 if (router.currentRoute == AppRoute.Queue) router.popBack() else router.navigate(AppRoute.Queue)
             },
+            onOpenEqualizer = { router.navigate(AppRoute.Equalizer) },
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 HorizontalPager(

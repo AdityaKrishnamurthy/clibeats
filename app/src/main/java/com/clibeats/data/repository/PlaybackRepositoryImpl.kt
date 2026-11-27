@@ -61,6 +61,10 @@ class PlaybackRepositoryImpl
 
         override val playbackState: StateFlow<PlaybackState> = playerAdapter.playbackState
         override val queueState: StateFlow<List<Track>> = playerAdapter.queueFlow
+        override val volume: StateFlow<Float> = playerAdapter.volume
+
+        override fun setVolume(volume: Float) = playerAdapter.setVolume(volume)
+
         override val playerMessages: Flow<String> = playerAdapter.messages
         override val pauseAtEndOfTrack: StateFlow<Boolean> = playerAdapter.pauseAtEndOfTrack
         override val sleepTimerCountdown: StateFlow<Int?> = playerAdapter.sleepTimerCountdown

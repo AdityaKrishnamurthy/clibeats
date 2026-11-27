@@ -92,6 +92,11 @@ class PlayerViewModel
     ) : ViewModel() {
         val playbackState: StateFlow<PlaybackState> = playbackRepository.playbackState
 
+        /** Player output volume, 0..1; shown on Now Playing next to the equalizer shortcut. */
+        val volume: StateFlow<Float> = playbackRepository.volume
+
+        fun setVolume(volume: Float) = playbackRepository.setVolume(volume)
+
         /** Show each lyric line's translation under it (remembered). */
         val showTranslation: StateFlow<Boolean> =
             (appPreferences?.lyricsTranslate ?: flowOf(false)).stateIn(viewModelScope, SharingStarted.Eagerly, false)
