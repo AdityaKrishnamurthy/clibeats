@@ -54,6 +54,7 @@ fun WaveformScrubber(
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = WAVEFORM_HEIGHT_DP.dp,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val accent = CliBeatsAccent
@@ -73,7 +74,7 @@ fun WaveformScrubber(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(WAVEFORM_HEIGHT_DP.dp)
+                .height(height)
                 .semantics { contentDescription = "Seek: drag across the waveform" }
                 .pointerInput(trackKey) {
                     fun liveFractionNow(): Float {
@@ -204,24 +205,41 @@ internal fun formatTime(ms: Long): String {
     return "%d:%02d".format(totalSec / SECONDS_PER_MINUTE, totalSec % SECONDS_PER_MINUTE)
 }
 
-/** A smooth, music-like bar pattern that's the same every time for the same song. */
+/**
+ * A music-like bar pattern, the same every time for the same song: a quiet intro, a few sections at their own
+ * loudness (verse, chorus...) with gentle variation inside each, and a quiet outro. Heights stay in a calm band,
+ * so there's no wall of full-height bars and no sudden holes in the middle.
+ */
 internal fun waveformFor(
     key: String?,
     count: Int = BAR_COUNT,
 ): List<Float> {
     val random = Random(key?.hashCode() ?: 0)
-    var values = List(count) { MIN_AMPLITUDE + random.nextFloat() * (1f - MIN_AMPLITUDE) }
+    // Sections: their lengths and loudness.
+    val sections = SECTION_MIN + random.nextInt(SECTION_SPREAD)
+    val levels = List(sections) { SECTION_LOW + random.nextFloat() * (SECTION_HIGH - SECTION_LOW) }
+    var values =
+        List(count) { i ->
+            val position = i.toFloat() / (count - 1) * (sections - 1)
+            val from = position.toInt().coerceAtMost(sections - 2)
+            val t = position - from
+            // Smooth step between neighbouring sections.
+            val eased = smoothStep(t)
+            val level = levels[from] + (levels[from + 1] - levels[from]) * eased
+            level + (random.nextFloat() - HALF) * DETAIL
+        }
     repeat(SMOOTHING_PASSES) {
         values =
             values.indices.map { i ->
                 (values[maxOf(0, i - 1)] + values[i] * 2 + values[minOf(count - 1, i + 1)]) / SMOOTHING_WEIGHT
             }
     }
-    val peak = values.max()
+    val peak = values.max().coerceAtLeast(MIN_AMPLITUDE)
     return values.mapIndexed { i, v ->
         // Quieter intro and outro, like most tracks.
-        val edge = minOf(i, count - 1 - i).toFloat() / (count * FADE_FRACTION)
-        (v / peak * minOf(1f, MIN_EDGE_LEVEL + edge)).coerceIn(MIN_AMPLITUDE, 1f)
+        val edge = (minOf(i, count - 1 - i).toFloat() / (count * FADE_FRACTION)).coerceAtMost(1f)
+        val fade = MIN_EDGE_LEVEL + (1f - MIN_EDGE_LEVEL) * smoothStep(edge)
+        (v / peak * PEAK_LEVEL * fade).coerceIn(MIN_AMPLITUDE, 1f)
     }
 }
 
@@ -230,11 +248,17 @@ private const val BAR_COUNT = 64
 private const val BAR_FILL = 0.62f
 private const val BAR_MAX_HEIGHT = 0.92f
 private const val MIN_AMPLITUDE = 0.12f
-private const val SMOOTHING_PASSES = 2
+private const val SECTION_MIN = 4
+private const val SECTION_SPREAD = 3
+private const val SECTION_LOW = 0.42f
+private const val SECTION_HIGH = 0.88f
+private const val DETAIL = 0.42f
+private const val PEAK_LEVEL = 0.95f
+private const val SMOOTHING_PASSES = 1
 private const val SMOOTHING_WEIGHT = 4f
 private const val HALF = 0.5f
-private const val FADE_FRACTION = 0.08f
-private const val MIN_EDGE_LEVEL = 0.35f
+private const val FADE_FRACTION = 0.12f
+private const val MIN_EDGE_LEVEL = 0.2f
 private const val SNAP_DP = 14
 private const val IDLE_BAR_ALPHA = 0.28f
 private const val PLAYED_BAR_ALPHA = 0.92f
@@ -243,3 +267,8 @@ private const val LIVE_MARKER_ALPHA = 0.7f
 private const val CHIP_ALPHA = 0.85f
 private const val MS_PER_SECOND = 1000
 private const val SECONDS_PER_MINUTE = 60
+
+/** Eases 0..1 in and out (slow at both ends). */
+private fun smoothStep(t: Float): Float = t * t * (SMOOTH_STEP_A - 2 * t)
+
+private const val SMOOTH_STEP_A = 3f

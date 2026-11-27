@@ -108,15 +108,24 @@ class EqualizerController
             }
         }
 
+        /** The session the current effect is attached to (0: none). */
+        private var attachedSession = 0
+
+        /**
+         * Applies [state]. While the effect is already attached to this session, only its levels change (no
+         * rebuilding, so dragging a slider doesn't click); it's rebuilt when turned on or the session changes.
+         */
+        @Suppress("ReturnCount")
         private fun apply(state: EqualizerState) {
-            releaseEffects(closeSession = false)
             if (!state.enabled) {
-                closeSessionBroadcast()
+                releaseEffects(closeSession = true)
                 return
             }
             val id = sessionId
             if (id <= 0) return
+            if (attachedSession == id && updateInPlace(state)) return
 
+            releaseEffects(closeSession = false)
             openSessionBroadcast(id)
             val attached =
                 runCatching {
@@ -130,6 +139,18 @@ class EqualizerController
                 runCatching { attachLegacy(id, state) }
                     .onFailure { releaseEffects(closeSession = true) }
             }
+            if (dynamics != null || legacy != null) attachedSession = id
+        }
+
+        @Suppress("ReturnCount")
+        private fun updateInPlace(state: EqualizerState): Boolean {
+            dynamics?.let { effect ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    return runCatching { setDynamicsLevels(effect, state) }.isSuccess
+                }
+            }
+            legacy?.let { effect -> return runCatching { setLegacyLevels(effect, state) }.isSuccess }
+            return false
         }
 
         @RequiresApi(Build.VERSION_CODES.P)
@@ -151,27 +172,44 @@ class EqualizerController
                     true,
                 ).build()
             val effect = DynamicsProcessing(0, id, config)
-            EQUALIZER_BANDS_HZ.forEachIndexed { index, frequency ->
+            runCatching {
+                setDynamicsLevels(effect, state)
+                effect.setLimiterAllChannelsTo(
+                    DynamicsProcessing.Limiter(
+                        true,
+                        true,
+                        0,
+                        LIMITER_ATTACK_MS,
+                        LIMITER_RELEASE_MS,
+                        LIMITER_RATIO,
+                        LIMITER_THRESHOLD_DB,
+                        0f,
+                    ),
+                )
+                effect.enabled = true
+            }.onFailure {
+                effect.release()
+                throw it
+            }
+            dynamics = effect
+        }
+
+        /**
+         * Each band is given by its upper edge (DynamicsProcessing's "cutoff"), not its centre: halfway (on a log
+         * scale) to the next band, and the last one reaches the top of hearing.
+         */
+        @RequiresApi(Build.VERSION_CODES.P)
+        private fun setDynamicsLevels(
+            effect: DynamicsProcessing,
+            state: EqualizerState,
+        ) {
+            EQUALIZER_BANDS_HZ.forEachIndexed { index, _ ->
                 effect.setPreEqBandAllChannelsTo(
                     index,
-                    DynamicsProcessing.EqBand(true, frequency.toFloat(), state.gainsDb[index]),
+                    DynamicsProcessing.EqBand(true, bandUpperEdgeHz(index), state.gainsDb[index]),
                 )
             }
             effect.setInputGainAllChannelsTo(state.preampDb)
-            effect.setLimiterAllChannelsTo(
-                DynamicsProcessing.Limiter(
-                    true,
-                    true,
-                    0,
-                    LIMITER_ATTACK_MS,
-                    LIMITER_RELEASE_MS,
-                    LIMITER_RATIO,
-                    LIMITER_THRESHOLD_DB,
-                    0f,
-                ),
-            )
-            effect.enabled = true
-            dynamics = effect
         }
 
         private fun attachLegacy(
@@ -184,14 +222,27 @@ class EqualizerController
                 effect.release()
                 return
             }
+            runCatching {
+                setLegacyLevels(effect, state)
+                effect.enabled = true
+            }.onFailure {
+                effect.release()
+                throw it
+            }
+            legacy = effect
+        }
+
+        private fun setLegacyLevels(
+            effect: Equalizer,
+            state: EqualizerState,
+        ) {
+            val range = effect.bandLevelRange
             for (band in 0 until effect.numberOfBands) {
                 val centerHz = effect.getCenterFreq(band.toShort()) / 1_000
                 val index = EQUALIZER_BANDS_HZ.indices.minByOrNull { abs(EQUALIZER_BANDS_HZ[it] - centerHz) } ?: 0
                 val millibels = (state.gainsDb[index] * MILLIBELS_PER_DB).toInt()
                 effect.setBandLevel(band.toShort(), millibels.coerceIn(range[0].toInt(), range[1].toInt()).toShort())
             }
-            effect.enabled = true
-            legacy = effect
         }
 
         private fun releaseEffects(closeSession: Boolean) {
@@ -201,6 +252,7 @@ class EqualizerController
             runCatching { legacy?.enabled = false }
             runCatching { legacy?.release() }
             legacy = null
+            attachedSession = 0
             if (closeSession) closeSessionBroadcast()
         }
 
@@ -232,3 +284,12 @@ class EqualizerController
             const val LIMITER_THRESHOLD_DB = -0.5f
         }
     }
+
+/** The upper edge of band [index]: the geometric middle between it and the next band (the last: 20 kHz). */
+internal fun bandUpperEdgeHz(index: Int): Float {
+    val center = EQUALIZER_BANDS_HZ[index].toDouble()
+    val next = EQUALIZER_BANDS_HZ.getOrNull(index + 1)?.toDouble() ?: return TOP_OF_HEARING_HZ
+    return kotlin.math.sqrt(center * next).toFloat()
+}
+
+private const val TOP_OF_HEARING_HZ = 20_000f
