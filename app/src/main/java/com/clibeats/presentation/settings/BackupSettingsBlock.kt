@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -17,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.component.TuiButton
 import com.clibeats.presentation.theme.LocalAccentColor
 
 @Suppress("LongParameterList", "LongMethod")
@@ -54,11 +53,10 @@ internal fun BackupSettingsBlock(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp),
                 )
-                Text(
-                    text = "[ BACK UP NOW ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = accent,
-                    modifier = Modifier.clickable(onClick = onBackUpNow).padding(vertical = 8.dp),
+                TuiButton(
+                    text = "BACK UP NOW",
+                    onClick = onBackUpNow,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
             // 2. Keeping a copy that survives uninstalling.
@@ -95,11 +93,8 @@ private fun BackupAction(
     description: String,
     onClick: () -> Unit,
 ) {
-    val accent = LocalAccentColor.current
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Button(onClick = onClick, colors = ButtonDefaults.buttonColors(containerColor = accent)) {
-            Text(label, style = MaterialTheme.typography.labelMedium)
-        }
+        TuiButton(text = label, onClick = onClick)
         Text(
             text = description,
             style = MaterialTheme.typography.labelSmall,

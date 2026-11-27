@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,6 +20,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.clibeats.data.scan.ScanStatus
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.component.TuiButton
 import com.clibeats.presentation.theme.LocalAccentColor
 
 private const val LOCAL_HINT =
@@ -43,7 +42,6 @@ internal fun LocalLibrarySettingsBlock(
     onRemoveFolder: (String) -> Unit,
     onRescan: () -> Unit,
 ) {
-    val accent = LocalAccentColor.current
     TuiBlock(title = "Local Music", isActive = true) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (localFolders.isEmpty()) {
@@ -62,21 +60,17 @@ internal fun LocalLibrarySettingsBlock(
                 localTrackCount = localTrackCount,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
+                TuiButton(
+                    text = "+ ADD FOLDER",
                     onClick = onAddFolder,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                ) {
-                    Text("+ ADD FOLDER")
-                }
-                Button(
+                )
+                TuiButton(
+                    text = "RESCAN",
                     onClick = onRescan,
                     enabled = localFolders.isNotEmpty() && scanStatus !is ScanStatus.Scanning,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = accent),
-                ) {
-                    Text("RESCAN")
-                }
+                )
             }
         }
     }

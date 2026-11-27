@@ -2,18 +2,17 @@
 
 package com.clibeats.presentation.settings
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,13 +47,15 @@ internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel(
                     modifier = Modifier.weight(1f),
                 )
                 val isDefault = gestures == GestureSettings()
-                IconButton(onClick = viewModel::reset, enabled = !isDefault) {
-                    Icon(
-                        imageVector = Icons.Outlined.RestartAlt,
-                        contentDescription = "Reset gestures to default",
-                        tint = if (isDefault) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else accent,
-                    )
-                }
+                Text(
+                    text = "[ ↺ RESET ]",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isDefault) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f) else accent,
+                    modifier =
+                        Modifier
+                            .clickable(enabled = !isDefault, role = Role.Button, onClick = viewModel::reset)
+                            .padding(8.dp),
+                )
             }
             SwipeActionRow("SWIPE SONG RIGHT →", gestures.songSwipeRight, SwipeAction.SONG_CHOICES) { action ->
                 viewModel.update { it.copy(songSwipeRight = action) }
@@ -99,7 +100,14 @@ private fun SwipeActionRow(
                 style = MaterialTheme.typography.labelMedium,
                 color = if (action == SwipeAction.OFF) MaterialTheme.colorScheme.onSurfaceVariant else accent,
             )
-            DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenu(
+                expanded = open,
+                onDismissRequest = { open = false },
+                shape = RoundedCornerShape(2.dp),
+                containerColor = MaterialTheme.colorScheme.surface,
+                tonalElevation = 0.dp,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            ) {
                 choices.forEach { option ->
                     DropdownMenuItem(
                         text = { Text(if (option == action) "● ${option.label}" else "   ${option.label}") },
