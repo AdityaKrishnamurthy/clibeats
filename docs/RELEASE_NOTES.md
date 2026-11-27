@@ -8,7 +8,7 @@
   open the colour scheme, themes and accent (folded away the rest of the time, so Settings stays short).
 - **Color scheme cards.** System, Light, Dark and AMOLED as little previews of the app. **System** follows your
   phone's light / dark setting.
-- **Themes.** Classic (neutral grey with a silver-white accent, the new default), Berry, Grove, Ocean, Ember and
+- **Themes.** Classic (neutral grey with terminal amber, the new default), Berry, Grove, Ocean, Ember and
   Iris each tint the whole app (backgrounds, panels, borders), in a light and a dark version shown as two orbs.
   Tap a theme to use it, or one of its orbs to pick that version straight away; AMOLED keeps pure black with the
   theme's tint in the panels. Picking a theme sets its accent; the accent colours still work on top.

@@ -39,8 +39,8 @@ data class Accent(
     val storedName: String get() = preset?.name ?: toHex(color)
 
     companion object {
-        /** New installs: the Classic theme's silver-white (anyone who picked an accent keeps theirs). */
-        val DEFAULT = Accent(AccentColor.WHITE.color, AccentColor.WHITE)
+        /** New installs: the Classic theme's amber (anyone who picked an accent keeps theirs). */
+        val DEFAULT = Accent(AccentColor.AMBER.color, AccentColor.AMBER)
 
         /** Presets dropped in 2.3.1: anyone who picked one keeps that exact colour as a custom colour. */
         @Suppress("MagicNumber")
