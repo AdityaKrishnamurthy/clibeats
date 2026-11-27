@@ -1,3 +1,53 @@
+# CLIBeats v2.9.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.9.1.apk` (verify with `SHA256SUMS.txt`)
+
+A cleaner Settings, lyrics that are ready when you open them, downloads that keep their covers, and equalizer fixes.
+Includes everything from v2.9.0 (Android Auto, the equalizer, volume on Now Playing).
+
+## Settings
+- **A list of sections instead of one long page.** The current theme sits on top; then **Listening** (high quality
+  streaming, Gestures, Local music), **Your data** (Storage & cache, Downloads, Backup) and **App** (Updates). Each
+  row says what's set now and opens its own page; Back or tapping Settings again returns to the list.
+- The same boxy terminal look as the theme page everywhere: square frames, `[ ON ]` / `[ OFF ]` toggles, `> ` headings
+  and bracketed actions. Panels use the theme's colours, so Berry, Ocean, Grove and the rest tint every page.
+- **About:** a copy button next to the GitHub link.
+
+## Storage & downloads
+- **Cover art cache:** 500 MB (default), 1 GB, 2 GB or 3 GB. **Song cache:** 500 MB, 1 GB (default), 2 GB, 3 GB or
+  5 GB. Old sizes move to the nearest new one (512 MB → 500 MB).
+- When a cache is full, what you haven't played or seen for the longest is removed automatically.
+- **Downloads have their own page** (every song, remove one or all) and are kept apart from the caches.
+- **Downloaded songs keep their own covers:** clearing the cover cache (or it filling up) no longer leaves them
+  without pictures offline. Older downloads get theirs the next time the app is online.
+- **Downloaded songs now really save their lyrics for offline** (and older downloads fill theirs in).
+
+## Lyrics
+- **Ready when you open them:** each song's lyrics load quietly in the background a moment after it starts, so
+  opening lyrics shows them straight away. Translation and pronunciation still load only when switched on.
+- **5,000 songs** of lyrics are kept (was 2,000); about 50–60 MB for a typical mix.
+- **More room:** with lyrics open, the waveform gets shorter, the volume row folds away and the gaps tighten.
+
+## Equalizer
+- Back from the equalizer returns to **Now Playing**.
+- Each slider now shapes the range around its own frequency (they were half a band low, and the top treble had
+  none), so presets sound as intended.
+- Dragging a slider adjusts the sound smoothly instead of rebuilding the effect each time (no clicks).
+
+## Backup
+- Play history in the backup now covers every song in **Library → Online**: the newest 20,000 plays plus at least
+  one play of every older song.
+- Plays you've cleared from every list (Home's Recently played, Library → Online, Most played) aren't backed up.
+
+## Android Auto
+- **Search in the car** now shows results.
+- Songs in the car's lists show their covers.
+
+## Not in this release
+- The Discord presence preview from v2.9.0 is removed for now; it will come back as a proper, safe connection.
+
+---
+
 # CLIBeats v2.9.0 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.9.0.apk` (verify with `SHA256SUMS.txt`)

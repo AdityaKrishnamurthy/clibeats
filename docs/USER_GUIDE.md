@@ -17,7 +17,7 @@ Swipe left / right anywhere outside a song row to move between tabs.
 | **Home** | Source switch (`ONLINE ▾` / `LOCAL`), Recently Played (last 5, with `[ CLEAR ]`), and trending songs for your country (from your SIM / mobile network). Trending loads once each time you open the app; `[ ↻ REFRESH ]` reloads it. Tap the tab again to switch Online ↔ Local. |
 | **Search** | Search the active source. With the box empty it lists songs you played, queued, favourited or added to a playlist from earlier searches (`[ CLEAR ]`). Tap the tab again to switch Online ↔ Local; double-tap it to jump into the search box. |
 | **Library** | Three sections: **Playlists** (♥ Favorites and Most Played pinned, then your playlists with `[ ↓ IMPORT ]` and `[ + NEW ]`, then local M3U playlists; small grid, large grid, list or details), **Online** (songs you've played) and **Local** (music on your device: Tracks / Artists / Albums). Tap the tab again to leave an open playlist, then to move through the sections. |
-| **Settings** | Theme & accent (nine colours plus **Custom**: hue, saturation and brightness sliders or a hex code), music folders, playback, storage, playlist exchange, updates, about. |
+| **Settings** | A list of sections, each opening its own page: the theme (colour scheme, themes, accent and **Custom** colours), Listening (high quality streaming, gestures, local music), Your data (storage & cache, downloads, backup), Updates, and About (with a copy button for the GitHub link). Back or tapping the tab again returns to the list. |
 
 **Queue:** tap the queue button in the mini player (it shows how many songs are up next); tap it again to go back.
 The playing song is 1 and Up Next starts at 2. Swipe a song right to remove it (**Undo** brings it back); drag ≡ or
@@ -101,10 +101,17 @@ read-only `[LOCAL]` playlists; use **Save as app playlist** to get an editable c
 
 ## Storage
 
-Settings → Storage has two caches, each with a size limit and `[ CLEAR ]`:
+Settings → **Storage & cache** has two caches, each with a size limit, a usage bar and **Clear**:
 
-- **Songs** — streamed songs replay instantly without using data (local files are never copied).
-- **Artwork** — cover images. Changing the limit applies immediately.
+- **Songs** — streamed songs replay instantly without using data (local files are never copied). 500 MB, 1, 2, 3
+  or 5 GB; 1 GB by default.
+- **Cover art** — cover images. 500 MB, 1, 2 or 3 GB; 500 MB by default.
+- When a cache is full, what you haven't played or seen for the longest is removed automatically. Changing a limit
+  applies immediately.
+- **Lyrics** — saved lyrics for up to 5,000 songs (the oldest are dropped past that; downloaded songs keep theirs).
+
+Settings → **Downloads** lists every downloaded song with remove one / delete all. Downloads have no size limit
+and are never removed by the caches: each keeps its own cover and lyrics for offline.
 
 ## Controls outside the app
 
@@ -121,17 +128,13 @@ Android's update screen. The first time, Android asks you to allow installs from
 Settings → Updates sets how often the app checks (**Daily**, **Weekly** or **Off**) and has **CHECK NOW** to
 check, download and install by hand. The downloaded APK is deleted after the update is installed.
 
-## Playlist exchange
-
-Settings → Playlist exchange exports your playlists and Favorites to a `clibeats.json` file anywhere you
-choose, and imports them back (for example on a new phone or after reinstalling).
-
 ## Backup
 
 Settings → **Backup** keeps a full backup of the app, saved automatically once a day (each day's replaces the
 last, so there's only ever one): your playlists, ♥ Favorites, saved albums and artists, play history (Most played,
-Recently played), which songs are downloaded, and all your settings (theme, gestures, languages, sorts…). The music
-files, caches and lyrics aren't included. It shows when it last saved; **[ BACK UP NOW ]** saves one straight away.
+Recently played, Library → Online), which songs are downloaded, and all your settings (theme, gestures, languages, sorts…). The music
+files, caches and lyrics aren't included, nor are plays you've cleared from every list (Home's Recently played,
+Library → Online, Most played). It shows when it last saved; **[ BACK UP NOW ]** saves one straight away.
 
 - **Keep a copy in Downloads** (on by default) also saves it to `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` (today's date, e.g. `clibeats-backup-27112026.json`),
   which stays after an uninstall; setup offers to restore it.
