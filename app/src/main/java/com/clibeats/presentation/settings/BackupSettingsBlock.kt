@@ -56,9 +56,9 @@ internal fun BackupSettingsBlock(
             }
             Text(
                 text =
-                    "Saves playlists, ♥ Favorites, saved albums & artists, play history (Library → Online, Most " +
-                        "played, Recently played), which songs are downloaded, and every setting. Not the music files, " +
-                        "caches or lyrics.",
+                    "Saves playlists, ♥ Favorites, saved albums & artists, play history (Library → Online, " +
+                        "Most played, Recently played), which songs are downloaded, and every setting. Not the " +
+                        "music files, caches or lyrics.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
