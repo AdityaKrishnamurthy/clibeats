@@ -60,7 +60,7 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Online:** YouTube Music.
 - **Local:** your own files — **FLAC (16/24-bit), WAV, MP3, M4A (AAC / ALAC), AAC, OGG Vorbis, Opus** (each checked
   with a real sample file in the tests; ALAC also needs the phone's decoder). AIFF isn't supported.
-- **Data saver** — turn off *High quality streaming* (Settings → Audio Quality) to stream the lowest-bitrate audio.
+- **Data saver** — turn off *High quality streaming* (Settings → Listening) to stream the lowest-bitrate audio.
 
 ### Home
 - **Online:** *Trending in <your country>* (YouTube's daily top songs for the country your SIM / mobile network is
@@ -102,7 +102,8 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Reorder** the queue, ♥ Favorites and your own playlists: drag a song's ≡ handle, or hold its cover and drag.
 - **Playlist export / import** (`clibeats.json`, any location via the system picker) — includes Favorites.
 - **Full backup:** saved automatically once a day, each day's replacing the last: playlists, Favorites, saved albums
-  and artists, play history (Most played, Recently played), which songs are downloaded, and every setting. A copy goes
+  and artists, play history (Library → Online, Most played, Recently played; plays you've cleared everywhere are
+  left out), which songs are downloaded, and every setting. A copy goes
   to `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` on Android 10+ so it survives an uninstall; setup offers to
   restore it. Settings → **Backup**: back up now, save a copy anywhere, restore, share. Restoring offers to download
   the downloaded songs again. Android's own backup also restores the library on a new phone.
@@ -143,8 +144,10 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **Lyrics:** swipe up on the cover (or tap the lyrics button) for syllable-synced, line-synced or plain lyrics.
   Local songs read the file's tags or a `.lrc` beside it; YouTube Music songs search LyricsPlus, BetterLyrics, LRCLIB,
   YouTube Music and lyrics.ovh at once and keep the best (syllable > line > plain). **文A Translate** and **abc
-  Pronunciation** add each line's meaning and romanization. Lyrics load only when opened, are saved (downloads keep
-  theirs offline), and Settings → Storage shows their size (2,000 songs kept).
+  Pronunciation** add each line's meaning and romanization. Each song's lyrics load quietly in the background as it
+  starts, so opening them is instant (translation and pronunciation only when switched on). They're saved (downloads
+  keep theirs offline), and Settings → Storage & cache shows their size (5,000 songs kept). With lyrics open, the
+  waveform shrinks and the volume row folds away to give them more room.
 
 ### System integration
 - **Background playback** and lock-screen / notification controls with **high-res artwork** from the image cache:
@@ -156,16 +159,20 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
   Downloads with a progress bar above the player (`[VIEW]` / `[×]`), then INSTALL. Settings → Updates: auto-check
   daily / weekly / off and CHECK NOW.
 - **Android Auto / AAOS:** Recently Played, Playlists, Library and Queue roots over the existing media library
-  service, with voice search. Sideloaded builds need **Unknown sources** enabled in Android Auto's developer settings.
-- **Equalizer on Now Playing:** volume and an **[ EQ ]** shortcut beside the song; the screen has a terminal
-  response graph, animated waveform, 10 draggable bands (31 Hz – 16 kHz), presets, pre-amp and RESET. Android 9+
-  uses `DynamicsProcessing`, Android 8 the platform `Equalizer`; **SYSTEM EQ** opens the phone's effects panel.
-- **Discord:** opt-in "Listening to CLIBeats" card preview; publishing is gated on Discord's official Social SDK
-  (see `docs/DISCORD_PRESENCE.md`) and never uses a user token.
+  service, with search and song covers. Sideloaded builds need **Unknown sources** enabled in Android Auto's
+  developer settings.
+- **Equalizer on Now Playing:** the app's own volume and an **[ EQ ]** shortcut beside the song (Back returns to
+  Now Playing); the screen has a terminal response graph, animated waveform, 10 draggable bands (31 Hz – 16 kHz, each
+  covering the range around it), presets, pre-amp and RESET. Turn it on with `[ OFF ]` → `[ ON ]` (remembered).
+  Android 9+ uses `DynamicsProcessing`, Android 8 the platform `Equalizer`; **SYSTEM EQ** opens the phone's effects
+  panel.
 
 ### Storage & performance
-- **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);
-  limit changes apply immediately.
+- **Two caches, each with its own limit and Clear:** cover art (500 MB, 1, 2 or 3 GB; 500 MB default) and songs
+  (500 MB, 1, 2, 3 or 5 GB; 1 GB default). Limit changes apply immediately; when a cache is full, what you haven't
+  played or seen for the longest is removed automatically.
+- **Downloads are separate** (Settings → Downloads: every song, remove one or all) and never touched by the caches:
+  each download keeps its own cover and lyrics, so clearing the cover cache doesn't blank them offline.
 - **Song cache:** streamed songs replay instantly without using data; local files are never duplicated.
 - One shared thumbnail per cover, disk-cached images, lightweight list rendering.
 
@@ -241,7 +248,9 @@ swiping and Now Playing's swipes can be switched off. The ↺ icon restores the 
   first); hold a result for more options.
 - **Library** — **Playlists** (Favorites, Most Played, your playlists, import, local M3U), **Online** (played songs)
   and **Local** (device music: Tracks / Artists / Albums).
-- **Settings** — theme & accent, local music folders, playback, storage, backup, updates, about.
+- **Settings** — a short list that opens a page per section: the theme card up top, then Listening (high
+  quality streaming, Gestures, Local music), Your data (Storage & cache, Downloads, Backup) and App (Updates), and
+  About with a copy button for the GitHub link. Back, or tapping Settings again, returns to the list.
 - **Queue** opens full screen from the mini player's queue button (also from Now Playing).
 
 ---

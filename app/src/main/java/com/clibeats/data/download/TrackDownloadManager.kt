@@ -55,6 +55,8 @@ class TrackDownloadManager
         private val fetcher: DownloadStreamFetcher,
         /** Saves a downloaded song's lyrics too, so they show offline. */
         private val onlineLyrics: dagger.Lazy<com.clibeats.data.lyrics.online.OnlineLyricsRepository>? = null,
+        /** Keeps each downloaded song's cover with it (safe from clearing the cover cache). */
+        private val covers: DownloadCovers? = null,
     ) {
         constructor(
             context: Context,
@@ -97,7 +99,20 @@ class TrackDownloadManager
                 onlineLyrics?.let { lyrics ->
                     runCatching { lyrics.get().backfill(store.getDownloadedSongs().first()) }
                 }
+                // Older downloads get their covers kept too.
+                covers?.let { kept ->
+                    runCatching { store.getDownloadedSongs().first().forEach { kept.keep(it) } }
+                }
             }
+        }
+
+        private fun keepCover(track: Track) {
+            covers?.let { kept -> scope.launch { runCatching { kept.keep(track) } } }
+        }
+
+        /** Drops kept covers that no downloaded song uses now. */
+        private suspend fun pruneCovers() {
+            covers?.let { kept -> runCatching { kept.keepOnly(store.getDownloadedSongs().first()) } }
         }
 
         private fun publishPending() {
@@ -185,6 +200,7 @@ class TrackDownloadManager
                 store.existingDownload(track.id)?.let { existing ->
                     updateStatus(track.id, DownloadStatus.Completed(existing))
                     onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
+                    keepCover(track)
                     return true
                 }
 
@@ -199,6 +215,7 @@ class TrackDownloadManager
                     updateStatus(track.id, DownloadStatus.Completed(file))
                     // The lyrics come along (looked up now, while online), so the song shows them offline too.
                     onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
+                    keepCover(track)
                     return true
                 }
 
@@ -261,6 +278,7 @@ class TrackDownloadManager
                     updateStatus(track.id, DownloadStatus.Completed(file))
                     // The lyrics come along (looked up now, while online), so the song shows them offline too.
                     onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
+                    keepCover(track)
                     succeeded = true
                 }
                 attempt++
@@ -287,6 +305,7 @@ class TrackDownloadManager
             withContext(Dispatchers.IO + NonCancellable) {
                 cancelDownload(trackId)
                 store.deleteTrackRecordAndFiles(trackId)
+                pruneCovers()
                 trackTitles.remove(trackId)
                 _downloads.update { it - trackId }
                 if (_activeDownload.value?.trackId == trackId) _activeDownload.value = null
@@ -300,6 +319,7 @@ class TrackDownloadManager
                 pending.clear()
                 publishPending()
                 store.deleteAllRecordsAndFiles()
+                pruneCovers()
                 trackTitles.clear()
                 _downloads.value = emptyMap()
                 _activeDownload.value = null

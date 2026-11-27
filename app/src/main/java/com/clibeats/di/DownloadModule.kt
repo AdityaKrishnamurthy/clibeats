@@ -22,10 +22,15 @@ object DownloadModule {
         @ApplicationContext context: Context,
         store: DownloadStore,
         fetcher: DownloadStreamFetcher,
+        onlineLyrics: dagger.Lazy<com.clibeats.data.lyrics.online.OnlineLyricsRepository>,
+        covers: com.clibeats.data.download.DownloadCovers,
     ): TrackDownloadManager =
         TrackDownloadManager(
             context = context,
             store = store,
             fetcher = fetcher,
+            // Downloads keep their lyrics and covers for offline.
+            onlineLyrics = onlineLyrics,
+            covers = covers,
         )
 }

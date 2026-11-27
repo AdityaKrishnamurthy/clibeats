@@ -37,7 +37,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.theme.Accent
 import com.clibeats.presentation.theme.AccentColor
 import com.clibeats.presentation.theme.CliBeatsThemeMode
@@ -56,10 +55,10 @@ internal fun ThemeSettingsBlock(
 ) {
     val systemDark = isSystemInDarkTheme()
     val shownDark = uiState.themeMode.resolve(systemDark) != CliBeatsThemeMode.LIGHT
-    // Folded by default: one big heading that shows the current look and opens everything below.
-    var expanded by rememberSaveable { mutableStateOf(false) }
+    // Open on its page; the big heading shows the current look and folds the choices away.
+    var expanded by rememberSaveable { mutableStateOf(true) }
     var creating by remember { mutableStateOf(false) }
-    TuiBlock(title = "Appearance", isActive = true) {
+    SettingsPanel {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             ThemeHeading(palette = palette, uiState = uiState, shownDark = shownDark, expanded = expanded) {
                 expanded = !expanded
@@ -468,10 +467,10 @@ private fun Orb(
     )
 }
 
-private fun lightOrb(palette: ThemePalette): Brush =
+internal fun lightOrb(palette: ThemePalette): Brush =
     Brush.linearGradient(listOf(Color.White, lerp(Color.White, palette.swatch, 0.45f), palette.lightSurfaceVariant))
 
-private fun darkOrb(palette: ThemePalette): Brush =
+internal fun darkOrb(palette: ThemePalette): Brush =
     Brush.linearGradient(
         listOf(palette.darkBackground, lerp(palette.darkSurfaceVariant, palette.swatch, 0.55f), Color.Black),
     )

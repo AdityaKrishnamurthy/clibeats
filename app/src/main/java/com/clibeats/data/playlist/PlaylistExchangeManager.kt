@@ -136,9 +136,21 @@ class PlaylistExchangeManager
             )
         }
 
-        /** The play history (newest first, up to [MAX_HISTORY]): each song once, and every play pointing at it. */
+        /**
+         * The play history (newest first): the latest [MAX_HISTORY] plays, plus the last play of every older song,
+         * so every song in Library → Online and Recently played comes back. Each song once, plays pointing at it.
+         */
         private suspend fun playHistory(): Pair<List<CliBeatsTrack>, List<CliBeatsPlay>> {
-            val plays = database.historyDao().getAllAsFlow().first().take(MAX_HISTORY)
+            // Plays cleared everywhere they show (Home's Recently played, Library → Online, Most played) stay out.
+            val since =
+                visibleSince(
+                    appPreferences.homeRecentsClearedAt.first(),
+                    appPreferences.libraryHistoryClearedAt.first(),
+                    appPreferences.mostPlayedClearedAt.first(),
+                )
+            val all = database.historyDao().getAllAsFlow().first().filter { it.playedAt > since }
+            val kept = historyToKeep(all.map { it.songId to it.playedAt }, MAX_HISTORY).toHashSet()
+            val plays = all.filter { (it.songId to it.playedAt) in kept }
             if (plays.isEmpty()) return emptyList<CliBeatsTrack>() to emptyList()
             val ids = plays.map { it.songId }.distinct()
             val songs =
@@ -241,11 +253,11 @@ class PlaylistExchangeManager
         /** Adds the backup's plays (Most played, Recently played); plays already here aren't added twice. */
         private suspend fun restoreHistory(file: CliBeatsFile) {
             if (file.history.isEmpty()) return
-            val tracks = file.historyTracks.take(MAX_HISTORY).map(::importedTrack)
+            val tracks = file.historyTracks.take(MAX_HISTORY_READ).map(::importedTrack)
             songRepository.upsertTracks(tracks.filterNotNull().distinctBy { it.id })
             val dao = database.historyDao()
             val have = dao.getAllAsFlow().first().mapTo(HashSet()) { it.songId to it.playedAt }
-            val toAdd = playsToRestore(file.history.take(MAX_HISTORY), tracks, have)
+            val toAdd = playsToRestore(file.history.take(MAX_HISTORY_READ), tracks, have)
             database.withTransaction {
                 toAdd.forEach { (track, at) ->
                     dao.insert(
@@ -359,7 +371,10 @@ class PlaylistExchangeManager
             const val FAVORITES_NAME = "♥ Favorites"
             private const val LOCAL_FILE_PREFIX = "localpl:"
             private const val MAX_FILE_CHARS = 8 * 1024 * 1024
-            private const val MAX_HISTORY = 3_000
+            private const val MAX_HISTORY = 20_000
+
+            /** Plays read from a file: the kept ones plus one per older song. */
+            private const val MAX_HISTORY_READ = 60_000
             private const val MAX_SETTINGS = 300
             private const val SQL_CHUNK = 500
             private const val READ_BUFFER_CHARS = 8 * 1024
@@ -429,3 +444,20 @@ internal fun downloadsToOffer(
     tracks: List<Track>,
     have: Set<String>,
 ): List<Track> = tracks.filter { it.id !in have && it.providerId != "local" }.distinctBy { it.id }
+
+/**
+ * Which plays a backup keeps ([plays]: song id and time, newest first): the newest [max], then the latest play of
+ * each song not in those, so no played song is left out (only some of its older plays).
+ */
+internal fun historyToKeep(
+    plays: List<Pair<String, Long>>,
+    max: Int,
+): List<Pair<String, Long>> {
+    val recent = plays.take(max)
+    val seen = recent.mapTo(HashSet()) { it.first }
+    val older = plays.drop(max).filter { seen.add(it.first) }
+    return recent + older
+}
+
+/** Plays after this still show somewhere: the earliest of the "cleared at" times (0 when one was never cleared). */
+internal fun visibleSince(vararg clearedAt: Long): Long = clearedAt.minOrNull()?.coerceAtLeast(0L) ?: 0L

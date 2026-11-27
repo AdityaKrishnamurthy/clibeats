@@ -22,8 +22,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // CI passes -PversionName=1.2.3 -PversionCode=10203 from the git tag (major*10000 + minor*100 + patch).
-        versionCode = providers.gradleProperty("versionCode").orElse("20900").get().toInt()
-        versionName = providers.gradleProperty("versionName").orElse("2.9.0").get()
+        versionCode = providers.gradleProperty("versionCode").orElse("20901").get().toInt()
+        versionName = providers.gradleProperty("versionName").orElse("2.9.1").get()
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

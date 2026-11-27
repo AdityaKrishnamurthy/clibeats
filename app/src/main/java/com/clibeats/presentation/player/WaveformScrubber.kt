@@ -54,6 +54,7 @@ fun WaveformScrubber(
     durationMs: Long,
     onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier,
+    height: androidx.compose.ui.unit.Dp = WAVEFORM_HEIGHT_DP.dp,
     content: @Composable BoxScope.() -> Unit,
 ) {
     val accent = CliBeatsAccent
@@ -73,7 +74,7 @@ fun WaveformScrubber(
         modifier =
             modifier
                 .fillMaxWidth()
-                .height(WAVEFORM_HEIGHT_DP.dp)
+                .height(height)
                 .semantics { contentDescription = "Seek: drag across the waveform" }
                 .pointerInput(trackKey) {
                     fun liveFractionNow(): Float {

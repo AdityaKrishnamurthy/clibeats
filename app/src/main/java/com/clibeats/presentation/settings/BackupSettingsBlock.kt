@@ -1,30 +1,28 @@
-@file:Suppress(
-    "ktlint:standard:function-naming",
-    "FunctionNaming",
-    "ArgumentListWrapping",
-    "MaxLineLength",
-    "MaximumLineLength",
-)
+@file:Suppress("ktlint:standard:function-naming", "FunctionNaming")
 
 package com.clibeats.presentation.settings
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.SaveAlt
+import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.clibeats.presentation.component.TuiBlock
 import com.clibeats.presentation.component.TuiButton
-import com.clibeats.presentation.component.TuiExpandable
 import com.clibeats.presentation.theme.LocalAccentColor
 
+/** Settings → Backup: the automatic daily backup, the copy kept in Downloads, and your own copies. */
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun BackupSettingsBlock(
@@ -38,85 +36,86 @@ internal fun BackupSettingsBlock(
     onShareSnapshot: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    TuiBlock(title = "Backup", isActive = true) {
-        TuiExpandable(
-            summary = "Daily · " + (lastBackupAt?.let { "last saved ${backupTime(it)}" } ?: "not saved yet"),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // 1. The automatic backup and when it last ran.
-                Column {
-                    Text("AUTOMATIC BACKUP · DAILY", style = MaterialTheme.typography.titleSmall, color = accent)
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SettingsPanel(label = "Automatic backup") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text =
-                            lastBackupAt?.let { "Last saved ${backupTime(it)}" }
-                                ?: "Not saved yet — it saves once a day when you open the app",
-                        style = MaterialTheme.typography.bodySmall,
+                        text = lastBackupAt?.let { "Last saved ${backupTime(it)}" } ?: "Not saved yet",
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text =
-                            "Saves your playlists, ♥ Favorites, saved albums & artists, play history " +
-                                "(Most played, Recently played), which songs are downloaded, and all your settings. " +
-                                "Each day's backup replaces the last. The music files, caches and lyrics aren't " +
-                                "included.",
+                        text = "Once a day, each replacing the one before",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    TuiButton(
-                        text = "BACK UP NOW",
-                        onClick = onBackUpNow,
-                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
-                // 2. Keeping a copy that survives uninstalling.
-                MirrorDownloadsToggleRow(
-                    mirrorBackupsToDownloads = mirrorBackupsToDownloads,
-                    onToggle = onToggleMirrorBackups,
-                )
-                // 3. Your own copies: save, restore, send.
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("YOUR COPIES", style = MaterialTheme.typography.titleSmall, color = accent)
-                    BackupAction("SAVE A COPY…", "Save the backup file anywhere: Downloads, Drive, a USB stick", onExport)
-                    BackupAction(
-                        "RESTORE…",
-                        "Pick a backup file to bring everything back (downloads are offered again)",
-                        onImport,
-                    )
-                    BackupAction("SHARE", "Send the backup to another phone or app", onShareSnapshot)
-                }
-                exchangeMessage?.let { message ->
-                    Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Spacer(Modifier.width(8.dp))
+                TuiButton(text = "BACK UP NOW", onClick = onBackUpNow)
             }
+            Text(
+                text =
+                    "Saves playlists, ♥ Favorites, saved albums & artists, play history (Library → Online, " +
+                        "Most played, Recently played), which songs are downloaded, and every setting. Not the " +
+                        "music files, caches or lyrics.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+            SettingsSwitchRow(
+                icon = null,
+                title = "Keep a copy in Downloads",
+                summary =
+                    "Download/CLIBeats/clibeats-backup-DDMMYYYY.json — survives uninstalling; setup offers " +
+                        "to restore it. Anyone with file access can read it.",
+                checked = mirrorBackupsToDownloads,
+                onCheckedChange = onToggleMirrorBackups,
+            )
+        }
+        SettingsGroup(
+            label = "Your copies",
+            rows =
+                listOf(
+                    {
+                        SettingsNavRow(
+                            Icons.Outlined.SaveAlt,
+                            "Save a copy…",
+                            "Downloads, Drive, a USB stick",
+                            onExport,
+                        )
+                    },
+                    {
+                        SettingsNavRow(
+                            Icons.Outlined.Restore,
+                            "Restore…",
+                            "Pick a backup file to bring everything back (downloads are offered again)",
+                            onImport,
+                        )
+                    },
+                    {
+                        SettingsNavRow(
+                            Icons.Outlined.Share,
+                            "Share",
+                            "Send the backup to another phone or app",
+                            onShareSnapshot,
+                        )
+                    },
+                ),
+        )
+        exchangeMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = accent,
+                modifier = Modifier.padding(start = 6.dp),
+            )
         }
     }
 }
 
-/** One backup action: a button and a line saying what it does. */
-@Composable
-private fun BackupAction(
-    label: String,
-    description: String,
-    onClick: () -> Unit,
-) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        TuiButton(text = label, onClick = onClick)
-        Text(
-            text = description,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 10.dp).weight(1f),
-        )
-    }
-}
-
 /** "today 3:12 PM", "yesterday 9:05 AM" or "12 Nov, 9:05 AM". */
-private fun backupTime(epochMs: Long): String {
+internal fun backupTime(epochMs: Long): String {
     val time = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(epochMs))
     val days =
         java.util.concurrent.TimeUnit.MILLISECONDS.toDays(
@@ -140,40 +139,3 @@ private fun startOfDay(epochMs: Long): Long =
         set(java.util.Calendar.SECOND, 0)
         set(java.util.Calendar.MILLISECOND, 0)
     }.timeInMillis
-
-@Composable
-private fun MirrorDownloadsToggleRow(
-    mirrorBackupsToDownloads: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    val accent = LocalAccentColor.current
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable { onToggle(!mirrorBackupsToDownloads) }
-                .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
-            Text(
-                text = "KEEP A COPY IN DOWNLOADS",
-                style = MaterialTheme.typography.labelMedium,
-                color = accent,
-            )
-            Text(
-                text =
-                    "Also saves it to Download/CLIBeats (named with the date), so it survives uninstalling the app " +
-                        "(restore it from setup). It's a readable file anyone with file access can open.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Text(
-            text = if (mirrorBackupsToDownloads) "[ ON ]" else "[ OFF ]",
-            style = MaterialTheme.typography.labelMedium,
-            color = if (mirrorBackupsToDownloads) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}

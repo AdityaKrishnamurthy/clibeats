@@ -13,7 +13,11 @@ import com.clibeats.data.provider.mapper.nav
 import com.clibeats.data.provider.mapper.safeString
 import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.Track
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -71,7 +75,31 @@ class OnlineLyricsRepository
         suspend fun cached(track: Track): Lyrics? =
             (memory.get(track.id) as? OnlineLyricsResult.Found)?.lyrics ?: readSaved(track.id)?.first
 
+        /** Lookups running now, by song: a second ask (prefetch, then the lyrics view) waits for the same one. */
+        private val inFlight = java.util.concurrent.ConcurrentHashMap<String, Deferred<OnlineLyricsResult>>()
+        private val lookupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        /**
+         * The song's lyrics: from memory, saved, or searched online. The search runs on its own, so leaving the
+         * lyrics view (or a prefetch being cancelled) doesn't throw away a lookup that's half done.
+         */
         suspend fun lyricsFor(track: Track): OnlineLyricsResult {
+            memory.get(track.id)?.let { return it }
+            val lookup =
+                inFlight.computeIfAbsent(track.id) {
+                    lookupScope.async(start = CoroutineStart.LAZY) {
+                        try {
+                            lookUp(track)
+                        } finally {
+                            inFlight.remove(track.id)
+                        }
+                    }
+                }
+            lookup.start()
+            return lookup.await()
+        }
+
+        private suspend fun lookUp(track: Track): OnlineLyricsResult {
             memory.get(track.id)?.let { return it }
             val saved = readSaved(track.id)
             if (saved != null) {
@@ -355,7 +383,7 @@ class OnlineLyricsRepository
             const val SOURCE_TIMEOUT_MS = 9_000L
             const val YOUTUBE_PREFERENCE = 3
             const val MEMORY_SIZE = 64
-            const val MAX_SAVED = 2_000
+            const val MAX_SAVED = 5_000
             const val NOT_FOUND_MARK = "[not found]"
             const val NOT_FOUND_RETRY_MS = 3L * 24 * 60 * 60 * 1000
             const val USER_AGENT = "CLIBeats (Android music player; lyrics)"

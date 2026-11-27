@@ -183,6 +183,12 @@ class AndroidAutoBrowser
                         .setTitle(track.title)
                         .setArtist(track.artist)
                         .setAlbumTitle(track.album)
+                        .apply {
+                            // The car fetches covers itself: only web links work (not on-phone files).
+                            com.clibeats.util.artworkUrlFor(track.artworkUrl, com.clibeats.util.ARTWORK_THUMB_PX * 2)
+                                ?.takeIf { it.startsWith("https://") || it.startsWith("http://") }
+                                ?.let { setArtworkUri(android.net.Uri.parse(it)) }
+                        }
                         .setIsBrowsable(false)
                         .setIsPlayable(true)
                         .setExtras(contentStyle())

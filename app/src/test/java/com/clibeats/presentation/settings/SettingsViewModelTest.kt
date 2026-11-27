@@ -47,7 +47,7 @@ class SettingsViewModelTest {
         whenever(appPreferences.themePalette).thenReturn(flowOf(null))
         whenever(appPreferences.autoQueueRelated).thenReturn(flowOf(true))
         whenever(appPreferences.localMusicTreeUris).thenReturn(flowOf(emptyList()))
-        whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(128))
+        whenever(appPreferences.artworkCacheMb).thenReturn(flowOf(512))
         whenever(downloadManager.getDownloadedSongItems()).thenReturn(flowOf(emptyList()))
         whenever(downloadManager.getTotalDownloadedSizeBytes()).thenReturn(flowOf(0L))
 

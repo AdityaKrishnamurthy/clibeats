@@ -433,7 +433,13 @@ class PlaybackService : MediaLibraryService() {
             browser: MediaSession.ControllerInfo,
             query: String,
             params: LibraryParams?,
-        ): ListenableFuture<LibraryResult<Void>> = Futures.immediateFuture(LibraryResult.ofVoid())
+        ): ListenableFuture<LibraryResult<Void>> =
+            afterRestore {
+                // Android Auto only asks for the results once it's told how many there are.
+                val count = androidAutoBrowser.search(query).size
+                session.notifySearchResultChanged(browser, query, count, params)
+                LibraryResult.ofVoid()
+            }
 
         override fun onGetSearchResult(
             session: MediaLibrarySession,

@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -72,6 +73,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -112,6 +114,7 @@ import com.clibeats.util.ARTWORK_THUMB_PX
 import com.clibeats.util.artworkUrlFor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import androidx.compose.ui.unit.lerp as lerpDp
 
 /** Full-screen player opened from the bottom PlayerBar. Collects state itself (ticks stay local). */
 @Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
@@ -460,7 +463,9 @@ fun NowPlayingScreen(
                     }
                 }
 
-                Spacer(Modifier.height(20.dp))
+                // With lyrics open, every gap below the lyrics tightens (follows the swipe).
+                val lyricsT = lyricsProgress.coerceIn(0f, 1f)
+                Spacer(Modifier.height(lerpDp(20.dp, 8.dp, lyricsT)))
 
                 // ── Where it's playing from, then title / artist / quality (a small row while lyrics are open) ──
                 Box(modifier = Modifier.fillMaxWidth().animateContentSize().then(swipe)) {
@@ -531,7 +536,7 @@ fun NowPlayingScreen(
                     }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(lerpDp(16.dp, 6.dp, lyricsT)))
 
                 // ── Waveform seek: scrub without interrupting playback, snaps back to "now"; controls on top ──
                 WaveformScrubber(
@@ -539,6 +544,7 @@ fun NowPlayingScreen(
                     positionMsProvider = { positionState.value },
                     durationMs = state.durationMs,
                     onSeek = viewModel::seekTo,
+                    height = lerpDp(WAVEFORM_FULL_HEIGHT, WAVEFORM_LYRICS_HEIGHT, lyricsT),
                 ) {
                     TransportControls(
                         state = state,
@@ -549,12 +555,18 @@ fun NowPlayingScreen(
                     )
                 }
 
-                // A little extra room so the action icons sit clear of the waveform.
-                Spacer(Modifier.height(52.dp))
+                // Room below the waveform; the volume row then sits between it and the action icons.
+                Spacer(Modifier.height(lerpDp(24.dp, 4.dp, lyricsT)))
 
-                // ── Volume + equalizer: the two controls that belong with the song ──
+                // ── Volume + equalizer: the two controls that belong with the song (folded away with lyrics) ──
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = lerpDp(VOLUME_ROW_HEIGHT, 0.dp, lyricsT))
+                            .clipToBounds()
+                            .graphicsLayer { alpha = 1f - lyricsT }
+                            .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -1050,3 +1062,10 @@ private val LIGHT_WASH = Triple(0.62f, 0.74f, 0.92f)
 
 private const val LABEL_MIN_SOFTEN = 0.3f
 private const val LABEL_SOFTEN_STEP = 0.05f
+
+/** The waveform (with the controls on it) on the cover view, and smaller while lyrics are open. */
+private val WAVEFORM_FULL_HEIGHT = 176.dp
+private val WAVEFORM_LYRICS_HEIGHT = 124.dp
+
+/** The volume row's height (a slider's touch height). */
+private val VOLUME_ROW_HEIGHT = 48.dp

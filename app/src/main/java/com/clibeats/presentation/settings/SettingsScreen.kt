@@ -4,17 +4,28 @@ package com.clibeats.presentation.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,8 +33,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DownloadForOffline
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Storage
+import androidx.compose.material.icons.outlined.Swipe
+import androidx.compose.material.icons.outlined.SystemUpdate
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,13 +55,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -45,7 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.BuildConfig
 import com.clibeats.presentation.component.CliConfirmDialog
-import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.theme.CliBeatsThemeMode
 import com.clibeats.presentation.theme.LocalAccentColor
 import com.clibeats.presentation.update.UpdateSection
 
@@ -55,6 +83,7 @@ private const val OMPRAKASH_GITHUB_URL = "https://github.com/Omprakash-p06"
 private const val PLAYLIST_FILE_NAME = "clibeats.json"
 private val IMPORT_MIME_TYPES = arrayOf("application/json", "text/plain", "application/octet-stream")
 private const val CURSOR_BLINK_MS = 1_100
+private const val PAGE_MS = 220
 private const val HALF_CYCLE = 0.5f
 private val blinkEasing = Easing { fraction -> if (fraction < HALF_CYCLE) 0f else 1f }
 
@@ -62,6 +91,8 @@ private val blinkEasing = Easing { fraction -> if (fraction < HALF_CYCLE) 0f els
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    backToListRequested: Boolean = false,
+    onBackToListHandled: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -82,9 +113,7 @@ fun SettingsScreen(
     var confirmClearArtwork by remember { mutableStateOf(false) }
     var confirmClearSongs by remember { mutableStateOf(false) }
     var confirmClearLyrics by remember { mutableStateOf(false) }
-    var showManageDownloads by remember { mutableStateOf(false) }
 
-    val accent = LocalAccentColor.current
     val context = LocalContext.current
 
     folderToRemove?.let { folder ->
@@ -150,17 +179,6 @@ fun SettingsScreen(
             onDismiss = { confirmClearSongs = false },
         )
     }
-    if (showManageDownloads) {
-        ManageDownloadsDialog(
-            downloadedItems = downloadedItems,
-            onDeleteDownload = viewModel::deleteDownload,
-            onClearAll = {
-                showManageDownloads = false
-                confirmClearDownloads = true
-            },
-            onDismiss = { showManageDownloads = false },
-        )
-    }
 
     LaunchedEffect(shareFile) {
         val file = shareFile ?: return@LaunchedEffect
@@ -196,103 +214,304 @@ fun SettingsScreen(
             if (uri != null) viewModel.importPlaylists(uri)
         }
 
-    Column(
-        modifier =
-            modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-                .padding(12.dp)
-                .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        val themePalette by viewModel.themePalette.collectAsStateWithLifecycle()
-        ThemeSettingsBlock(
-            uiState = uiState,
-            palette = themePalette,
-            onPaletteChange = viewModel::setThemePalette,
-            onThemeModeChange = viewModel::setThemeMode,
-            onAccentColorChange = viewModel::setAccentColor,
-            onCustomAccentChange = viewModel::setCustomAccent,
-        )
-        LocalLibrarySettingsBlock(
-            localFolders = localFolders,
-            scanStatus = scanStatus,
-            localTrackCount = localTrackCount,
-            onAddFolder = { pickFolder.launch(null) },
-            onRemoveFolder = { folderToRemove = it },
-            onRescan = viewModel::rescanLocalMusic,
-        )
-        GesturesSettingsBlock()
-        StorageSettingsBlock(
-            cacheUsage = cacheUsage,
-            artworkCacheMb = artworkCacheMb,
-            songCacheMb = uiState.cacheMaxMb,
-            downloadedBytes = downloadedBytes,
-            downloadedCount = downloadedItems.size,
-            onArtworkLimitChange = viewModel::setArtworkCacheMb,
-            onSongLimitChange = viewModel::setSongCacheMb,
-            onClearArtworkCache = { confirmClearArtwork = true },
-            onClearSongCache = { confirmClearSongs = true },
-            onManageDownloads = { showManageDownloads = true },
-            onClearDownloads = { confirmClearDownloads = true },
-            lyrics =
-                LyricsStorage(
-                    songs = lyricsCount,
-                    bytes = lyricsBytes,
-                    limit = viewModel.lyricsLimit,
-                    onClear = { confirmClearLyrics = true },
-                ),
-        )
-        TuiBlock(title = "Audio Quality", isActive = true) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { viewModel.setHighQualityStreaming(!uiState.highQualityStreaming) },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column {
-                    Text(
-                        text = "HIGH QUALITY STREAMING",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accent,
-                    )
-                    Text(
-                        text = "Prefer high-bitrate audio streams",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+    val themePalette by viewModel.themePalette.collectAsStateWithLifecycle()
+    val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
+    val gesturesViewModel: GesturesViewModel = hiltViewModel()
+    val gestures by gesturesViewModel.gestures.collectAsStateWithLifecycle()
+
+    // The main list, or one section's page over it. Back (or tapping Settings again) returns to the list.
+    var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
+    BackHandler(enabled = section != null) { section = null }
+    LaunchedEffect(backToListRequested) {
+        if (backToListRequested) {
+            section = null
+            onBackToListHandled()
+        }
+    }
+
+    AnimatedContent(
+        targetState = section,
+        modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
+        transitionSpec = {
+            val forward = targetState != null
+            val enter =
+                slideInHorizontally(tween(PAGE_MS)) { if (forward) it / 4 else -it / 4 } + fadeIn(tween(PAGE_MS))
+            val exit =
+                slideOutHorizontally(tween(PAGE_MS)) { if (forward) -it / 4 else it / 4 } + fadeOut(tween(PAGE_MS))
+            enter togetherWith exit
+        },
+        label = "settings-page",
+    ) { shown ->
+        if (shown == null) {
+            SettingsList(
+                summary =
+                    SettingsSummary(
+                        theme = "${themePalette.displayName} \u00b7 ${uiState.themeMode.displayName}",
+                        accent = uiState.accentColor.displayName,
+                        localMusic = localMusicSummary(localFolders.size, localTrackCount),
+                        gestures =
+                            "Swipe right: ${gestures.songSwipeRight.label} \u00b7 " +
+                                "left: ${gestures.songSwipeLeft.label}",
+                        storage =
+                            formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + lyricsBytes) +
+                                " used \u00b7 songs ${formatMb(uiState.cacheMaxMb)}, " +
+                                "covers ${formatMb(artworkCacheMb)}",
+                        downloads =
+                            if (downloadedItems.isEmpty()) {
+                                "Nothing downloaded yet"
+                            } else {
+                                "${downloadedItems.size} songs \u00b7 ${formatSize(downloadedBytes)}"
+                            },
+                        backup = lastBackupAt?.let { "Last saved ${backupTime(it)}" } ?: "Not saved yet",
+                    ),
+                palette = themePalette,
+                shownDark = uiState.themeMode.resolve(isSystemInDarkTheme()) != CliBeatsThemeMode.LIGHT,
+                highQualityStreaming = uiState.highQualityStreaming,
+                onHighQualityChange = viewModel::setHighQualityStreaming,
+                onOpen = { section = it },
+            )
+        } else {
+            Column(modifier = Modifier.fillMaxSize()) {
+                SettingsPageHeader(title = shown.title, onBack = { section = null })
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                            .padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                ) {
+                    when (shown) {
+                        SettingsSection.APPEARANCE ->
+                            ThemeSettingsBlock(
+                                uiState = uiState,
+                                palette = themePalette,
+                                onPaletteChange = viewModel::setThemePalette,
+                                onThemeModeChange = viewModel::setThemeMode,
+                                onAccentColorChange = viewModel::setAccentColor,
+                                onCustomAccentChange = viewModel::setCustomAccent,
+                            )
+                        SettingsSection.LOCAL_MUSIC ->
+                            LocalLibrarySettingsBlock(
+                                localFolders = localFolders,
+                                scanStatus = scanStatus,
+                                localTrackCount = localTrackCount,
+                                onAddFolder = { pickFolder.launch(null) },
+                                onRemoveFolder = { folderToRemove = it },
+                                onRescan = viewModel::rescanLocalMusic,
+                            )
+                        SettingsSection.GESTURES -> GesturesSettingsBlock(gesturesViewModel)
+                        SettingsSection.STORAGE ->
+                            StorageSettingsBlock(
+                                cacheUsage = cacheUsage,
+                                artworkCacheMb = artworkCacheMb,
+                                songCacheMb = uiState.cacheMaxMb,
+                                downloadedBytes = downloadedBytes,
+                                onArtworkLimitChange = viewModel::setArtworkCacheMb,
+                                onSongLimitChange = viewModel::setSongCacheMb,
+                                onClearArtworkCache = { confirmClearArtwork = true },
+                                onClearSongCache = { confirmClearSongs = true },
+                                lyrics =
+                                    LyricsStorage(
+                                        songs = lyricsCount,
+                                        bytes = lyricsBytes,
+                                        limit = viewModel.lyricsLimit,
+                                        onClear = { confirmClearLyrics = true },
+                                    ),
+                            )
+                        SettingsSection.BACKUP ->
+                            BackupSettingsBlock(
+                                lastBackupAt = lastBackupAt,
+                                onBackUpNow = viewModel::backUpNow,
+                                mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
+                                exchangeMessage = exchangeMessage,
+                                onToggleMirrorBackups = viewModel::setMirrorBackupsToDownloads,
+                                onExport = { exportLauncher.launch(PLAYLIST_FILE_NAME) },
+                                onImport = { importLauncher.launch(IMPORT_MIME_TYPES) },
+                                onShareSnapshot = viewModel::shareSnapshot,
+                            )
+                        SettingsSection.DOWNLOADS ->
+                            DownloadsSettingsBlock(
+                                downloadedItems = downloadedItems,
+                                downloadedBytes = downloadedBytes,
+                                onDeleteDownload = viewModel::deleteDownload,
+                                onClearAll = { confirmClearDownloads = true },
+                            )
+                        SettingsSection.UPDATES -> UpdateSection()
+                    }
                 }
-                Text(
-                    text = if (uiState.highQualityStreaming) "[ ON ]" else "[ OFF ]",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (uiState.highQualityStreaming) accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         }
-        val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
-        LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
-        BackupSettingsBlock(
-            lastBackupAt = lastBackupAt,
-            onBackUpNow = viewModel::backUpNow,
-            mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
-            exchangeMessage = exchangeMessage,
-            onToggleMirrorBackups = viewModel::setMirrorBackupsToDownloads,
-            onExport = { exportLauncher.launch(PLAYLIST_FILE_NAME) },
-            onImport = { importLauncher.launch(IMPORT_MIME_TYPES) },
-            onShareSnapshot = viewModel::shareSnapshot,
+    }
+}
+
+private fun localMusicSummary(
+    folders: Int,
+    tracks: Int,
+): String =
+    when (folders) {
+        0 -> "No folders chosen"
+        1 -> "1 folder \u00b7 $tracks ${if (tracks == 1) "song" else "songs"}"
+        else -> "$folders folders \u00b7 $tracks ${if (tracks == 1) "song" else "songs"}"
+    }
+
+/** What each row of the main list says is set now. */
+@Suppress("LongParameterList")
+private class SettingsSummary(
+    val theme: String,
+    val accent: String,
+    val localMusic: String,
+    val gestures: String,
+    val storage: String,
+    val downloads: String,
+    val backup: String,
+)
+
+/** Settings' main list: the theme up top, then each section in a few groups, then About. */
+@Suppress("LongParameterList", "LongMethod")
+@Composable
+private fun SettingsList(
+    summary: SettingsSummary,
+    palette: com.clibeats.presentation.theme.ThemePalette,
+    shownDark: Boolean,
+    highQualityStreaming: Boolean,
+    onHighQualityChange: (Boolean) -> Unit,
+    onOpen: (SettingsSection) -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = "Settings",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(start = 4.dp),
         )
-        DiscordSettingsBlock()
-        UpdateSection()
+        ThemeCard(
+            palette = palette,
+            shownDark = shownDark,
+            theme = summary.theme,
+            accent = summary.accent,
+            onClick = { onOpen(SettingsSection.APPEARANCE) },
+        )
+        SettingsGroup(
+            label = "Listening",
+            rows =
+                listOf(
+                    {
+                        SettingsSwitchRow(
+                            icon = Icons.Outlined.GraphicEq,
+                            title = "High quality streaming",
+                            summary = "Prefer high-bitrate audio (uses more data)",
+                            checked = highQualityStreaming,
+                            onCheckedChange = onHighQualityChange,
+                        )
+                    },
+                    {
+                        SettingsNavRow(Icons.Outlined.Swipe, "Gestures", summary.gestures) {
+                            onOpen(SettingsSection.GESTURES)
+                        }
+                    },
+                    {
+                        SettingsNavRow(Icons.Outlined.Folder, "Local music", summary.localMusic) {
+                            onOpen(SettingsSection.LOCAL_MUSIC)
+                        }
+                    },
+                ),
+        )
+        SettingsGroup(
+            label = "Your data",
+            rows =
+                listOf(
+                    {
+                        SettingsNavRow(Icons.Outlined.Storage, "Storage & cache", summary.storage) {
+                            onOpen(SettingsSection.STORAGE)
+                        }
+                    },
+                    {
+                        SettingsNavRow(Icons.Outlined.DownloadForOffline, "Downloads", summary.downloads) {
+                            onOpen(SettingsSection.DOWNLOADS)
+                        }
+                    },
+                    {
+                        SettingsNavRow(Icons.Outlined.Backup, "Backup", summary.backup) {
+                            onOpen(SettingsSection.BACKUP)
+                        }
+                    },
+                ),
+        )
+        SettingsGroup(
+            label = "App",
+            rows =
+                listOf(
+                    {
+                        SettingsNavRow(
+                            Icons.Outlined.SystemUpdate,
+                            "Updates",
+                            "CLIBeats v${BuildConfig.VERSION_NAME} \u00b7 check for a new version",
+                        ) { onOpen(SettingsSection.UPDATES) }
+                    },
+                ),
+        )
         AboutSettingsBlock()
+    }
+}
+
+/** The current theme, big, at the top of Settings: its colours, name and accent; opens Appearance. */
+@Composable
+private fun ThemeCard(
+    palette: com.clibeats.presentation.theme.ThemePalette,
+    shownDark: Boolean,
+    theme: String,
+    accent: String,
+    onClick: () -> Unit,
+) {
+    val accentColor = LocalAccentColor.current
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(SettingsShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .border(1.dp, accentColor, SettingsShape)
+                .clickable(role = Role.Button, onClickLabel = "Change theme", onClick = onClick)
+                .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(48.dp)
+                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette), SettingsShape)
+                    .border(1.dp, accentColor, SettingsShape),
+        )
+        Spacer(Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = "> THEME",
+                style = MaterialTheme.typography.titleMedium,
+                color = accentColor,
+            )
+            Text(text = theme, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+            Text(
+                text = "Accent: $accent \u00b7 tap to change colours",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(text = "[ OPEN ]", style = MaterialTheme.typography.labelMedium, color = accentColor)
     }
 }
 
 @Composable
 private fun AboutSettingsBlock() {
     val context = LocalContext.current
-    TuiBlock(title = "About", isActive = true) {
+    SettingsPanel(label = "About") {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 text = "CLIBeats v${BuildConfig.VERSION_NAME}",
@@ -307,17 +526,37 @@ private fun AboutSettingsBlock() {
             DeveloperLine(name = "Omprakash Panda", url = OMPRAKASH_GITHUB_URL)
             DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Source: github.com/Omprakash-p06/clibeats · MIT",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .semantics { contentDescription = "Source code on GitHub" }
-                        .clickable(role = Role.Button) {
-                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }
-                        }.padding(vertical = 4.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Source: github.com/Omprakash-p06/clibeats",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .semantics { contentDescription = "Source code on GitHub" }
+                            .clickable(role = Role.Button) {
+                                runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
+                                }
+                            }.padding(vertical = 4.dp),
+                )
+                // Copies the repository link, to paste it anywhere.
+                val clipboard = LocalClipboardManager.current
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(GITHUB_URL))
+                        Toast.makeText(context, "GitHub link copied", Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy GitHub link",
+                        tint = LocalAccentColor.current,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }

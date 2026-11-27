@@ -141,7 +141,7 @@ class MediaCaches
 
         companion object {
             const val BYTES_IN_MB = 1_048_576L
-            private const val DEFAULT_SONG_CACHE_MB = 512L
+            private const val DEFAULT_SONG_CACHE_MB = 1024L
             private const val KEY_KBPS = "clibeats_kbps"
             private const val BITS_PER_BYTE = 8
             private const val TRIM_SETTLE_MS = 500L

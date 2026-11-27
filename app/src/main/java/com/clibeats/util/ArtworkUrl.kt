@@ -50,3 +50,17 @@ const val ARTWORK_THUMB_PX = 128
 const val ARTWORK_FULL_PX = 1080
 
 private val ALLOWED_ARTWORK_SCHEMES = setOf("http", "https", "content", "file")
+
+/**
+ * The same picture whatever size was asked for: the URL without its size part (the Google size spec, or the
+ * ytimg file name), so a song's thumbnail and its big cover map to one kept file.
+ */
+fun artworkBaseKey(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    return when {
+        "googleusercontent.com" in url || "ggpht.com" in url -> url.replace(GOOGLE_SIZE_SPEC, "")
+        "ytimg.com" in url && YTIMG_THUMB.containsMatchIn(url) ->
+            YTIMG_THUMB.find(url.substringBefore('?'))?.groupValues?.get(1) ?: url
+        else -> url
+    }
+}

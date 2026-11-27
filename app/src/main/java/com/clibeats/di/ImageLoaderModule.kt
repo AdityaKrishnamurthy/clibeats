@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 private const val MEMORY_CACHE_PERCENT = 0.25
 private const val BYTES_IN_MB = 1_048_576L
-private const val DEFAULT_ARTWORK_CACHE_MB = 128L
+private const val DEFAULT_ARTWORK_CACHE_MB = 500L
 
 @Module
 @InstallIn(SingletonComponent::class)
@@ -38,8 +38,11 @@ object ImageLoaderModule {
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,
         artworkDiskCache: ResizableDiskCache,
+        downloadCovers: com.clibeats.data.download.DownloadCovers,
     ): ImageLoader =
         ImageLoader.Builder(context)
+            // Downloaded songs' covers come from their kept files (offline, and safe from cache clears).
+            .components { add(downloadCovers.interceptor) }
             .okHttpClient(okHttpClient)
             .memoryCache {
                 MemoryCache.Builder(context)
