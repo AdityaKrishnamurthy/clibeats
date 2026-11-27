@@ -26,16 +26,21 @@ class AppPreferences
     ) {
         companion object {
             /** Settings → Storage and Cache: artwork sizes (MB); the first is the default. */
-            val ARTWORK_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072)
+            val ARTWORK_CACHE_OPTIONS_MB = listOf(500, 1024, 2048, 3072)
 
             /** Settings → Storage and Cache: song cache sizes (MB); 1 GB is the default. */
-            val SONG_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072, 4096, 5120)
+            val SONG_CACHE_OPTIONS_MB = listOf(500, 1024, 2048, 3072, 5120)
 
-            /** [mb] if it's offered, else the next size up (the largest when it's bigger than all). */
+            /**
+             * [mb] if it's offered, else the next size up (the largest when it's bigger than all). A size just
+             * above an option counts as that option, so the old 512 MB becomes 500 MB, not 1 GB.
+             */
             internal fun snapToOption(
                 mb: Int,
                 options: List<Int>,
-            ): Int = options.firstOrNull { it >= mb } ?: options.last()
+            ): Int = options.firstOrNull { it >= mb * NEAR_OPTION } ?: options.last()
+
+            private const val NEAR_OPTION = 0.95
         }
 
         private object Keys {
@@ -582,7 +587,7 @@ class AppPreferences
         }
     }
 
-private const val DEFAULT_ARTWORK_CACHE_MB = 512
+private const val DEFAULT_ARTWORK_CACHE_MB = 500
 private const val DEFAULT_SONG_CACHE_MB = 1024
 
 /** Stored download id meaning "no update download in progress or kept". */

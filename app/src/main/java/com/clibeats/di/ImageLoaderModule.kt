@@ -16,7 +16,7 @@ import javax.inject.Singleton
 
 private const val MEMORY_CACHE_PERCENT = 0.25
 private const val BYTES_IN_MB = 1_048_576L
-private const val DEFAULT_ARTWORK_CACHE_MB = 512L
+private const val DEFAULT_ARTWORK_CACHE_MB = 500L
 
 @Module
 @InstallIn(SingletonComponent::class)
