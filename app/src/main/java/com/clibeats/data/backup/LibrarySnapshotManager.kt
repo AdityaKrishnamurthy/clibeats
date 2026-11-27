@@ -5,7 +5,6 @@ package com.clibeats.data.backup
 import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
-import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
@@ -27,11 +26,11 @@ import javax.inject.Singleton
  * that forces an uninstall) no longer means losing everything. Two copies:
  *
  * - `files/backups/` inside the app: part of Android's own backup, so it comes back with a restore.
- * - `Download/CLIBeats/Playlists/` on Android 10+: survives an uninstall. A new install can't read it directly
- *   (it doesn't own the file any more), so onboarding opens the file picker on it.
+ * - `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` on Android 10+: survives an uninstall. A new install can't
+ *   read it directly (it doesn't own the file any more), so onboarding opens the file picker on it.
  *
  * A snapshot is written at most once a day and never for an empty library, so a wipe or a failed scan
- * can't overwrite a good backup. The previous internal copy is kept as `.prev.json`.
+ * can't overwrite a good backup. Each day's backup replaces the one before: there is only ever one file.
  */
 @Singleton
 class LibrarySnapshotManager
@@ -67,12 +66,12 @@ class LibrarySnapshotManager
 
                     val file = exchange.buildFile()
                     // Never write an empty library (first run, wiped library): it would replace a good backup.
-                    if (file.playlists.isEmpty() && file.albums.isEmpty() && file.artists.isEmpty()) {
-                        return@runCatching null
-                    }
-                    withContext(Dispatchers.IO) {
-                        if (latest.isFile) latest.copyTo(previousFile, overwrite = true)
-                    }
+                    val nothing =
+                        file.playlists.isEmpty() && file.albums.isEmpty() && file.artists.isEmpty() &&
+                            file.history.isEmpty() && file.downloads.isEmpty()
+                    if (nothing) return@runCatching null
+                    // One backup only: today's replaces yesterday's (an older spare copy is removed).
+                    withContext(Dispatchers.IO) { if (previousFile.isFile) previousFile.delete() }
                     exchange.exportToFile(latest).getOrThrow()
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
                         appPreferences.mirrorBackupsToDownloads.first()
@@ -85,30 +84,21 @@ class LibrarySnapshotManager
             }
 
         /**
-         * Copies [source] to `Download/CLIBeats/Playlists/clibeats-backup.json`, replacing this install's earlier
-         * copy. A copy left by a previous install isn't visible to this one, so Android names the new
-         * file `clibeats-backup (1).json`; both stay restorable.
+         * Copies [source] to `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` (today's date), first removing this
+         * install's earlier copies there, so the folder only ever holds the latest backup. A copy left by a previous
+         * install isn't visible to this one (Android keeps it), so that one stays and is still restorable.
          */
         @RequiresApi(Build.VERSION_CODES.Q)
         private suspend fun writePublicCopy(source: File) =
             withContext(Dispatchers.IO) {
                 val resolver = context.contentResolver
                 val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
-                val existing: Uri? =
-                    resolver.query(
-                        collection,
-                        arrayOf(MediaStore.MediaColumns._ID),
-                        "${MediaStore.MediaColumns.RELATIVE_PATH} = ? AND ${MediaStore.MediaColumns.DISPLAY_NAME} = ?",
-                        arrayOf(PUBLIC_RELATIVE_PATH, PlaylistExchangeManager.BACKUP_FILE_NAME),
-                        null,
-                    )?.use { cursor ->
-                        if (cursor.moveToFirst()) ContentUris.withAppendedId(collection, cursor.getLong(0)) else null
-                    }
+                deletePublicCopies()
                 val target =
-                    existing ?: resolver.insert(
+                    resolver.insert(
                         collection,
                         ContentValues().apply {
-                            put(MediaStore.MediaColumns.DISPLAY_NAME, PlaylistExchangeManager.BACKUP_FILE_NAME)
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, datedBackupName())
                             put(MediaStore.MediaColumns.MIME_TYPE, "application/json")
                             put(MediaStore.MediaColumns.RELATIVE_PATH, PUBLIC_RELATIVE_PATH)
                         },
@@ -160,7 +150,8 @@ class LibrarySnapshotManager
             withContext(Dispatchers.IO) {
                 val latest = latestFile.takeIf { it.isFile } ?: return@withContext null
                 val shared = context.cacheDir.resolve(SHARED_FOLDER).apply { mkdirs() }
-                val target = File(shared, PlaylistExchangeManager.BACKUP_FILE_NAME)
+                shared.listFiles()?.forEach { it.delete() }
+                val target = File(shared, datedBackupName())
                 latest.copyTo(target, overwrite = true)
                 target
             }
@@ -171,9 +162,13 @@ class LibrarySnapshotManager
             private const val SNAPSHOT_INTERVAL_MS = 24 * 60 * 60 * 1000L
 
             /** Where the uninstall-proof copy goes, as MediaStore stores it (trailing slash included). */
-            val PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/Playlists/"
+            val PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/"
 
-            /** Where versions up to 2.5.1 put it; cleared along with the current folder. */
-            private val OLD_PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/"
+            /** Where versions 2.5.2 to 2.8.1 put it; cleared along with the current folder. */
+            private val OLD_PUBLIC_RELATIVE_PATH = Environment.DIRECTORY_DOWNLOADS + "/CLIBeats/Playlists/"
+
+            /** `clibeats-backup-27112026.json`: today's date as day, month, year. */
+            fun datedBackupName(now: java.util.Date = java.util.Date()): String =
+                "clibeats-backup-" + java.text.SimpleDateFormat("ddMMyyyy", java.util.Locale.US).format(now) + ".json"
         }
     }

@@ -25,6 +25,7 @@ internal fun buildArtists(
     tracks: List<Track>,
     playCounts: Map<String, Int>,
     sort: GroupSort,
+    lastPlayed: Map<String, Long> = emptyMap(),
 ): List<ArtistGroup> {
     // Group case-insensitively; show the spelling used most often.
     val byKey = LinkedHashMap<String, MutableList<Pair<String, Track>>>()
@@ -44,7 +45,9 @@ internal fun buildArtists(
                 artworkUrl = songs.firstNotNullOfOrNull { it.artworkUrl },
             )
         }
-    return sortGroups(groups, sort, { it.name }, { it.playCount }, { it.trackCount })
+    return sortGroups(groups, sort, { it.name }, { it.playCount }, { it.trackCount }) {
+        recency(it.tracks, lastPlayed)
+    }
 }
 
 /** Albums from [tracks] (songs without an album name are left out); [playCounts] maps song id to plays. */
@@ -52,6 +55,7 @@ internal fun buildAlbums(
     tracks: List<Track>,
     playCounts: Map<String, Int>,
     sort: GroupSort,
+    lastPlayed: Map<String, Long> = emptyMap(),
 ): List<AlbumGroup> {
     val groups =
         tracks
@@ -75,8 +79,16 @@ internal fun buildAlbums(
                     artworkUrl = songs.firstNotNullOfOrNull { it.artworkUrl },
                 )
             }
-    return sortGroups(groups, sort, { it.title }, { it.playCount }, { it.trackCount })
+    return sortGroups(groups, sort, { it.title }, { it.playCount }, { it.trackCount }) {
+        recency(it.tracks, lastPlayed)
+    }
 }
+
+/** When any of [tracks] was last played (0 when never). */
+private fun recency(
+    tracks: List<Track>,
+    lastPlayed: Map<String, Long>,
+): Long = tracks.maxOfOrNull { lastPlayed[it.id] ?: 0L } ?: 0L
 
 /**
  * Songs sharing an album title: one album when they share a main artist with the rest, otherwise one album per
@@ -89,15 +101,19 @@ private fun splitByArtist(songs: List<Track>): List<List<Track>> {
     return if (byArtist.values.all { it.size == 1 }) listOf(songs) else byArtist.values.toList()
 }
 
+@Suppress("LongParameterList")
 private fun <T> sortGroups(
     groups: List<T>,
     sort: GroupSort,
     name: (T) -> String,
     plays: (T) -> Int,
     songs: (T) -> Int,
+    recent: (T) -> Long,
 ): List<T> {
     val byName = compareBy<T> { name(it).lowercase() }
     return when (sort) {
+        // Played most recently first; never played ones keep the list's own order after them.
+        GroupSort.RECENT -> groups.sortedWith(compareByDescending<T> { recent(it) })
         GroupSort.A_TO_Z -> groups.sortedWith(byName)
         GroupSort.MOST_PLAYED ->
             groups.sortedWith(compareByDescending<T> { plays(it) }.thenByDescending { songs(it) }.then(byName))

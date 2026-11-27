@@ -6,7 +6,7 @@ Welcome to CLIBeats, the terminal-styled music player for Android.
 
 New installs open a short setup: pick a theme, optionally choose your music folder, and choose the default
 source (Online or Local). Everything can be changed later in Settings. Reinstalling? The music step offers
-**RESTORE FROM A BACKUP FILE**: pick `clibeats-backup.json` from `Download/CLIBeats/Playlists`.
+**RESTORE FROM A BACKUP FILE**: pick the `clibeats-backup-DDMMYYYY.json` file from `Download/CLIBeats`.
 
 ## Tabs
 
@@ -128,8 +128,14 @@ choose, and imports them back (for example on a new phone or after reinstalling)
 
 ## Backup
 
-CLIBeats saves a backup of your library once a day: playlists, Favorites, saved albums and artists, and
-settings. On Android 10+ a copy goes to `Download/CLIBeats/Playlists/clibeats-backup.json`, which stays after an
-uninstall. Settings → **SHARE BACKUP** sends it to Drive, email or another phone; the trash button next to it
-deletes the saved backups (a new one is saved the next time you open the app). Android's own backup
-(Google account) also brings the library back when you set up a new phone.
+Settings → **Backup** keeps a full backup of the app, saved automatically once a day (each day's replaces the
+last, so there's only ever one): your playlists, ♥ Favorites, saved albums and artists, play history (Most played,
+Recently played), which songs are downloaded, and all your settings (theme, gestures, languages, sorts…). The music
+files, caches and lyrics aren't included. It shows when it last saved; **[ BACK UP NOW ]** saves one straight away.
+
+- **Keep a copy in Downloads** (on by default) also saves it to `Download/CLIBeats/clibeats-backup-DDMMYYYY.json` (today's date, e.g. `clibeats-backup-27112026.json`),
+  which stays after an uninstall; setup offers to restore it.
+- **Save a copy…** puts the backup file anywhere (Downloads, Drive, a USB stick); **Share** sends it to another
+  phone or app; **Restore…** brings a backup file back. After a restore, the songs that were downloaded are offered
+  for download again.
+- Android's own backup (Google account) also brings the library back when you set up a new phone.

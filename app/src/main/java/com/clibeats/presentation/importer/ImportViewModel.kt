@@ -162,11 +162,29 @@ class ImportViewModel
             if (playingId.value == track.id) playback.pause() else playback.playTrack(track)
         }
 
+        /** [ + ] on a result: it becomes this song's match (the song stays in the list, ticked; Find can change it). */
         fun pick(track: Track) {
             val pick = _manual.value ?: return
             _manual.value = null
             viewModelScope.launch { importer.resolveManually(pick.playlistIndex, pick.songIndex, track) }
         }
+
+        /** The song loaded in the player (playing or paused): its result in the Find sheet gets a seek bar. */
+        val loadedId: StateFlow<String?> =
+            playback.playbackState
+                .map { it.currentTrack?.id }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+        /** The preview's length (for its seek bar). */
+        val durationMs: StateFlow<Long> =
+            playback.playbackState
+                .map { it.durationMs }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0L)
+
+        /** The preview's exact position now (read every frame by the seek bar). */
+        fun livePositionMs(): Long = playback.livePositionMs()
+
+        fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 
         fun closeManual() {
             _manual.value = null

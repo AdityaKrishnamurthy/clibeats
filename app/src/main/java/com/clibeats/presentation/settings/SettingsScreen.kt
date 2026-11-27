@@ -78,7 +78,6 @@ fun SettingsScreen(
     val localTrackCount by viewModel.localTrackCount.collectAsStateWithLifecycle()
 
     var folderToRemove by remember { mutableStateOf<String?>(null) }
-    var confirmClearBackups by remember { mutableStateOf(false) }
     var confirmClearDownloads by remember { mutableStateOf(false) }
     var confirmClearArtwork by remember { mutableStateOf(false) }
     var confirmClearSongs by remember { mutableStateOf(false) }
@@ -105,17 +104,6 @@ fun SettingsScreen(
                 viewModel.removeLocalFolder(folder)
             },
             onDismiss = { folderToRemove = null },
-        )
-    }
-    if (confirmClearBackups) {
-        CliConfirmDialog(
-            command = "rm backups/*",
-            message =
-                "Deletes the backups CLIBeats saved inside the app and in Download/CLIBeats. A new one is " +
-                    "saved the next time you open the app. Your library isn't touched.",
-            confirmLabel = "Delete",
-            onConfirm = viewModel::clearBackups,
-            onDismiss = { confirmClearBackups = false },
         )
     }
     if (confirmClearDownloads) {
@@ -217,8 +205,11 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        val themePalette by viewModel.themePalette.collectAsStateWithLifecycle()
         ThemeSettingsBlock(
             uiState = uiState,
+            palette = themePalette,
+            onPaletteChange = viewModel::setThemePalette,
             onThemeModeChange = viewModel::setThemeMode,
             onAccentColorChange = viewModel::setAccentColor,
             onCustomAccentChange = viewModel::setCustomAccent,
@@ -280,14 +271,17 @@ fun SettingsScreen(
                 )
             }
         }
+        val lastBackupAt by viewModel.lastBackupAt.collectAsStateWithLifecycle()
+        LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
         BackupSettingsBlock(
+            lastBackupAt = lastBackupAt,
+            onBackUpNow = viewModel::backUpNow,
             mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
             exchangeMessage = exchangeMessage,
             onToggleMirrorBackups = viewModel::setMirrorBackupsToDownloads,
             onExport = { exportLauncher.launch(PLAYLIST_FILE_NAME) },
             onImport = { importLauncher.launch(IMPORT_MIME_TYPES) },
             onShareSnapshot = viewModel::shareSnapshot,
-            onConfirmClearBackups = { confirmClearBackups = true },
         )
         UpdateSection()
         AboutSettingsBlock()

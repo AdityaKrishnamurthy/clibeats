@@ -81,10 +81,11 @@ fun HomeScreen(
     toggleSourceRequested: Boolean = false,
     onToggleSourceHandled: () -> Unit = {},
 ) {
-    // Tapping the Home tab while already on Home switches the source Online <-> Local.
+    // Tapping the Home tab while already on Home: first closes a playlist opened from Home (back to the Home page);
+    // on the Home page itself, switches the source Online <-> Local.
     LaunchedEffect(toggleSourceRequested) {
         if (toggleSourceRequested) {
-            homeViewModel.toggleSource()
+            if (homeViewModel.opened.value != null) homeViewModel.closeCollection() else homeViewModel.toggleSource()
             onToggleSourceHandled()
         }
     }

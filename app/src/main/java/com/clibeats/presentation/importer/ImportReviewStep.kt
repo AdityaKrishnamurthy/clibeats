@@ -30,14 +30,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.ClipboardManager
@@ -169,18 +174,25 @@ private fun LazyListScope.playlistDetails(
     onCopy: (List<ImportedSong>) -> Unit,
 ) {
     val missed = playlist.missed
-    if (missed.isNotEmpty()) {
+    // Songs that weren't matched, and those since picked with Find: they stay here (ticked) so a pick can be
+    // checked or changed; once every one is ticked the section turns green.
+    val byHand = playlist.results.filter { it.match == null || it.manual }.sortedBy { it.index }
+    if (byHand.isNotEmpty()) {
         importSectionHeader(
             "p${playlistIndex}_missed",
-            "✗ COULDN'T MATCH · ${missed.size}",
-            good = false,
-            action = "[ Copy ]" to { onCopy(missed) },
+            if (missed.isEmpty()) {
+                "✓ PICKED BY HAND · ${byHand.size}"
+            } else {
+                "✗ COULDN'T MATCH · ${missed.size} of ${byHand.size}"
+            },
+            good = missed.isEmpty(),
+            action = if (missed.isNotEmpty()) "[ Copy ]" to { onCopy(missed) } else null,
         )
-        items(missed, key = { "p${playlistIndex}_m${it.index}" }) { song ->
-            SpotifyRow(song, onFind = { onFind(playlistIndex, song) })
+        items(byHand, key = { "p${playlistIndex}_m${it.index}" }) { song ->
+            SpotifyRow(song, onFind = { onFind(playlistIndex, song) }, found = song.match != null)
         }
     }
-    val matched = playlist.matched.sortedBy { it.index }
+    val matched = playlist.matched.filterNot { it.manual }.sortedBy { it.index }
     if (matched.isNotEmpty()) {
         importSectionHeader("p${playlistIndex}_ok", "✓ MATCHED · ${matched.size}", good = true)
         items(matched, key = { "p${playlistIndex}_ok${it.index}" }) { MatchedRow(it) }
@@ -210,7 +222,7 @@ private fun copyText(
     }
 }
 
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FindMatchSheet(
@@ -220,6 +232,7 @@ internal fun FindMatchSheet(
     onSearch: (String) -> Unit,
     onPick: (Track) -> Unit,
     onDismiss: () -> Unit,
+    seek: PreviewSeek? = null,
 ) {
     var query by rememberSaveable(pick.songIndex, pick.playlistIndex) { mutableStateOf(pick.query) }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -278,56 +291,125 @@ internal fun FindMatchSheet(
                     LazyColumn(modifier = Modifier.fillMaxWidth().height(420.dp)) {
                         items(pick.results, key = { it.id }) { track ->
                             val playing = track.id == playingId
-                            Row(
-                                modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable(
-                                            role = Role.Button,
-                                            onClickLabel = if (playing) "Pause" else "Play ${track.title}",
-                                        ) { onPreview(track) }
-                                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                TrackArtwork(artworkUrl = track.artworkUrl, size = 44)
-                                Spacer(Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (playing) "▶ ${track.title}" else track.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (playing) CliBeatsAccent else CliBeatsTextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        text = track.artist,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = CliBeatsTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                if (track.durationMs > 0) {
-                                    Text(
-                                        text = formatDuration(track.durationMs),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = CliBeatsTextSecondary,
-                                    )
-                                }
-                                Text(
-                                    text = "[ + ]",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = CliBeatsAccent,
+                            Column {
+                                Row(
                                     modifier =
                                         Modifier
-                                            .clickable(role = Role.Button, onClickLabel = "Add ${track.title}") {
-                                                onPick(track)
-                                            }.padding(horizontal = 12.dp, vertical = 10.dp),
-                                )
+                                            .fillMaxWidth()
+                                            .clickable(
+                                                role = Role.Button,
+                                                onClickLabel = if (playing) "Pause" else "Play ${track.title}",
+                                            ) { onPreview(track) }
+                                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TrackArtwork(artworkUrl = track.artworkUrl, size = 44)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (playing) "▶ ${track.title}" else track.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (playing) CliBeatsAccent else CliBeatsTextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = track.artist,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = CliBeatsTextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (track.durationMs > 0) {
+                                        Text(
+                                            text = formatDuration(track.durationMs),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = CliBeatsTextSecondary,
+                                        )
+                                    }
+                                    Text(
+                                        text = "[ + ]",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = CliBeatsAccent,
+                                        modifier =
+                                            Modifier
+                                                .clickable(
+                                                    role = Role.Button,
+                                                    onClickLabel = "Add ${track.title}",
+                                                ) {
+                                                    onPick(track)
+                                                }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    )
+                                }
+                                // The song being previewed: a seek bar right under it.
+                                if (seek != null && track.id == seek.loadedId && seek.durationMs > 0) {
+                                    PreviewSeekBar(seek = seek, playing = playing)
+                                }
                             }
                         }
                     }
             }
         }
+    }
+}
+
+/** The Find sheet's preview: which song is loaded, its length, its live position, and seeking. */
+internal class PreviewSeek(
+    val loadedId: String?,
+    val durationMs: Long,
+    val position: () -> Long,
+    val onSeek: (Long) -> Unit,
+)
+
+/** A slim seek bar under the previewed result: follows the song smoothly; drag or tap to jump. */
+@Composable
+private fun PreviewSeekBar(
+    seek: PreviewSeek,
+    playing: Boolean,
+) {
+    var position by remember { mutableLongStateOf(seek.position()) }
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(playing, seek.loadedId) {
+        position = seek.position()
+        while (playing) {
+            withFrameNanos { if (dragging == null) position = seek.position() }
+        }
+    }
+    val duration = seek.durationMs.coerceAtLeast(1L)
+    val fraction = dragging ?: (position.toFloat() / duration).coerceIn(0f, 1f)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = formatDuration((fraction * duration).toLong()),
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
+        Slider(
+            value = fraction,
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let {
+                    val target = (it * duration).toLong()
+                    seek.onSeek(target)
+                    position = target
+                }
+                dragging = null
+            },
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = CliBeatsAccent,
+                    activeTrackColor = CliBeatsAccent,
+                    inactiveTrackColor = CliBeatsDivider,
+                ),
+            modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 8.dp),
+        )
+        Text(
+            text = formatDuration(seek.durationMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
     }
 }

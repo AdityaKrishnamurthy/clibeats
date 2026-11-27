@@ -108,7 +108,8 @@ fun LibraryScreen(
     // An artist or album opened from the list shows its songs (Play, Shuffle, Find, select) under the switch.
     if (OpenedGroupView(opened, state, viewModel, trackActions, mode)) return
     val localFolderChosen by viewModel.localFolderChosen.collectAsStateWithLifecycle()
-    val sort by viewModel.sort.collectAsStateWithLifecycle()
+    val artistSort by viewModel.artistSort.collectAsStateWithLifecycle()
+    val albumSort by viewModel.albumSort.collectAsStateWithLifecycle()
     val groupView by viewModel.groupView.collectAsStateWithLifecycle()
     val selectedTabIndex by viewModel.tab.collectAsStateWithLifecycle()
     // Android back on Artists / Albums goes to Tracks first (an open artist / album has its own back).
@@ -248,8 +249,8 @@ fun LibraryScreen(
                                     noun = "artist",
                                     viewMode = groupView,
                                     onViewModeChange = viewModel::setGroupView,
-                                    sort = sort,
-                                    onSortChange = viewModel::setSort,
+                                    sort = artistSort,
+                                    onSortChange = viewModel::setArtistSort,
                                     gridState = artistsGridState,
                                 )
                             2 ->
@@ -264,8 +265,8 @@ fun LibraryScreen(
                                     noun = "album",
                                     viewMode = groupView,
                                     onViewModeChange = viewModel::setGroupView,
-                                    sort = sort,
-                                    onSortChange = viewModel::setSort,
+                                    sort = albumSort,
+                                    onSortChange = viewModel::setAlbumSort,
                                     gridState = albumsGridState,
                                 )
                         }

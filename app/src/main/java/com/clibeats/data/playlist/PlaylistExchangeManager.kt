@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.clibeats.data.local.CliBeatsDatabase
+import com.clibeats.data.local.mapper.toDomain
 import com.clibeats.data.preferences.AppPreferences
 import com.clibeats.domain.model.Album
 import com.clibeats.domain.model.Artist
@@ -33,6 +34,7 @@ import javax.inject.Singleton
  * Online stream URLs are never trusted from the file: they are re-resolved at playback.
  */
 @Singleton
+@Suppress("TooManyFunctions")
 class PlaylistExchangeManager
     @Inject
     constructor(
@@ -72,6 +74,7 @@ class PlaylistExchangeManager
 
         /** Builds the complete portable library: playlists, favorites, albums, artists and safe prefs. */
         suspend fun buildFile(): CliBeatsFile {
+            val history = playHistory()
             val appPlaylists =
                 playlistRepository.getAllPlaylistsAsFlow().first().filterNot { it.id.startsWith(LOCAL_FILE_PREFIX) }
             val named =
@@ -86,26 +89,14 @@ class PlaylistExchangeManager
                     named.map { (name, songs) ->
                         CliBeatsPlaylist(
                             name = name,
-                            tracks =
-                                songs.map { song ->
-                                    val safeSourceUrl =
-                                        song.streamUrl?.takeIf {
-                                            song.providerId == "local" || !it.contains("expire")
-                                        }
-                                    CliBeatsTrack(
-                                        providerId = song.providerId,
-                                        sourceId = ProviderId.rawSourceId(song.providerId, song.id),
-                                        title = song.title,
-                                        artist = song.artist,
-                                        album = song.album,
-                                        durationMs = song.durationMs,
-                                        artworkUrl = song.artworkUrl,
-                                        sourceUrl = safeSourceUrl,
-                                    )
-                                },
+                            tracks = songs.map(::exchangeTrack),
                         )
                     },
                 prefs = currentPrefs(),
+                settings = appPreferences.exportSettings().mapValues { (_, v) -> CliBeatsSetting(v.first, v.second) },
+                historyTracks = history.first,
+                history = history.second,
+                downloads = downloadedSongs().map(::exchangeTrack),
                 albums =
                     libraryRepository.getSavedAlbums().first().map { album ->
                         CliBeatsAlbum(
@@ -128,6 +119,47 @@ class PlaylistExchangeManager
                         )
                     },
             )
+        }
+
+        /** A song as it's written in the file (online stream links expire, so they're left out). */
+        private fun exchangeTrack(song: Track): CliBeatsTrack {
+            val safeSourceUrl = song.streamUrl?.takeIf { song.providerId == "local" || !it.contains("expire") }
+            return CliBeatsTrack(
+                providerId = song.providerId,
+                sourceId = ProviderId.rawSourceId(song.providerId, song.id),
+                title = song.title,
+                artist = song.artist,
+                album = song.album,
+                durationMs = song.durationMs,
+                artworkUrl = song.artworkUrl,
+                sourceUrl = safeSourceUrl,
+            )
+        }
+
+        /** The play history (newest first, up to [MAX_HISTORY]): each song once, and every play pointing at it. */
+        private suspend fun playHistory(): Pair<List<CliBeatsTrack>, List<CliBeatsPlay>> {
+            val plays = database.historyDao().getAllAsFlow().first().take(MAX_HISTORY)
+            if (plays.isEmpty()) return emptyList<CliBeatsTrack>() to emptyList()
+            val ids = plays.map { it.songId }.distinct()
+            val songs =
+                ids.chunked(SQL_CHUNK).flatMap { database.historyDao().getSongsByIds(it) }
+                    .associateBy { it.id }
+            val exchanged = songs.mapValues { exchangeTrack(it.value.toDomain()) }
+            return packHistory(plays.map { it.songId to it.playedAt }, exchanged)
+        }
+
+        /** Songs downloaded for offline (just which ones; the audio isn't backed up). */
+        private suspend fun downloadedSongs(): List<Track> {
+            val ids = database.downloadedTrackDao().getAll().map { it.songId }
+            return ids.chunked(SQL_CHUNK).flatMap { database.historyDao().getSongsByIds(it) }.map { it.toDomain() }
+        }
+
+        /** Songs from the last restored backup that were downloaded there and aren't here yet. */
+        private val _pendingDownloads = kotlinx.coroutines.flow.MutableStateFlow<List<Track>>(emptyList())
+        val pendingDownloads: kotlinx.coroutines.flow.StateFlow<List<Track>> = _pendingDownloads
+
+        fun clearPendingDownloads() {
+            _pendingDownloads.value = emptyList()
         }
 
         /** Non-secret settings only: never tokens, history or search queries. */
@@ -156,25 +188,8 @@ class PlaylistExchangeManager
                         val tracks =
                             playlistData.tracks
                                 .take(MAX_TRACKS_PER_PLAYLIST)
-                                .mapNotNull { trackData ->
-                                    if (providerRegistry.getProvider(trackData.providerId) == null) {
-                                        return@mapNotNull null
-                                    }
-                                    val sourceId =
-                                        trackData.sourceId
-                                            .takeIf { it.isNotBlank() && it.length <= MAX_SOURCE_ID_LENGTH }
-                                            ?: return@mapNotNull null
-                                    Track(
-                                        id = ProviderId.composite(trackData.providerId, sourceId),
-                                        title = trackData.title.take(MAX_TITLE_LENGTH),
-                                        artist = trackData.artist.take(MAX_TITLE_LENGTH),
-                                        album = trackData.album.take(MAX_TITLE_LENGTH),
-                                        durationMs = trackData.durationMs.coerceAtLeast(0L),
-                                        artworkUrl = safeArtworkUrl(trackData.artworkUrl),
-                                        streamUrl = safeStreamUrl(trackData.providerId, trackData.sourceUrl),
-                                        providerId = trackData.providerId,
-                                    )
-                                }.distinctBy { it.id }
+                                .mapNotNull(::importedTrack)
+                                .distinctBy { it.id }
                         songRepository.upsertTracks(tracks)
                         importedTracks += tracks.size
                         if (playlistData.name == FAVORITES_NAME) {
@@ -199,12 +214,68 @@ class PlaylistExchangeManager
                 // All-or-nothing: a malformed entry must not leave half-imported playlists.
                 database.withTransaction { write() }
                 restoreExtras(cliBeatsFile)
+                restoreHistory(cliBeatsFile)
+                offerDownloads(cliBeatsFile)
                 importedTracks
             }
 
-        /** Applies the settings and saved albums/artists a v2 snapshot carries. */
+        /** A song from the file, checked (known provider, sane lengths, safe links); null when it isn't usable. */
+        private fun importedTrack(trackData: CliBeatsTrack): Track? {
+            val sourceId =
+                trackData.sourceId.takeIf {
+                    providerRegistry.getProvider(trackData.providerId) != null &&
+                        it.isNotBlank() && it.length <= MAX_SOURCE_ID_LENGTH
+                } ?: return null
+            return Track(
+                id = ProviderId.composite(trackData.providerId, sourceId),
+                title = trackData.title.take(MAX_TITLE_LENGTH),
+                artist = trackData.artist.take(MAX_TITLE_LENGTH),
+                album = trackData.album.take(MAX_TITLE_LENGTH),
+                durationMs = trackData.durationMs.coerceAtLeast(0L),
+                artworkUrl = safeArtworkUrl(trackData.artworkUrl),
+                streamUrl = safeStreamUrl(trackData.providerId, trackData.sourceUrl),
+                providerId = trackData.providerId,
+            )
+        }
+
+        /** Adds the backup's plays (Most played, Recently played); plays already here aren't added twice. */
+        private suspend fun restoreHistory(file: CliBeatsFile) {
+            if (file.history.isEmpty()) return
+            val tracks = file.historyTracks.take(MAX_HISTORY).map(::importedTrack)
+            songRepository.upsertTracks(tracks.filterNotNull().distinctBy { it.id })
+            val dao = database.historyDao()
+            val have = dao.getAllAsFlow().first().mapTo(HashSet()) { it.songId to it.playedAt }
+            val toAdd = playsToRestore(file.history.take(MAX_HISTORY), tracks, have)
+            database.withTransaction {
+                toAdd.forEach { (track, at) ->
+                    dao.insert(
+                        com.clibeats.data.local.entity.HistoryEntity(
+                            songId = track.id,
+                            playedAt = at,
+                            providerId = track.providerId,
+                        ),
+                    )
+                }
+            }
+        }
+
+        /** The backup's downloaded songs that aren't downloaded here: the app offers to download them again. */
+        private suspend fun offerDownloads(file: CliBeatsFile) {
+            if (file.downloads.isEmpty()) return
+            val have = database.downloadedTrackDao().getAll().mapTo(HashSet()) { it.songId }
+            val listed = file.downloads.take(MAX_TRACKS_PER_PLAYLIST).mapNotNull(::importedTrack)
+            val missing = downloadsToOffer(listed, have)
+            songRepository.upsertTracks(missing)
+            _pendingDownloads.value = missing
+        }
+
+        /** Applies the settings and saved albums/artists a snapshot carries. */
         private suspend fun restoreExtras(file: CliBeatsFile) {
             file.prefs?.let { applyPrefs(it) }
+            // A full backup (v3) carries every setting; applied after the older fields so they win.
+            if (file.settings.isNotEmpty()) {
+                appPreferences.importSettings(file.settings.mapValues { (_, v) -> v.type to v.value })
+            }
             file.albums.forEach { album ->
                 if (!libraryRepository.isAlbumSaved(album.id).first()) {
                     libraryRepository.toggleSaveAlbum(
@@ -267,7 +338,7 @@ class PlaylistExchangeManager
                             val read = reader.read(buffer)
                             if (read < 0) break
                             out.append(buffer, 0, read)
-                            require(out.length <= MAX_FILE_CHARS) { "File is too large (max 2 MB)" }
+                            require(out.length <= MAX_FILE_CHARS) { "File is too large (max 8 MB)" }
                         }
                         out.toString()
                     }
@@ -278,6 +349,7 @@ class PlaylistExchangeManager
             }
             require(file.playlists.size <= MAX_PLAYLISTS) { "Too many playlists (max $MAX_PLAYLISTS)" }
             require(file.playlists.sumOf { it.tracks.size } <= MAX_TOTAL_TRACKS) { "Too many tracks" }
+            require(file.settings.size <= MAX_SETTINGS) { "Too many settings" }
             return file
         }
 
@@ -286,7 +358,10 @@ class PlaylistExchangeManager
             const val BACKUP_FILE_NAME = "clibeats-backup.json"
             const val FAVORITES_NAME = "♥ Favorites"
             private const val LOCAL_FILE_PREFIX = "localpl:"
-            private const val MAX_FILE_CHARS = 2 * 1024 * 1024
+            private const val MAX_FILE_CHARS = 8 * 1024 * 1024
+            private const val MAX_HISTORY = 3_000
+            private const val MAX_SETTINGS = 300
+            private const val SQL_CHUNK = 500
             private const val READ_BUFFER_CHARS = 8 * 1024
             private const val MAX_PLAYLISTS = 200
             private const val MAX_TOTAL_TRACKS = 20_000
@@ -316,3 +391,41 @@ class PlaylistExchangeManager
             }
         }
     }
+
+/**
+ * The play history as written in a backup: [plays] (song id, time; newest first) become each song once
+ * (in [songs], first-played order) and every play pointing at its song. Plays of unknown songs are left out.
+ */
+internal fun packHistory(
+    plays: List<Pair<String, Long>>,
+    songs: Map<String, CliBeatsTrack>,
+): Pair<List<CliBeatsTrack>, List<CliBeatsPlay>> {
+    val order = plays.map { it.first }.distinct().filter { it in songs }
+    val index = order.withIndex().associate { (i, id) -> id to i }
+    val tracks = order.map { songs.getValue(it) }
+    val entries = plays.mapNotNull { (id, at) -> index[id]?.let { CliBeatsPlay(it, at) } }
+    return tracks to entries
+}
+
+/**
+ * The backup's plays to add: each with its song ([tracks] by index; null = unusable), skipping bad times and plays
+ * already here ([have]: song id and time), so restoring the same backup twice doesn't double the counts.
+ */
+internal fun playsToRestore(
+    plays: List<CliBeatsPlay>,
+    tracks: List<Track?>,
+    have: Set<Pair<String, Long>>,
+): List<Pair<Track, Long>> {
+    val seen = HashSet(have)
+    return plays.mapNotNull { play ->
+        val track = tracks.getOrNull(play.track) ?: return@mapNotNull null
+        if (play.at <= 0L || !seen.add(track.id to play.at)) return@mapNotNull null
+        track to play.at
+    }
+}
+
+/** The backup's downloaded songs worth offering: online ones not downloaded here ([have]), once each. */
+internal fun downloadsToOffer(
+    tracks: List<Track>,
+    have: Set<String>,
+): List<Track> = tracks.filter { it.id !in have && it.providerId != "local" }.distinctBy { it.id }

@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -196,6 +197,29 @@ class SettingsViewModel
             }
         }
 
+        /** Settings → Theme: the palette in use. */
+        val themePalette: StateFlow<com.clibeats.presentation.theme.ThemePalette> =
+            appPreferences.themePalette
+                .map { com.clibeats.presentation.theme.ThemePalette.fromName(it) }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, com.clibeats.presentation.theme.ThemePalette.CLASSIC)
+
+        /**
+         * Picks a theme; its colour becomes the accent (Classic goes back to silver-white). The accent can
+         * still be changed below afterwards.
+         */
+        fun setThemePalette(palette: com.clibeats.presentation.theme.ThemePalette) {
+            viewModelScope.launch {
+                appPreferences.setThemePalette(palette.name)
+                val accent =
+                    if (palette == com.clibeats.presentation.theme.ThemePalette.CLASSIC) {
+                        AccentColor.WHITE.name
+                    } else {
+                        Accent.toHex(palette.swatch)
+                    }
+                appPreferences.setAccentColorName(accent)
+            }
+        }
+
         fun setThemeMode(mode: CliBeatsThemeMode) {
             viewModelScope.launch {
                 appPreferences.setThemeMode(mode.name)
@@ -243,6 +267,31 @@ class SettingsViewModel
         private val _shareFile = MutableStateFlow<File?>(null)
         val shareFile: StateFlow<File?> = _shareFile.asStateFlow()
 
+        private val _lastBackupAt = MutableStateFlow<Long?>(null)
+
+        /** When the automatic backup was last saved (null: none yet). */
+        val lastBackupAt: StateFlow<Long?> = _lastBackupAt.asStateFlow()
+
+        fun refreshLastBackup() {
+            val manager = snapshotManager ?: return
+            viewModelScope.launch {
+                _lastBackupAt.value =
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        manager.latestFile.takeIf { it.isFile && it.length() > 0L }?.lastModified()
+                    }
+            }
+        }
+
+        /** Saves a fresh automatic backup now (it replaces the previous one). */
+        fun backUpNow() {
+            val manager = snapshotManager ?: return
+            viewModelScope.launch {
+                val saved = manager.snapshotIfDue(force = true).getOrNull()
+                _exchangeMessage.value = if (saved != null) "Backup saved" else "Nothing to back up yet"
+                refreshLastBackup()
+            }
+        }
+
         /** Takes a fresh snapshot and exposes it for ACTION_SEND (Drive, email, nearby, ...). */
         fun shareSnapshot() {
             val manager = snapshotManager ?: return
@@ -254,20 +303,6 @@ class SettingsViewModel
                     _exchangeMessage.value =
                         "Nothing to share yet: save a song or create a playlist first"
                 }
-            }
-        }
-
-        /** Deletes every stored backup (inside the app and in Downloads); a new one is saved on the next start. */
-        fun clearBackups() {
-            val manager = snapshotManager ?: return
-            viewModelScope.launch {
-                val removed = manager.clearBackups()
-                _exchangeMessage.value =
-                    when (removed) {
-                        0 -> "No backups to delete"
-                        1 -> "Deleted 1 backup"
-                        else -> "Deleted $removed backups"
-                    }
             }
         }
 

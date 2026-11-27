@@ -42,6 +42,7 @@ data class AlbumGroup(
 enum class GroupSort(
     val label: String,
 ) {
+    RECENT("RECENT"),
     MOST_PLAYED("MOST PLAYED"),
     MOST_SONGS("MOST SONGS"),
     A_TO_Z("A–Z"),

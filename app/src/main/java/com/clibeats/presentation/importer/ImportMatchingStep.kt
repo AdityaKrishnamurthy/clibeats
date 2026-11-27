@@ -30,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.clibeats.data.importer.ImportState
@@ -280,6 +282,8 @@ internal fun LazyListScope.importSectionHeader(
 internal fun SpotifyRow(
     song: ImportedSong,
     onFind: (() -> Unit)? = null,
+    /** Picked with Find: a green tick before Find. */
+    found: Boolean = false,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
@@ -304,6 +308,14 @@ internal fun SpotifyRow(
                 color = CliBeatsTextSecondary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (found) {
+            Text(
+                text = "✓",
+                style = MaterialTheme.typography.titleMedium,
+                color = CliBeatsAccent,
+                modifier = Modifier.padding(horizontal = 4.dp).semantics { contentDescription = "Found" },
             )
         }
         if (onFind != null) {

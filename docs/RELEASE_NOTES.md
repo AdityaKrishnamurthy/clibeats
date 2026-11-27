@@ -1,3 +1,59 @@
+# CLIBeats v2.8.5 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.5.apk` (verify with `SHA256SUMS.txt`)
+
+New themes, a full backup of the app, Recent for Artists and Albums, and a faster Home.
+
+## Themes
+
+- **One tap to a new look.** Settings opens with a big **THEME** heading showing your current theme; tap it to
+  open the colour scheme, themes and accent (folded away the rest of the time, so Settings stays short).
+- **Color scheme cards.** System, Light, Dark and AMOLED as little previews of the app. **System** follows your
+  phone's light / dark setting.
+- **Themes.** Classic (neutral grey with a silver-white accent, the new default), Berry, Grove, Ocean, Ember and
+  Iris each tint the whole app (backgrounds, panels, borders), in a light and a dark version shown as two orbs.
+  Tap a theme to use it, or one of its orbs to pick that version straight away; AMOLED keeps pure black with the
+  theme's tint in the panels. Picking a theme sets its accent; the accent colours still work on top.
+- **Create theme.** [ + Create theme ] makes a theme from any colour you pick: light and dark versions, softly
+  tinted with it.
+
+## Backup
+
+- **A full backup of the app.** Settings → Backup (renamed from Playlist Exchange) now saves everything worth
+  keeping: playlists, ♥ Favorites, saved albums and artists, your play history (so Most played and Recently played
+  come back), which songs were downloaded, and all your settings — theme, gestures, languages, sorts and the rest.
+  Caches, the music files and lyrics stay out.
+- **One backup, replaced daily.** The automatic backup saves once a day and replaces the previous one; Settings
+  shows when it last saved, with [ BACK UP NOW ]. The copy in Downloads now sits right in `Download/CLIBeats/` and
+  carries the date in its name, e.g. `clibeats-backup-27112026.json`.
+- **Downloads come back too.** Restoring a backup offers to download again the songs that were downloaded.
+- **Clearer Backup settings.** Each option now says what it does: keep a copy in Downloads (survives uninstalling),
+  save a copy anywhere, restore, share. (Delete saved backups is gone: there's only ever one, replaced each day.)
+
+## Library
+
+- **Recent for Artists and Albums.** A new RECENT sort (Online and Local) puts the artists and albums you played
+  most recently first. It's the default; Artists and Albums each remember their own sort.
+
+## Playlist import
+
+- **Picked songs show as found.** After choosing a song with Find → [ + ], it stays where it was in the import
+  summary with a ✓ next to Find (tap Find again to change it), and the playlist counts it as found. When every
+  song is ticked, the playlist turns green.
+- **Seek while checking a match.** In the Find sheet, the song you're previewing gets a small seek bar right under
+  it, so you can jump to any part to check it's the right version.
+
+## Faster Home and Search
+
+- **Home loads instantly.** The Home page (charts, popular playlists, your languages' rows) is saved for a day, so
+  opening the app shows it at once instead of fetching everything again; it updates once a day, or straight away
+  with [ ↻ REFRESH ].
+- **Playlist covers in Search.** Some playlists' covers (their own custom covers) didn't load; they do now.
+- **Tapping Home closes an open playlist.** With a playlist open from Home, tapping the Home tab again goes back to
+  the Home page (another tap switches Online / Local as before).
+
+---
+
 # CLIBeats v2.8.1 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.1.apk` (verify with `SHA256SUMS.txt`)
