@@ -38,8 +38,11 @@ object ImageLoaderModule {
         @ApplicationContext context: Context,
         okHttpClient: OkHttpClient,
         artworkDiskCache: ResizableDiskCache,
+        downloadCovers: com.clibeats.data.download.DownloadCovers,
     ): ImageLoader =
         ImageLoader.Builder(context)
+            // Downloaded songs' covers come from their kept files (offline, and safe from cache clears).
+            .components { add(downloadCovers.interceptor) }
             .okHttpClient(okHttpClient)
             .memoryCache {
                 MemoryCache.Builder(context)

@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.clibeats.data.cache.CacheUsage
 import com.clibeats.data.local.dao.DownloadedSongItem
 import com.clibeats.data.preferences.AppPreferences
+import com.clibeats.presentation.component.TuiButton
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -62,6 +63,7 @@ internal fun formatMb(mb: Int): String =
 
 private fun trimZeros(number: String): String = if ('.' in number) number.trimEnd('0').trimEnd('.') else number
 
+/** Settings → Storage & cache: the two caches (with their limits) and saved lyrics. Downloads are separate. */
 @Suppress("LongParameterList", "LongMethod")
 @Composable
 internal fun StorageSettingsBlock(
@@ -69,32 +71,30 @@ internal fun StorageSettingsBlock(
     artworkCacheMb: Int,
     songCacheMb: Int,
     downloadedBytes: Long,
-    downloadedCount: Int,
     onArtworkLimitChange: (Int) -> Unit,
     onSongLimitChange: (Int) -> Unit,
     onClearArtworkCache: () -> Unit,
     onClearSongCache: () -> Unit,
-    onManageDownloads: () -> Unit,
-    onClearDownloads: () -> Unit,
     lyrics: LyricsStorage = LyricsStorage(),
 ) {
     val accent = LocalAccentColor.current
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SettingsPanel {
             Text(
-                text = "Total used",
+                text = "Cache and lyrics use",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
-                text = formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyrics.bytes),
+                text = formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + lyrics.bytes),
                 style = MaterialTheme.typography.headlineSmall,
                 color = accent,
             )
             Text(
                 text =
                     "Songs ${formatSize(cacheUsage.songBytes)} \u00b7 Covers ${formatSize(cacheUsage.artworkBytes)} " +
-                        "\u00b7 Downloads ${formatSize(downloadedBytes)} \u00b7 Lyrics ${formatSize(lyrics.bytes)}",
+                        "\u00b7 Lyrics ${formatSize(lyrics.bytes)}. Downloads (${formatSize(downloadedBytes)}) are " +
+                        "separate: Settings \u2192 Downloads.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -122,20 +122,55 @@ internal fun StorageSettingsBlock(
             Text(
                 text =
                     "When a cache is full, what you haven't played or seen for the longest is removed " +
-                        "automatically to make room. Downloads are never removed.",
+                        "automatically to make room. Clearing or filling a cache never touches your downloads " +
+                        "or their covers.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        SettingsPanel(label = "Downloads") {
-            DownloadsRow(
-                usedBytes = downloadedBytes,
-                songs = downloadedCount,
-                onManage = onManageDownloads,
-                onClearAll = onClearDownloads,
-            )
-        }
         SettingsPanel(label = "Lyrics") { LyricsRow(lyrics) }
+    }
+}
+
+/** Settings → Downloads: every downloaded song, with removing one or all. Separate from the caches. */
+@Composable
+internal fun DownloadsSettingsBlock(
+    downloadedItems: List<DownloadedSongItem>,
+    downloadedBytes: Long,
+    onDeleteDownload: (String) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SettingsPanel {
+            Text(
+                text = if (downloadedItems.size == 1) "1 song" else "${downloadedItems.size} songs",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(text = formatSize(downloadedBytes), style = MaterialTheme.typography.headlineSmall, color = accent)
+            Text(
+                text =
+                    "Saved for offline with their covers and lyrics. No size limit, and nothing here is removed " +
+                        "unless you remove it.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (downloadedItems.isNotEmpty()) {
+                TuiButton(
+                    text = "DELETE ALL DOWNLOADS",
+                    onClick = onClearAll,
+                    modifier = Modifier.semantics { contentDescription = "Delete all downloaded songs" },
+                )
+            }
+        }
+        if (downloadedItems.isNotEmpty()) {
+            SettingsPanel(label = "Songs") {
+                downloadedItems.forEach { item ->
+                    ManageDownloadItemRow(item = item, onDelete = { onDeleteDownload(item.songId) })
+                }
+            }
+        }
     }
 }
 
@@ -245,41 +280,6 @@ private fun CacheRow(
                             .padding(horizontal = 14.dp, vertical = 7.dp),
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun DownloadsRow(
-    usedBytes: Long,
-    songs: Int,
-    onManage: () -> Unit,
-    onClearAll: () -> Unit,
-) {
-    val accent = LocalAccentColor.current
-    SizeLine(
-        title = if (songs == 1) "1 song" else "$songs songs",
-        value =
-            if (songs > 0) {
-                "${formatSize(usedBytes)} \u00b7 saved for offline, no size limit"
-            } else {
-                "Nothing downloaded yet"
-            },
-        action = if (songs > 0) "Manage" else null,
-        actionColor = accent,
-        actionDescription = "Manage downloaded songs",
-        onAction = onManage,
-    )
-    if (songs > 0) {
-        TextButton(
-            onClick = onClearAll,
-            modifier = Modifier.semantics { contentDescription = "Delete all downloaded songs" },
-        ) {
-            Text(
-                "Delete all downloads",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
         }
     }
 }

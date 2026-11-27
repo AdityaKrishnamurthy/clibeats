@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -28,7 +29,7 @@ class AppPreferences
             val ARTWORK_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072)
 
             /** Settings → Storage and Cache: song cache sizes (MB); the first is the default. */
-            val SONG_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072, 4096)
+            val SONG_CACHE_OPTIONS_MB = listOf(1024, 2048, 3072, 4096, 5120)
 
             /** [mb] if it's offered, else the next size up (the largest when it's bigger than all). */
             internal fun snapToOption(
@@ -84,6 +85,11 @@ class AppPreferences
             val UPDATE_DOWNLOAD_VERSION = stringPreferencesKey("update_download_version")
             val UPDATE_DOWNLOAD_SHA256 = stringPreferencesKey("update_download_sha256")
             val MIRROR_BACKUPS_TO_DOWNLOADS = booleanPreferencesKey("mirror_backups_to_downloads")
+            val EQ_ENABLED = booleanPreferencesKey("eq_enabled")
+            val EQ_PRESET = stringPreferencesKey("eq_preset")
+            val EQ_GAINS_DB = stringPreferencesKey("eq_gains_db")
+            val EQ_PREAMP_DB = floatPreferencesKey("eq_preamp_db")
+            val DISCORD_PRESENCE = booleanPreferencesKey("discord_presence_enabled")
         }
 
         /**
@@ -415,6 +421,69 @@ class AppPreferences
             dataStore.edit { it[Keys.ACCENT_COLOR_NAME] = name }
         }
 
+        /** Settings → Discord: show what is playing on the Discord profile (opt-in, off by default). */
+        val discordPresenceEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.DISCORD_PRESENCE] ?: false }
+
+        suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
+            dataStore.edit { it[Keys.DISCORD_PRESENCE] = enabled }
+        }
+
+        /** Settings → Equalizer: on/off, preset, per-band gains and pre-amp, restored with backups. */
+        val equalizerEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.EQ_ENABLED] ?: false }
+
+        val equalizerPreset: Flow<com.clibeats.domain.model.EqualizerPreset> =
+            dataStore.data.map {
+                com.clibeats.domain.model.EqualizerPreset.fromStoredName(it[Keys.EQ_PRESET])
+            }
+
+        val equalizerGainsDb: Flow<List<Float>> =
+            dataStore.data.map {
+                com.clibeats.domain.model.decodeEqualizerGains(
+                    it[Keys.EQ_GAINS_DB],
+                    com.clibeats.domain.model.EqualizerPreset.fromStoredName(it[Keys.EQ_PRESET]),
+                )
+            }
+
+        val equalizerPreampDb: Flow<Float> = dataStore.data.map { it[Keys.EQ_PREAMP_DB] ?: 0f }
+
+        suspend fun setEqualizerEnabled(enabled: Boolean) {
+            dataStore.edit { it[Keys.EQ_ENABLED] = enabled }
+        }
+
+        suspend fun setEqualizerPreset(preset: com.clibeats.domain.model.EqualizerPreset) {
+            dataStore.edit {
+                it[Keys.EQ_PRESET] = preset.storedName
+                it[Keys.EQ_GAINS_DB] = com.clibeats.domain.model.encodeEqualizerGains(preset.gains())
+            }
+        }
+
+        suspend fun setEqualizerBand(
+            index: Int,
+            gainDb: Float,
+        ) {
+            dataStore.edit { prefs ->
+                val preset = com.clibeats.domain.model.EqualizerPreset.fromStoredName(prefs[Keys.EQ_PRESET])
+                val gains =
+                    com.clibeats.domain.model
+                        .decodeEqualizerGains(prefs[Keys.EQ_GAINS_DB], preset)
+                        .toMutableList()
+                if (index !in gains.indices) return@edit
+                gains[index] = com.clibeats.domain.model.clampGainDb(gainDb)
+                prefs[Keys.EQ_GAINS_DB] = com.clibeats.domain.model.encodeEqualizerGains(gains)
+                prefs[Keys.EQ_PRESET] = com.clibeats.domain.model.EqualizerPreset.CUSTOM.storedName
+            }
+        }
+
+        suspend fun setEqualizerPreamp(gainDb: Float) {
+            dataStore.edit {
+                it[Keys.EQ_PREAMP_DB] =
+                    gainDb.coerceIn(
+                        com.clibeats.domain.model.EQUALIZER_MIN_PREAMP_DB,
+                        com.clibeats.domain.model.EQUALIZER_MAX_PREAMP_DB,
+                    )
+            }
+        }
+
         /** Playlists overview layout (a PlaylistViewMode name); null = default. */
         val playlistView: Flow<String?> = dataStore.data.map { it[Keys.PLAYLIST_VIEW] }
 
@@ -522,7 +591,7 @@ class AppPreferences
     }
 
 private const val DEFAULT_ARTWORK_CACHE_MB = 512
-private const val DEFAULT_SONG_CACHE_MB = 512
+private const val DEFAULT_SONG_CACHE_MB = 1024
 
 /** Stored download id meaning "no update download in progress or kept". */
 const val NO_DOWNLOAD = -1L

@@ -36,6 +36,7 @@ import com.clibeats.data.link.IncomingLinks
 import com.clibeats.data.link.MusicLink
 import com.clibeats.presentation.detail.AlbumDetailScreen
 import com.clibeats.presentation.detail.ArtistDetailScreen
+import com.clibeats.presentation.equalizer.EqualizerScreen
 import com.clibeats.presentation.home.HomeScreen
 import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.layout.LocalTabSwipeLock
@@ -253,6 +254,7 @@ private fun AppContent() {
             onQueueClick = {
                 if (router.currentRoute == AppRoute.Queue) router.popBack() else router.navigate(AppRoute.Queue)
             },
+            onOpenEqualizer = { router.navigate(AppRoute.Equalizer) },
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 HorizontalPager(
@@ -296,7 +298,7 @@ private fun AppContent() {
                                     ArtistDetailScreen(route = tabRoute, onBack = { router.popBack() })
                                 is AppRoute.AlbumDetail ->
                                     AlbumDetailScreen(route = tabRoute, onBack = { router.popBack() })
-                                AppRoute.Queue -> Unit
+                                AppRoute.Queue, AppRoute.Equalizer -> Unit
                             }
                         }
                     }
@@ -304,6 +306,11 @@ private fun AppContent() {
                 if (router.currentRoute == AppRoute.Queue) {
                     Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
                         QueueScreen(onClose = { router.popBack() })
+                    }
+                }
+                if (router.currentRoute == AppRoute.Equalizer) {
+                    Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                        EqualizerScreen(onClose = { router.popBack() })
                     }
                 }
                 if (showLinkImport) {

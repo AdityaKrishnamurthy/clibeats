@@ -39,27 +39,27 @@ class AppPreferencesTest {
         }
 
     @Test
-    fun cacheMaxMb_defaultsTo512() =
+    fun cacheMaxMb_defaultsTo1024() =
         runTest {
-            assertEquals(512, appPreferences.cacheMaxMb.first())
+            assertEquals(1024, appPreferences.cacheMaxMb.first())
         }
 
     @Test
     fun setCacheMaxMb_roundTripsThroughDataStore() =
         runTest {
-            appPreferences.setCacheMaxMb(4096)
+            appPreferences.setCacheMaxMb(5120)
 
-            assertEquals(4096, appPreferences.cacheMaxMb.first())
+            assertEquals(5120, appPreferences.cacheMaxMb.first())
         }
 
     @Test
     fun cacheLimits_belowTheSmallestOptionAreRaised() =
         runTest {
-            // 256 MB (songs) and 64 MB (artwork) were options once; artwork now starts at 512 MB.
+            // 256 MB (songs) and 64 MB (artwork) were options once; songs now start at 1 GB, artwork at 512 MB.
             appPreferences.setCacheMaxMb(256)
             appPreferences.setArtworkCacheMb(64)
 
-            assertEquals(512, appPreferences.cacheMaxMb.first())
+            assertEquals(1024, appPreferences.cacheMaxMb.first())
             assertEquals(512, appPreferences.artworkCacheMb.first())
         }
 
@@ -71,7 +71,7 @@ class AppPreferencesTest {
 
             assertEquals(2048, appPreferences.cacheMaxMb.first())
             assertEquals(2048, AppPreferences.snapToOption(1536, AppPreferences.SONG_CACHE_OPTIONS_MB))
-            assertEquals(4096, AppPreferences.snapToOption(9999, AppPreferences.SONG_CACHE_OPTIONS_MB))
+            assertEquals(5120, AppPreferences.snapToOption(9999, AppPreferences.SONG_CACHE_OPTIONS_MB))
         }
 
     @Test
@@ -119,6 +119,6 @@ class AppPreferencesTest {
                 ),
             )
             assertEquals("LIGHT", appPreferences.themeMode.first())
-            assertEquals(512, appPreferences.cacheMaxMb.first())
+            assertEquals(1024, appPreferences.cacheMaxMb.first())
         }
 }

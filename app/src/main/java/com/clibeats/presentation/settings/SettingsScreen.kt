@@ -4,6 +4,7 @@ package com.clibeats.presentation.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,12 +41,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DownloadForOffline
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.Swipe
 import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,10 +63,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -109,7 +116,6 @@ fun SettingsScreen(
     var confirmClearArtwork by remember { mutableStateOf(false) }
     var confirmClearSongs by remember { mutableStateOf(false) }
     var confirmClearLyrics by remember { mutableStateOf(false) }
-    var showManageDownloads by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -176,17 +182,6 @@ fun SettingsScreen(
             onDismiss = { confirmClearSongs = false },
         )
     }
-    if (showManageDownloads) {
-        ManageDownloadsDialog(
-            downloadedItems = downloadedItems,
-            onDeleteDownload = viewModel::deleteDownload,
-            onClearAll = {
-                showManageDownloads = false
-                confirmClearDownloads = true
-            },
-            onDismiss = { showManageDownloads = false },
-        )
-    }
 
     LaunchedEffect(shareFile) {
         val file = shareFile ?: return@LaunchedEffect
@@ -227,6 +222,8 @@ fun SettingsScreen(
     LaunchedEffect(Unit) { viewModel.refreshLastBackup() }
     val gesturesViewModel: GesturesViewModel = hiltViewModel()
     val gestures by gesturesViewModel.gestures.collectAsStateWithLifecycle()
+    val discordViewModel: DiscordPresenceViewModel = hiltViewModel()
+    val discord by discordViewModel.state.collectAsStateWithLifecycle()
 
     // The main list, or one section's page over it. Back (or tapping Settings again) returns to the list.
     var section by rememberSaveable { mutableStateOf<SettingsSection?>(null) }
@@ -262,8 +259,16 @@ fun SettingsScreen(
                             "Swipe right: ${gestures.songSwipeRight.label} \u00b7 " +
                                 "left: ${gestures.songSwipeLeft.label}",
                         storage =
-                            formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + downloadedBytes + lyricsBytes) +
-                                " used \u00b7 ${downloadedItems.size} downloaded",
+                            formatSize(cacheUsage.artworkBytes + cacheUsage.songBytes + lyricsBytes) +
+                                " used \u00b7 songs ${formatMb(uiState.cacheMaxMb)}, " +
+                                "covers ${formatMb(artworkCacheMb)}",
+                        downloads =
+                            if (downloadedItems.isEmpty()) {
+                                "Nothing downloaded yet"
+                            } else {
+                                "${downloadedItems.size} songs \u00b7 ${formatSize(downloadedBytes)}"
+                            },
+                        discord = if (discord.enabled) "On \u00b7 Listening to CLIBeats" else "Off",
                         backup = lastBackupAt?.let { "Last saved ${backupTime(it)}" } ?: "Not saved yet",
                     ),
                 palette = themePalette,
@@ -308,13 +313,10 @@ fun SettingsScreen(
                                 artworkCacheMb = artworkCacheMb,
                                 songCacheMb = uiState.cacheMaxMb,
                                 downloadedBytes = downloadedBytes,
-                                downloadedCount = downloadedItems.size,
                                 onArtworkLimitChange = viewModel::setArtworkCacheMb,
                                 onSongLimitChange = viewModel::setSongCacheMb,
                                 onClearArtworkCache = { confirmClearArtwork = true },
                                 onClearSongCache = { confirmClearSongs = true },
-                                onManageDownloads = { showManageDownloads = true },
-                                onClearDownloads = { confirmClearDownloads = true },
                                 lyrics =
                                     LyricsStorage(
                                         songs = lyricsCount,
@@ -334,6 +336,14 @@ fun SettingsScreen(
                                 onImport = { importLauncher.launch(IMPORT_MIME_TYPES) },
                                 onShareSnapshot = viewModel::shareSnapshot,
                             )
+                        SettingsSection.DOWNLOADS ->
+                            DownloadsSettingsBlock(
+                                downloadedItems = downloadedItems,
+                                downloadedBytes = downloadedBytes,
+                                onDeleteDownload = viewModel::deleteDownload,
+                                onClearAll = { confirmClearDownloads = true },
+                            )
+                        SettingsSection.DISCORD -> DiscordSettingsBlock(discordViewModel)
                         SettingsSection.UPDATES -> UpdateSection()
                     }
                 }
@@ -353,13 +363,16 @@ private fun localMusicSummary(
     }
 
 /** What each row of the main list says is set now. */
+@Suppress("LongParameterList")
 private class SettingsSummary(
     val theme: String,
     val accent: String,
     val localMusic: String,
     val gestures: String,
     val storage: String,
+    val downloads: String,
     val backup: String,
+    val discord: String,
 )
 
 /** Settings' main list: the theme up top, then each section in a few groups, then About. */
@@ -429,6 +442,11 @@ private fun SettingsList(
                         }
                     },
                     {
+                        SettingsNavRow(Icons.Outlined.DownloadForOffline, "Downloads", summary.downloads) {
+                            onOpen(SettingsSection.DOWNLOADS)
+                        }
+                    },
+                    {
                         SettingsNavRow(Icons.Outlined.Backup, "Backup", summary.backup) {
                             onOpen(SettingsSection.BACKUP)
                         }
@@ -439,6 +457,11 @@ private fun SettingsList(
             label = "App",
             rows =
                 listOf(
+                    {
+                        SettingsNavRow(Icons.Outlined.Headphones, "Discord", summary.discord) {
+                            onOpen(SettingsSection.DISCORD)
+                        }
+                    },
                     {
                         SettingsNavRow(
                             Icons.Outlined.SystemUpdate,
@@ -521,17 +544,37 @@ private fun AboutSettingsBlock() {
             DeveloperLine(name = "Omprakash Panda", url = OMPRAKASH_GITHUB_URL)
             DeveloperLine(name = "Aditya Krishnamurthy", url = ADITYA_GITHUB_URL, cursor = true)
             Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Source: github.com/Omprakash-p06/clibeats · MIT",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier =
-                    Modifier
-                        .semantics { contentDescription = "Source code on GitHub" }
-                        .clickable(role = Role.Button) {
-                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL))) }
-                        }.padding(vertical = 4.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Source: github.com/Omprakash-p06/clibeats · MIT",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier =
+                        Modifier
+                            .weight(1f)
+                            .semantics { contentDescription = "Source code on GitHub" }
+                            .clickable(role = Role.Button) {
+                                runCatching {
+                                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(GITHUB_URL)))
+                                }
+                            }.padding(vertical = 4.dp),
+                )
+                // Copies the repository link, to paste it anywhere.
+                val clipboard = LocalClipboardManager.current
+                IconButton(
+                    onClick = {
+                        clipboard.setText(AnnotatedString(GITHUB_URL))
+                        Toast.makeText(context, "GitHub link copied", Toast.LENGTH_SHORT).show()
+                    },
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ContentCopy,
+                        contentDescription = "Copy GitHub link",
+                        tint = LocalAccentColor.current,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
     }
 }

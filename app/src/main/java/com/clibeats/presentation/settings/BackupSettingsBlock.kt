@@ -12,8 +12,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material.icons.outlined.SaveAlt
 import androidx.compose.material.icons.outlined.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.clibeats.presentation.component.TuiButton
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** Settings → Backup: the automatic daily backup, the copy kept in Downloads, and your own copies. */
@@ -53,12 +52,7 @@ internal fun BackupSettingsBlock(
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                Button(
-                    onClick = onBackUpNow,
-                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = readableOn(accent)),
-                ) {
-                    Text("Back up now", style = MaterialTheme.typography.labelMedium)
-                }
+                TuiButton(text = "BACK UP NOW", onClick = onBackUpNow)
             }
             Text(
                 text =

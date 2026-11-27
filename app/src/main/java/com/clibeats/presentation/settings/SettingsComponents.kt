@@ -55,7 +55,9 @@ enum class SettingsSection(
     LOCAL_MUSIC("Local music"),
     GESTURES("Gestures"),
     STORAGE("Storage & cache"),
+    DOWNLOADS("Downloads"),
     BACKUP("Backup"),
+    DISCORD("Discord"),
     UPDATES("Updates"),
 }
 

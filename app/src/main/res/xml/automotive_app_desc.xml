@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto / AAOS media app declaration. Android Auto lists CLIBeats once the user enables
+     "Unknown sources" for apps distributed outside Google Play. -->
+<automotiveApp>
+    <uses name="media" />
+</automotiveApp>

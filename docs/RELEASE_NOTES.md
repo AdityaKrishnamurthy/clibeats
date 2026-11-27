@@ -1,3 +1,52 @@
+# CLIBeats v2.9.0 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.9.0.apk` (verify with `SHA256SUMS.txt`)
+
+Android Auto, a 10-band equalizer, and a Discord presence preview.
+
+## Android Auto
+- Browse **Recently Played**, **Playlists** (Liked Songs + your playlists), **Library** (downloads and on-device
+  music) and **Queue** from the car screen; all four roots fit Android Auto's four-tab limit.
+- Selections start through the normal queue, and voice search covers the same library.
+- Android Auto requires **Unknown sources** for sideloaded apps (phone → Android Auto → Developer settings).
+
+## Equalizer and volume
+- **Volume** and a **[ EQ ]** shortcut now sit on the Now Playing screen, next to the song.
+- The equalizer opens to a terminal **response graph** over an animated waveform, with **10 draggable vertical
+  sliders** (31 Hz – 16 kHz), six presets, a pre-amp and **RESET**.
+- Android 9+ uses `DynamicsProcessing`; Android 8 falls back to the platform `Equalizer`.
+- **SYSTEM EQ** opens the phone's audio-effects panel; standard session broadcasts let Wavelet/OEM EQ apps bind.
+- Everything is saved (and restored with backups).
+
+## Cleaner Settings
+- Long sections (Local Music, Gestures, Storage, Backup, Discord) now show a one-line summary and expand only
+  when tapped; the equalizer moved out of Settings to where the music is.
+
+## Discord
+- Opt-in **Listening to CLIBeats** preview in Settings → Discord.
+- Publishing uses Discord's official Social SDK, which is a C++ prefab AAR downloaded from the Developer Portal and is
+  not bundled here; this build shows the preview and reports `[ SDK REQUIRED ]`. No user token or self-bot transport
+  is ever used. Setup: `docs/DISCORD_PRESENCE.md`.
+
+---
+
+# CLIBeats v2.8.6 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.6.apk` (verify with `SHA256SUMS.txt`)
+
+Settings, in the same terminal language as the rest of the app.
+
+## Settings
+
+- **Terminal-style actions.** The filled pill buttons are gone: Local Music, Backup and Updates now use bracketed
+  `[ + ADD FOLDER ]`, `[ RESCAN ]`-style actions inside the same thin frames as the rest of Settings. Disabled
+  actions dim instead of turning into a grey pill.
+- **Theme, without the Material card.** The current-theme row is a square frame with a `> THEME` prompt and an
+  `[ OPEN ]` / `[ CLOSE ]` action; the colour-scheme and palette previews are square swatches with thin borders.
+- **Reset gestures** is now the `[ ↺ RESET ]` control, matching `[ CLEAR ]` and `[ ON ]`.
+
+---
+
 # CLIBeats v2.8.5 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.5.apk` (verify with `SHA256SUMS.txt`)

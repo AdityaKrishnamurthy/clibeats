@@ -105,30 +105,27 @@ private fun ThemeHeading(
     onClick: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(2.dp)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .clip(shape)
-                .background(accent.copy(alpha = 0.10f))
-                .border(1.dp, accent.copy(alpha = 0.6f), shape)
+                .border(1.dp, accent, shape)
                 .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide themes" else "Change theme") {
                     onClick()
-                }.padding(14.dp),
+                }.padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
             modifier =
                 Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette))
-                    .border(2.dp, accent, CircleShape),
+                    .size(40.dp)
+                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette), shape)
+                    .border(1.dp, accent, shape),
         )
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(text = "THEME", style = MaterialTheme.typography.titleLarge, color = accent)
+            Text(text = "> THEME", style = MaterialTheme.typography.titleLarge, color = accent)
             Text(
                 text = "${palette.displayName} · ${uiState.themeMode.displayName}",
                 style = MaterialTheme.typography.bodyMedium,
@@ -140,7 +137,11 @@ private fun ThemeHeading(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Text(text = if (expanded) "▾" else "▸", style = MaterialTheme.typography.titleLarge, color = accent)
+        Text(
+            text = if (expanded) "[ CLOSE ]" else "[ OPEN ]",
+            style = MaterialTheme.typography.labelMedium,
+            color = accent,
+        )
     }
 }
 
@@ -320,14 +321,12 @@ private fun SchemeCard(
     modifier: Modifier = Modifier,
 ) {
     val accent = LocalAccentColor.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(2.dp)
     Column(
         modifier =
             modifier
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .border(
-                    width = if (selected) 2.dp else 1.dp,
+                    width = 1.dp,
                     color = if (selected) accent else MaterialTheme.colorScheme.outlineVariant,
                     shape = shape,
                 )
@@ -335,7 +334,7 @@ private fun SchemeCard(
                 .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(64.dp).clip(RoundedCornerShape(6.dp))) {
+        Row(modifier = Modifier.fillMaxWidth().height(64.dp).clip(shape)) {
             when (mode) {
                 CliBeatsThemeMode.SYSTEM -> {
                     MiniApp(previewColors(palette, CliBeatsThemeMode.LIGHT), accent, Modifier.weight(1f))
@@ -381,11 +380,11 @@ private fun MiniApp(
         modifier = modifier.fillMaxHeight().background(colors.background).padding(6.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Box(Modifier.fillMaxWidth(0.7f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line))
-        Box(Modifier.fillMaxWidth(0.5f).height(6.dp).clip(RoundedCornerShape(3.dp)).background(colors.line))
+        Box(Modifier.fillMaxWidth(0.7f).height(6.dp).background(colors.line))
+        Box(Modifier.fillMaxWidth(0.5f).height(6.dp).background(colors.line))
         Spacer(Modifier.weight(1f))
         Row(
-            modifier = Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(4.dp)).background(colors.panel),
+            modifier = Modifier.fillMaxWidth().height(14.dp).clip(RoundedCornerShape(2.dp)).background(colors.panel),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.End,
         ) {
@@ -407,14 +406,12 @@ private fun PaletteCard(
     modifier: Modifier = Modifier,
 ) {
     val accent = LocalAccentColor.current
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(2.dp)
     Column(
         modifier =
             modifier
-                .clip(shape)
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
                 .border(
-                    width = if (selected) 2.dp else 1.dp,
+                    width = 1.dp,
                     color = if (selected) accent else MaterialTheme.colorScheme.outlineVariant,
                     shape = shape,
                 )
@@ -457,15 +454,15 @@ private fun Orb(
     label: String,
     onClick: () -> Unit,
 ) {
+    val shape = RoundedCornerShape(2.dp)
     Box(
         modifier =
             Modifier
                 .size(54.dp)
-                .then(if (ringed) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+                .then(if (ringed) Modifier.border(2.dp, ring, shape) else Modifier)
                 .padding(4.dp)
-                .clip(CircleShape)
-                .background(brush)
-                .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                .background(brush, shape)
+                .border(1.dp, Color.White.copy(alpha = 0.2f), shape)
                 .clickable(role = Role.RadioButton, onClickLabel = label, onClick = onClick),
     )
 }

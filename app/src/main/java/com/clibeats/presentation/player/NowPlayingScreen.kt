@@ -53,6 +53,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -118,6 +120,7 @@ fun NowPlayingScreen(
     viewModel: PlayerViewModel,
     onClose: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenEqualizer: () -> Unit,
 ) {
     val state by viewModel.playbackMetadata.collectAsStateWithLifecycle()
     val positionState = viewModel.positionMs.collectAsStateWithLifecycle()
@@ -134,6 +137,7 @@ fun NowPlayingScreen(
     val windowFocused = LocalWindowInfo.current.isWindowFocused
     LaunchedEffect(windowFocused) { if (windowFocused) viewModel.refreshAudioOutput() }
     val track = state.currentTrack
+    val volume by viewModel.volume.collectAsStateWithLifecycle()
 
     // Match the screen to the album art (Symfonium-style): a deep tint of the cover at the top fading into
     // the theme background, and the cover's vivid colour as the accent. Fades between songs.
@@ -547,6 +551,44 @@ fun NowPlayingScreen(
 
                 // A little extra room so the action icons sit clear of the waveform.
                 Spacer(Modifier.height(52.dp))
+
+                // ── Volume + equalizer: the two controls that belong with the song ──
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "VOL",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CliBeatsTextSecondary,
+                    )
+                    Slider(
+                        value = volume,
+                        onValueChange = viewModel::setVolume,
+                        modifier = Modifier.weight(1f).padding(horizontal = 6.dp),
+                        colors =
+                            SliderDefaults.colors(
+                                thumbColor = CliBeatsAccent,
+                                activeTrackColor = CliBeatsAccent,
+                                inactiveTrackColor = CliBeatsBorderInactive,
+                            ),
+                    )
+                    Text(
+                        text = "${(volume * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = CliBeatsAccent,
+                    )
+                    Text(
+                        text = "[ EQ ]",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = CliBeatsAccent,
+                        modifier =
+                            Modifier
+                                .padding(start = 12.dp)
+                                .clickable(onClickLabel = "Open equalizer", onClick = onOpenEqualizer)
+                                .padding(vertical = 8.dp, horizontal = 4.dp),
+                    )
+                }
 
                 // ── Bottom actions: sleep timer · queue · add to playlist · favourite ──
                 Row(

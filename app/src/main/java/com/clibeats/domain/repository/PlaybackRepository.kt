@@ -14,6 +14,12 @@ interface PlaybackRepository {
 
     val queueState: StateFlow<List<Track>>
 
+    /** 0..1 output volume of the player (independent of the phone's media volume). */
+    val volume: StateFlow<Float>
+        get() = MutableStateFlow(1f)
+
+    fun setVolume(volume: Float) = Unit
+
     /** One-off player messages for the UI (e.g. "Couldn't play X — skipped"). */
     val playerMessages: Flow<String>
 

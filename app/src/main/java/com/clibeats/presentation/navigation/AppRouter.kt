@@ -63,7 +63,7 @@ class AppRouter(
                 activeTab = MainTab.entries.first { it.route == route }
             }
 
-            AppRoute.Queue -> {
+            AppRoute.Queue, AppRoute.Equalizer -> {
                 if (utilityStack.lastOrNull() != route) utilityStack.add(route)
             }
 

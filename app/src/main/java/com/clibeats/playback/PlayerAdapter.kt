@@ -74,6 +74,13 @@ class PlayerAdapter
             )
         val playbackState: StateFlow<PlaybackState> = _playbackState.asStateFlow()
 
+        private val _volume = MutableStateFlow(player.volume)
+        val volume: StateFlow<Float> = _volume.asStateFlow()
+
+        fun setVolume(value: Float) {
+            player.volume = value.coerceIn(0f, 1f)
+        }
+
         val queueFlow: StateFlow<List<Track>> = queueController.queueFlow
 
         /** The radio songs, for the Queue screen's "from radio" divider. */
@@ -167,6 +174,10 @@ class PlayerAdapter
                     override fun onRepeatModeChanged(repeatMode: Int) = updateState()
 
                     override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) = updateState()
+
+                    override fun onVolumeChanged(volume: Float) {
+                        _volume.value = volume.coerceIn(0f, 1f)
+                    }
                 },
             )
         }
