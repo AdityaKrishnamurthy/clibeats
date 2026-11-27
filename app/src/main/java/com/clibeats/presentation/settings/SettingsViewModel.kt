@@ -306,21 +306,6 @@ class SettingsViewModel
             }
         }
 
-        /** Deletes every stored backup (inside the app and in Downloads); a new one is saved on the next start. */
-        fun clearBackups() {
-            val manager = snapshotManager ?: return
-            viewModelScope.launch {
-                val removed = manager.clearBackups()
-                refreshLastBackup()
-                _exchangeMessage.value =
-                    when (removed) {
-                        0 -> "No backups to delete"
-                        1 -> "Deleted 1 backup"
-                        else -> "Deleted $removed backups"
-                    }
-            }
-        }
-
         fun clearShareFile() {
             _shareFile.value = null
         }

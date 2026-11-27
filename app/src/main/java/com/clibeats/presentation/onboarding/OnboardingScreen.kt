@@ -158,8 +158,8 @@ fun OnboardingScreen(
                                 onClick = { backupPicker.launch(BACKUP_MIME_TYPES) },
                             )
                             Text(
-                                "Reinstalling? Pick clibeats-backup.json from Download/CLIBeats/Playlists to " +
-                                    "bring back playlists, favorites and saved albums.",
+                                "Reinstalling? Pick the clibeats-backup file from Download/CLIBeats to " +
+                                    "bring back your library, history and settings.",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = CliBeatsTextSecondary,
                             )

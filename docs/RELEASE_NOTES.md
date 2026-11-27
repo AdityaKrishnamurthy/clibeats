@@ -22,10 +22,11 @@
   come back), which songs were downloaded, and all your settings — theme, gestures, languages, sorts and the rest.
   Caches, the music files and lyrics stay out.
 - **One backup, replaced daily.** The automatic backup saves once a day and replaces the previous one; Settings
-  shows when it last saved, with [ BACK UP NOW ].
+  shows when it last saved, with [ BACK UP NOW ]. The copy in Downloads now sits right in `Download/CLIBeats/` and
+  carries the date in its name, e.g. `clibeats-backup-27112026.json`.
 - **Downloads come back too.** Restoring a backup offers to download again the songs that were downloaded.
 - **Clearer Backup settings.** Each option now says what it does: keep a copy in Downloads (survives uninstalling),
-  save a copy anywhere, restore, share, delete.
+  save a copy anywhere, restore, share. (Delete saved backups is gone: there's only ever one, replaced each day.)
 
 ## Library
 

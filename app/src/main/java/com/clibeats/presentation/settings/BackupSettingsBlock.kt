@@ -8,13 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +30,6 @@ internal fun BackupSettingsBlock(
     onExport: () -> Unit,
     onImport: () -> Unit,
     onShareSnapshot: () -> Unit,
-    onConfirmClearBackups: () -> Unit,
 ) {
     val accent = LocalAccentColor.current
     TuiBlock(title = "Backup", isActive = true) {
@@ -81,12 +76,6 @@ internal fun BackupSettingsBlock(
                     onImport,
                 )
                 BackupAction("SHARE", "Send the backup to another phone or app", onShareSnapshot)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = onConfirmClearBackups) {
-                    Icon(Icons.Outlined.Delete, contentDescription = null)
-                    Text("  DELETE SAVED BACKUPS", style = MaterialTheme.typography.labelMedium)
-                }
             }
             exchangeMessage?.let { message ->
                 Text(
@@ -169,7 +158,7 @@ private fun MirrorDownloadsToggleRow(
             )
             Text(
                 text =
-                    "Also saves it to Download/CLIBeats/Playlists, so it survives uninstalling the app " +
+                    "Also saves it to Download/CLIBeats (named with the date), so it survives uninstalling the app " +
                         "(restore it from setup). It's a readable file anyone with file access can open.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -498,7 +498,7 @@ class AppPreferences
             dataStore.edit { it[Keys.PLAYLIST_VIEW] = name }
         }
 
-        /** Whether daily library backups are also mirrored to shared Download/CLIBeats/Playlists/. */
+        /** Whether daily library backups are also mirrored to shared Download/CLIBeats/. */
         val mirrorBackupsToDownloads: Flow<Boolean> =
             dataStore.data.map { prefs -> prefs[Keys.MIRROR_BACKUPS_TO_DOWNLOADS] ?: true }
 

@@ -92,4 +92,11 @@ class LibrarySnapshotManagerTest {
 
             assertThat(manager.hasSnapshot()).isFalse()
         }
+
+    @Test
+    fun `the copy in Downloads is named with the day, month and year`() {
+        val date = java.util.GregorianCalendar(2026, java.util.Calendar.NOVEMBER, 27, 15, 30).time
+        assertThat(LibrarySnapshotManager.datedBackupName(date)).isEqualTo("clibeats-backup-27112026.json")
+        assertThat(LibrarySnapshotManager.PUBLIC_RELATIVE_PATH).endsWith("/CLIBeats/")
+    }
 }
