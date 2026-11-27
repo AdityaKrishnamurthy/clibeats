@@ -1,3 +1,20 @@
+# CLIBeats v2.8.6 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.6.apk` (verify with `SHA256SUMS.txt`)
+
+Settings, in the same terminal language as the rest of the app.
+
+## Settings
+
+- **Terminal-style actions.** The filled pill buttons are gone: Local Music, Backup and Updates now use bracketed
+  `[ + ADD FOLDER ]`, `[ RESCAN ]`-style actions inside the same thin frames as the rest of Settings. Disabled
+  actions dim instead of turning into a grey pill.
+- **Theme, without the Material card.** The current-theme row is a square frame with a `> THEME` prompt and an
+  `[ OPEN ]` / `[ CLOSE ]` action; the colour-scheme and palette previews are square swatches with thin borders.
+- **Reset gestures** is now the `[ ↺ RESET ]` control, matching `[ CLEAR ]` and `[ ON ]`.
+
+---
+
 # CLIBeats v2.8.5 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.5.apk` (verify with `SHA256SUMS.txt`)

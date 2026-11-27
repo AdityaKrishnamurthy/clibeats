@@ -10,8 +10,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.data.update.UpdateFrequency
 import com.clibeats.data.update.UpdateState
 import com.clibeats.presentation.component.TuiBlock
+import com.clibeats.presentation.component.TuiButton
 import com.clibeats.presentation.theme.LocalAccentColor
 
 /** Settings → Updates: auto-check frequency, manual check, and download / install. */
@@ -81,20 +80,8 @@ fun UpdateSection(viewModel: UpdateViewModel = hiltViewModel()) {
             UpdateProgress(state, accent)
 
             val busy = state is UpdateState.Checking || state.isWorking
-            Button(
-                onClick = {
-                    when (state) {
-                        is UpdateState.ReadyToInstall -> viewModel.install()
-                        is UpdateState.Available, is UpdateState.Failed ->
-                            if (release != null) viewModel.download(fromPrompt = false) else viewModel.checkNow()
-                        else -> viewModel.checkNow()
-                    }
-                },
-                enabled = !busy,
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = accent),
-            ) {
-                Text(
+            TuiButton(
+                text =
                     when {
                         state is UpdateState.Checking -> "CHECKING..."
                         state is UpdateState.Downloading || state is UpdateState.Verifying -> "DOWNLOADING..."
@@ -103,8 +90,17 @@ fun UpdateSection(viewModel: UpdateViewModel = hiltViewModel()) {
                         release != null && state is UpdateState.Available -> "DOWNLOAD"
                         else -> "CHECK NOW"
                     },
-                )
-            }
+                enabled = !busy,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    when (state) {
+                        is UpdateState.ReadyToInstall -> viewModel.install()
+                        is UpdateState.Available, is UpdateState.Failed ->
+                            if (release != null) viewModel.download(fromPrompt = false) else viewModel.checkNow()
+                        else -> viewModel.checkNow()
+                    }
+                },
+            )
         }
     }
 }
