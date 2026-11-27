@@ -232,8 +232,8 @@ fun LibraryScreen(
                                     onTrackClick = { track, index ->
                                         viewModel.onTrackClick(track, currentState.tracks, index)
                                     },
-                                    onSwipeRight = trackActions::addToQueue,
-                                    onSwipeLeft = trackActions::favorite,
+                                    onSwipeRight = trackActions::swipeRight,
+                                    onSwipeLeft = trackActions::swipeLeft,
                                     onLongPress = { addToPlaylistTrack = it },
                                 )
                             1 ->
@@ -416,8 +416,8 @@ private fun OpenedGroupView(
                 onTrackClick = { list, index -> viewModel.playGroup(list, index, detail.title) },
                 onRemoveClick = null,
                 removeLabel = "",
-                onSwipeRight = trackActions::addToQueue,
-                onSwipeLeft = trackActions::favorite,
+                onSwipeRight = trackActions::swipeRight,
+                onSwipeLeft = trackActions::swipeLeft,
                 selection = selection,
                 coverUrl = detail.coverUrl,
                 downloadedIds = downloadedIds,

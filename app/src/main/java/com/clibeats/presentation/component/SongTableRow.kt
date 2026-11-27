@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.clibeats.domain.model.SwipeAction
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsDivider
@@ -102,8 +103,8 @@ fun SongTableRow(
     // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back). Either can
     // be turned off in Settings → Gestures.
     val gestureSettings = LocalGestureSettings.current
-    val onSwipeRight = onSwipeRight.takeIf { gestureSettings.songSwipeRight }
-    val onSwipeLeft = onSwipeLeft.takeIf { gestureSettings.songSwipeLeft }
+    val onSwipeRight = onSwipeRight.takeIf { gestureSettings.songSwipeRight != SwipeAction.OFF }
+    val onSwipeLeft = onSwipeLeft.takeIf { gestureSettings.songSwipeLeft != SwipeAction.OFF }
     var dragX by remember { mutableFloatStateOf(0f) }
     val swipeModifier =
         if (onSwipeRight == null && onSwipeLeft == null) {

@@ -16,16 +16,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AlertDialog
@@ -33,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -46,7 +46,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +60,7 @@ import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsSurface
+import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import java.text.Collator
 
@@ -151,8 +151,8 @@ fun PlaylistScreen(
                             onRemoveClick = viewModel::removeFromFavorites,
                             removeLabel = "Remove from favorites",
                             onReorder = viewModel::reorderFavorites,
-                            onSwipeRight = trackActions::addToQueue,
-                            onSwipeLeft = trackActions::favorite,
+                            onSwipeRight = trackActions::swipeRight,
+                            onSwipeLeft = trackActions::swipeLeft,
                             selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.FAVORITES },
@@ -173,8 +173,8 @@ fun PlaylistScreen(
                             onTrackClick = { shown, index -> viewModel.playPlaylist(shown, index, "Most Played") },
                             onRemoveClick = viewModel::removeFromMostPlayed,
                             removeLabel = "Remove from Most Played",
-                            onSwipeRight = trackActions::addToQueue,
-                            onSwipeLeft = trackActions::favorite,
+                            onSwipeRight = trackActions::swipeRight,
+                            onSwipeLeft = trackActions::swipeLeft,
                             selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.MOST_PLAYED },
@@ -205,8 +205,8 @@ fun PlaylistScreen(
                             onRemoveClick = viewModel::removeFromDownloaded,
                             pendingIds = pendingIds,
                             removeLabel = "Remove download",
-                            onSwipeRight = trackActions::addToQueue,
-                            onSwipeLeft = trackActions::favorite,
+                            onSwipeRight = trackActions::swipeRight,
+                            onSwipeLeft = trackActions::swipeLeft,
                             selection = selection,
                             headerAction =
                                 clearAllAction(tracks.isNotEmpty()) { pendingClear = ClearTarget.DOWNLOADED },
@@ -255,8 +255,8 @@ fun PlaylistScreen(
                                 } else {
                                     { reordered -> viewModel.reorderPlaylist(selected.id, reordered) }
                                 },
-                            onSwipeRight = trackActions::addToQueue,
-                            onSwipeLeft = trackActions::favorite,
+                            onSwipeRight = trackActions::swipeRight,
+                            onSwipeLeft = trackActions::swipeLeft,
                             selection = selection,
                             headerAction =
                                 if (readOnly && tracks.isNotEmpty()) {
@@ -532,30 +532,51 @@ internal fun SortButton(
     current: SongSort?,
     onSort: (SongSort) -> Unit,
 ) {
-    // One tap sorts; each further tap goes to the next order (Title A→Z, Z→A, Artist A→Z, Z→A, …).
+    // One tap sorts; each further tap goes to the next order (Title A→Z, Z→A, Artist A→Z, Z→A, …). The order
+    // just applied shows in a small pop-up for a moment.
     val next = SongSort.entries[((current?.ordinal ?: -1) + 1) % SongSort.entries.size]
-    Row(
-        modifier =
-            Modifier
-                .clickable(role = Role.Button, onClickLabel = "Sort by ${next.label}") { onSort(next) }
-                .padding(horizontal = 6.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.Sort,
-            contentDescription = "Sort songs" + (current?.let { ", now ${it.label}" } ?: ""),
-            tint = CliBeatsAccent,
-        )
-        if (current != null) {
-            Text(
-                text = current.shortLabel,
-                style = MaterialTheme.typography.labelSmall,
-                color = CliBeatsAccent,
-                modifier = Modifier.padding(start = 4.dp),
+    var shown by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(shown) {
+        if (shown != null) {
+            kotlinx.coroutines.delay(SORT_HINT_MS)
+            shown = null
+        }
+    }
+    Box {
+        IconButton(
+            onClick = {
+                onSort(next)
+                shown = next.label
+            },
+        ) {
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.Sort,
+                contentDescription = "Sort songs, next: ${next.label}",
+                tint = CliBeatsAccent,
             )
+        }
+        shown?.let { label ->
+            androidx.compose.ui.window.Popup(
+                alignment = Alignment.TopCenter,
+                offset = androidx.compose.ui.unit.IntOffset(0, SORT_HINT_OFFSET_PX),
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = CliBeatsTextPrimary,
+                    modifier =
+                        Modifier
+                            .background(CliBeatsSurface, RoundedCornerShape(6.dp))
+                            .border(1.dp, CliBeatsAccent, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                )
+            }
         }
     }
 }
+
+private const val SORT_HINT_MS = 1_300L
+private const val SORT_HINT_OFFSET_PX = 130
 
 private fun clearAllAction(
     enabled: Boolean,

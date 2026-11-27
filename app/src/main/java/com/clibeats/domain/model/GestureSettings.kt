@@ -1,11 +1,21 @@
 package com.clibeats.domain.model
 
-/** Which swipe gestures are on (Settings → Gestures). All on by default. */
+/** What swiping a song does (Settings → Gestures). */
+enum class SwipeAction(
+    val label: String,
+) {
+    QUEUE("Add to queue"),
+    PLAY_NEXT("Play next"),
+    FAVORITE("Add to ♥ Favorites"),
+    OFF("Nothing"),
+}
+
+/** The app's swipe gestures (Settings → Gestures). The defaults are how CLIBeats has always behaved. */
 data class GestureSettings(
-    /** Swipe a song right to add it to the queue. */
-    val songSwipeRight: Boolean = true,
-    /** Swipe a song left to add it to ♥ Favorites. */
-    val songSwipeLeft: Boolean = true,
+    /** Swiping a song to the right. */
+    val songSwipeRight: SwipeAction = SwipeAction.QUEUE,
+    /** Swiping a song to the left. */
+    val songSwipeLeft: SwipeAction = SwipeAction.FAVORITE,
     /** Swipe left / right to move between the bottom tabs. */
     val tabSwipe: Boolean = true,
     /** Swipe down on Now Playing to close it. */

@@ -231,6 +231,7 @@ fun SettingsScreen(
             onRemoveFolder = { folderToRemove = it },
             onRescan = viewModel::rescanLocalMusic,
         )
+        GesturesSettingsBlock()
         StorageSettingsBlock(
             cacheUsage = cacheUsage,
             artworkCacheMb = artworkCacheMb,
@@ -279,7 +280,6 @@ fun SettingsScreen(
                 )
             }
         }
-        GesturesSettingsBlock()
         BackupSettingsBlock(
             mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
             exchangeMessage = exchangeMessage,

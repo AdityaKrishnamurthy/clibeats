@@ -128,17 +128,26 @@ private fun AppContent() {
     val stateHolder = rememberSaveableStateHolder()
     val scope = rememberCoroutineScope()
 
+    // A tab tapped (or a route opened): the pager follows. While it's moving there, the pager settling on the page
+    // it started from must not switch the tab back (that left you stuck on Search after tapping Library).
+    var pagerTarget by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(router.activeTab) {
         val target = router.activeTab.ordinal
-        if (pagerState.currentPage != target) {
-            if (abs(target - pagerState.currentPage) == 1) {
-                pagerState.animateScrollToPage(target)
-            } else {
-                pagerState.scrollToPage(target)
+        if (pagerState.currentPage != target || pagerState.targetPage != target) {
+            pagerTarget = target
+            try {
+                if (abs(target - pagerState.currentPage) == 1) {
+                    pagerState.animateScrollToPage(target)
+                } else {
+                    pagerState.scrollToPage(target)
+                }
+            } finally {
+                pagerTarget = null
             }
         }
     }
-    LaunchedEffect(pagerState.settledPage) {
+    LaunchedEffect(pagerState.settledPage, pagerTarget) {
+        if (pagerTarget != null) return@LaunchedEffect
         val settledTab = tabs[pagerState.settledPage]
         if (settledTab != router.activeTab && router.currentRoute != AppRoute.Queue) {
             router.selectTab(settledTab)
@@ -223,6 +232,9 @@ private fun AppContent() {
                     state = pagerState,
                     key = { tabs[it].route.key },
                     modifier = Modifier.fillMaxSize(),
+                    // All four tabs stay loaded, so switching back (e.g. to a playlist open on Home) is instant
+                    // instead of rebuilding the screen.
+                    beyondViewportPageCount = tabs.size - 1,
                     userScrollEnabled = gestures.tabSwipe && pagerState.currentPage !in swipeLockedPages,
                 ) { page ->
                     val tab = tabs[page]

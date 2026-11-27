@@ -4,13 +4,14 @@
 
 ## New
 
-- **Gesture settings.** Settings → Gestures turns each swipe on or off: swipe a song right (queue) or left
-  (♥ Favorites), swipe between tabs, and in Now Playing swipe down (close) or up (cover ↔ lyrics).
-  **[ RESET TO DEFAULTS ]** turns them all back on.
-- **Row styles inside playlists.** A new icon next to sort switches the songs between compact (no covers), list and
-  large covers with each tap; your choice is remembered for every playlist.
+- **Gesture settings.** A new Gestures block in Settings (above Storage and Cache) lets you choose what swiping a
+  song right or left does — add to queue, play next, add to ♥ Favorites, or nothing — and turn off swiping between
+  tabs or Now Playing's swipe down (close) and up (cover ↔ lyrics). The ↺ icon at the top right of the block puts
+  everything back to the defaults.
+- **Playlist views.** An icon next to sort switches the songs between details, bigger details, grid and bigger
+  grid with each tap; your choice is remembered for every playlist.
 - **One-tap sort.** The sort button sorts straight away; each further tap moves to the next order (Title A→Z, Z→A,
-  Artist A→Z, Z→A), and the current order shows beside it.
+  Artist A→Z, Z→A), shown in a small pop-up.
 
 ## Fixes
 
@@ -20,6 +21,10 @@
   soon as the song plays.
 - **View artist shows all their songs.** The artist page now loads the artist's full song list from YouTube Music
   (for example Ado's "ビンクスの酒 - Binks' Sake"), not just the top search results.
+- **Smooth tab switching.** Tapping Library from Search no longer gets stuck on Search, and going back to a tab
+  (e.g. a playlist open on Home) no longer lags: all four tabs stay loaded.
+- **Readable lyrics buttons.** The 文A and abc buttons keep the song's colour but lighten it when it's too dark to
+  see on the background.
 - **Clearing lyrics asks first.** Settings → Storage and Cache → Lyrics → [ CLEAR ] now asks for confirmation.
 
 ---
