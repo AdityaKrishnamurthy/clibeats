@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -25,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,59 +56,157 @@ internal fun ThemeSettingsBlock(
 ) {
     val systemDark = isSystemInDarkTheme()
     val shownDark = uiState.themeMode.resolve(systemDark) != CliBeatsThemeMode.LIGHT
-    val title = "Theme — ${palette.displayName} · ${uiState.themeMode.displayName}"
-    TuiBlock(title = title, isActive = true) {
+    // Folded by default: one big heading that shows the current look and opens everything below.
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    var creating by remember { mutableStateOf(false) }
+    TuiBlock(title = "Appearance", isActive = true) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            SectionLabel("COLOR SCHEME")
-            CliBeatsThemeMode.entries.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { mode ->
-                        SchemeCard(
-                            mode = mode,
-                            palette = palette,
-                            selected = uiState.themeMode == mode,
-                            onClick = { onThemeModeChange(mode) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                }
+            ThemeHeading(palette = palette, uiState = uiState, shownDark = shownDark, expanded = expanded) {
+                expanded = !expanded
             }
-            Spacer(Modifier.height(4.dp))
-            SectionLabel("THEMES")
-            ThemePalette.entries.chunked(2).forEach { row ->
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { option ->
-                        PaletteCard(
-                            palette = option,
-                            selected = option == palette,
-                            shownDark = shownDark,
-                            onClick = { onPaletteChange(option) },
-                            onPickLight = {
-                                onPaletteChange(option)
-                                onThemeModeChange(CliBeatsThemeMode.LIGHT)
-                            },
-                            onPickDark = {
-                                onPaletteChange(option)
-                                // AMOLED stays AMOLED (it's the dark version on black).
-                                if (uiState.themeMode != CliBeatsThemeMode.AMOLED) {
-                                    onThemeModeChange(CliBeatsThemeMode.DARK)
-                                }
-                            },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
-                }
+            if (expanded) {
+                ThemeChoices(
+                    uiState = uiState,
+                    palette = palette,
+                    shownDark = shownDark,
+                    onPaletteChange = onPaletteChange,
+                    onThemeModeChange = onThemeModeChange,
+                    onCreate = { creating = true },
+                )
+                Spacer(Modifier.height(4.dp))
+                SectionLabel("ACCENT COLOR — ${uiState.accentColor.displayName.uppercase()}")
+                AccentColorPicker(
+                    selected = uiState.accentColor,
+                    onSelect = onAccentColorChange,
+                    onCustom = onCustomAccentChange,
+                )
             }
         }
     }
-
-    TuiBlock(title = "Accent Color — ${uiState.accentColor.displayName}", isActive = true) {
-        AccentColorPicker(
-            selected = uiState.accentColor,
-            onSelect = onAccentColorChange,
-            onCustom = onCustomAccentChange,
+    if (creating) {
+        CustomAccentDialog(
+            initial = palette.swatch,
+            title = "> theme --create (pick its colour)",
+            onDismiss = { creating = false },
+            onApply = {
+                creating = false
+                onPaletteChange(ThemePalette.custom(it))
+            },
         )
+    }
+}
+
+/** The big "Theme" heading: the current theme's orb, its name and scheme, and a hint to tap it. */
+@Composable
+private fun ThemeHeading(
+    palette: ThemePalette,
+    uiState: SettingsUiState,
+    shownDark: Boolean,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    val shape = RoundedCornerShape(12.dp)
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(accent.copy(alpha = 0.10f))
+                .border(1.dp, accent.copy(alpha = 0.6f), shape)
+                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide themes" else "Change theme") {
+                    onClick()
+                }.padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(44.dp)
+                    .clip(CircleShape)
+                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette))
+                    .border(2.dp, accent, CircleShape),
+        )
+        Spacer(Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = "THEME", style = MaterialTheme.typography.titleLarge, color = accent)
+            Text(
+                text = "${palette.displayName} · ${uiState.themeMode.displayName}",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = if (expanded) "Tap to close" else "Tap to change colours, themes and accent",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(text = if (expanded) "▾" else "▸", style = MaterialTheme.typography.titleLarge, color = accent)
+    }
+}
+
+/** Color scheme cards, then the themes (and Create theme). */
+@Suppress("LongParameterList")
+@Composable
+private fun ThemeChoices(
+    uiState: SettingsUiState,
+    palette: ThemePalette,
+    shownDark: Boolean,
+    onPaletteChange: (ThemePalette) -> Unit,
+    onThemeModeChange: (CliBeatsThemeMode) -> Unit,
+    onCreate: () -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    SectionLabel("COLOR SCHEME")
+    CliBeatsThemeMode.entries.chunked(2).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            row.forEach { mode ->
+                SchemeCard(
+                    mode = mode,
+                    palette = palette,
+                    selected = uiState.themeMode == mode,
+                    onClick = { onThemeModeChange(mode) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+    }
+    Spacer(Modifier.height(4.dp))
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.weight(1f)) { SectionLabel("THEMES") }
+        Text(
+            text = "[ + Create theme ]",
+            style = MaterialTheme.typography.labelMedium,
+            color = accent,
+            modifier = Modifier.clickable(role = Role.Button, onClick = onCreate).padding(vertical = 6.dp),
+        )
+    }
+    // A custom theme, when one is in use, comes first.
+    val options = listOfNotNull(palette.takeIf { it.isCustom }) + ThemePalette.entries
+    options.chunked(2).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            row.forEach { option ->
+                PaletteCard(
+                    palette = option,
+                    selected = option == palette,
+                    shownDark = shownDark,
+                    onClick = { if (option.isCustom) onCreate() else onPaletteChange(option) },
+                    onPickLight = {
+                        onPaletteChange(option)
+                        onThemeModeChange(CliBeatsThemeMode.LIGHT)
+                    },
+                    onPickDark = {
+                        onPaletteChange(option)
+                        // AMOLED stays AMOLED (it's the dark version on black).
+                        if (uiState.themeMode != CliBeatsThemeMode.AMOLED) {
+                            onThemeModeChange(CliBeatsThemeMode.DARK)
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+        }
     }
 }
 

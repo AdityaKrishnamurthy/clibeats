@@ -58,6 +58,7 @@ internal fun CustomAccentDialog(
     initial: Color,
     onDismiss: () -> Unit,
     onApply: (Color) -> Unit,
+    title: String = "> accent --custom",
 ) {
     val start = remember { FloatArray(HSV_SIZE).also { android.graphics.Color.colorToHSV(initial.toArgb(), it) } }
     var hue by remember { mutableFloatStateOf(start[0]) }
@@ -81,7 +82,7 @@ internal fun CustomAccentDialog(
         onDismissRequest = onDismiss,
         modifier = Modifier.border(1.dp, color),
         containerColor = MaterialTheme.colorScheme.surface,
-        title = { Text("> accent --custom", style = MaterialTheme.typography.titleSmall, color = color) },
+        title = { Text(title, style = MaterialTheme.typography.titleSmall, color = color) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
