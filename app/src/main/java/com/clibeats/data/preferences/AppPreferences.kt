@@ -89,6 +89,7 @@ class AppPreferences
             val EQ_PRESET = stringPreferencesKey("eq_preset")
             val EQ_GAINS_DB = stringPreferencesKey("eq_gains_db")
             val EQ_PREAMP_DB = floatPreferencesKey("eq_preamp_db")
+            val DISCORD_PRESENCE = booleanPreferencesKey("discord_presence_enabled")
         }
 
         /**
@@ -418,6 +419,13 @@ class AppPreferences
 
         suspend fun setAccentColorName(name: String) {
             dataStore.edit { it[Keys.ACCENT_COLOR_NAME] = name }
+        }
+
+        /** Settings → Discord: show what is playing on the Discord profile (opt-in, off by default). */
+        val discordPresenceEnabled: Flow<Boolean> = dataStore.data.map { it[Keys.DISCORD_PRESENCE] ?: false }
+
+        suspend fun setDiscordPresenceEnabled(enabled: Boolean) {
+            dataStore.edit { it[Keys.DISCORD_PRESENCE] = enabled }
         }
 
         /** Settings → Equalizer: on/off, preset, per-band gains and pre-amp, restored with backups. */
