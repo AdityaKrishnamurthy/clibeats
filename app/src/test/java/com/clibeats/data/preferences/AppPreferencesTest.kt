@@ -59,7 +59,7 @@ class AppPreferencesTest {
             appPreferences.setCacheMaxMb(256)
             appPreferences.setArtworkCacheMb(64)
 
-            assertEquals(1024, appPreferences.cacheMaxMb.first())
+            assertEquals(512, appPreferences.cacheMaxMb.first())
             assertEquals(512, appPreferences.artworkCacheMb.first())
         }
 

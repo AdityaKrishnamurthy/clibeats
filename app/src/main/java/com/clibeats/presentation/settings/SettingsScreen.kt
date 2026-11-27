@@ -546,7 +546,7 @@ private fun AboutSettingsBlock() {
             Spacer(modifier = Modifier.height(4.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Source: github.com/Omprakash-p06/clibeats · MIT",
+                    text = "Source: github.com/Omprakash-p06/clibeats",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier =

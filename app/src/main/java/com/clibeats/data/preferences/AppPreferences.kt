@@ -28,8 +28,8 @@ class AppPreferences
             /** Settings → Storage and Cache: artwork sizes (MB); the first is the default. */
             val ARTWORK_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072)
 
-            /** Settings → Storage and Cache: song cache sizes (MB); the first is the default. */
-            val SONG_CACHE_OPTIONS_MB = listOf(1024, 2048, 3072, 4096, 5120)
+            /** Settings → Storage and Cache: song cache sizes (MB); 1 GB is the default. */
+            val SONG_CACHE_OPTIONS_MB = listOf(512, 1024, 2048, 3072, 4096, 5120)
 
             /** [mb] if it's offered, else the next size up (the largest when it's bigger than all). */
             internal fun snapToOption(
