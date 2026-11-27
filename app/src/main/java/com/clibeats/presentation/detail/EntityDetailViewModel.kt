@@ -54,10 +54,10 @@ class EntityDetailViewModel
                         localMatches
                     } else {
                         val provider = getProvider(providerId)
+                        // The artist's own full song list first (search alone misses many of their songs).
+                        val main = artistName.split(", ", " & ", " x ", " feat. ", " ft. ").first().trim()
                         val browsed =
-                            browseId?.takeIf { it.isNotBlank() }?.let { id ->
-                                (provider as? YouTubeMusicProvider)?.page(id)?.second
-                            }.orEmpty()
+                            (provider as? YouTubeMusicProvider)?.artistSongs(main, browseId).orEmpty()
                         val online =
                             browsed.ifEmpty {
                                 val searchResult = provider?.search(artistName, SEARCH_LIMIT)

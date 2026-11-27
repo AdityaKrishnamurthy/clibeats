@@ -80,7 +80,15 @@ class OnlineLyricsRepository
                 // "Not found" is remembered for a few days, then searched again (sources add songs).
                 if (System.currentTimeMillis() - fetchedAt < NOT_FOUND_RETRY_MS) return OnlineLyricsResult.NotFound
             }
-            val result = withContext(Dispatchers.IO) { search(queryFor(track)) }
+            val searched = withContext(Dispatchers.IO) { search(queryFor(track)) }
+            // Offline, but an older version saved this song's lyrics in its own format: show those meanwhile.
+            val result =
+                if (searched == OnlineLyricsResult.Unreachable) {
+                    olderSaved(track.id)?.let(OnlineLyricsResult::Found) ?: searched
+                } else {
+                    searched
+                }
+            if (result !== searched) return result
             when (result) {
                 is OnlineLyricsResult.Found -> save(track.id, result.lyrics)
                 OnlineLyricsResult.NotFound -> saveNotFound(track.id)
@@ -123,6 +131,25 @@ class OnlineLyricsRepository
         /** Fetches and saves [track]'s lyrics now (when it's downloaded), so they're there offline. */
         suspend fun prefetch(track: Track) {
             runCatching { lyricsFor(track) }
+        }
+
+        /**
+         * Looks up and saves lyrics for downloaded songs that don't have ours yet (downloaded before lyrics were
+         * saved with downloads, or saved by an older version), so they show offline. Stops when offline.
+         */
+        suspend fun backfill(tracks: List<Track>) {
+            for (track in tracks) {
+                if (readSaved(track.id) != null) continue
+                val result = runCatching { lyricsFor(track) }.getOrNull()
+                if (result == OnlineLyricsResult.Unreachable) return
+            }
+        }
+
+        /** Lyrics an older version saved as plain LRC / text, if any. */
+        private suspend fun olderSaved(trackId: String): Lyrics? {
+            val row = runCatching { lyricsCacheDao.getById(trackId) }.getOrNull() ?: return null
+            val raw = row.syncedLrc ?: row.plainLyrics?.takeIf { it != NOT_FOUND_MARK }
+            return com.clibeats.data.lyrics.LrcParser.parse(raw)
         }
 
         private suspend fun saveNotFound(trackId: String) {

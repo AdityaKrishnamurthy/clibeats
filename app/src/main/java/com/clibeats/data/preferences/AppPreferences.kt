@@ -50,6 +50,11 @@ class AppPreferences
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
             val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
             val LYRICS_TRANSLATE = booleanPreferencesKey("lyrics_translate")
+            val GESTURE_SONG_RIGHT = booleanPreferencesKey("gesture_song_swipe_right")
+            val GESTURE_SONG_LEFT = booleanPreferencesKey("gesture_song_swipe_left")
+            val GESTURE_TABS = booleanPreferencesKey("gesture_tab_swipe")
+            val GESTURE_NP_DOWN = booleanPreferencesKey("gesture_now_playing_down")
+            val GESTURE_NP_UP = booleanPreferencesKey("gesture_now_playing_up")
             val LYRICS_PRONOUNCE = booleanPreferencesKey("lyrics_pronounce")
             val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
@@ -365,6 +370,28 @@ class AppPreferences
             dataStore.edit {
                 it[Keys.HOME_LANGUAGES] = names
                 it[Keys.HOME_LANGUAGES_ASKED] = true
+            }
+        }
+
+        /** Settings → Gestures (all on unless turned off). */
+        val gestures: Flow<com.clibeats.domain.model.GestureSettings> =
+            dataStore.data.map {
+                com.clibeats.domain.model.GestureSettings(
+                    songSwipeRight = it[Keys.GESTURE_SONG_RIGHT] ?: true,
+                    songSwipeLeft = it[Keys.GESTURE_SONG_LEFT] ?: true,
+                    tabSwipe = it[Keys.GESTURE_TABS] ?: true,
+                    nowPlayingSwipeDown = it[Keys.GESTURE_NP_DOWN] ?: true,
+                    nowPlayingSwipeUp = it[Keys.GESTURE_NP_UP] ?: true,
+                )
+            }
+
+        suspend fun setGestures(gestures: com.clibeats.domain.model.GestureSettings) {
+            dataStore.edit {
+                it[Keys.GESTURE_SONG_RIGHT] = gestures.songSwipeRight
+                it[Keys.GESTURE_SONG_LEFT] = gestures.songSwipeLeft
+                it[Keys.GESTURE_TABS] = gestures.tabSwipe
+                it[Keys.GESTURE_NP_DOWN] = gestures.nowPlayingSwipeDown
+                it[Keys.GESTURE_NP_UP] = gestures.nowPlayingSwipeUp
             }
         }
 

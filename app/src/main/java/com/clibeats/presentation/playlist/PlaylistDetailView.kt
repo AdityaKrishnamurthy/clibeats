@@ -39,12 +39,15 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.ViewList
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material.icons.outlined.ViewHeadline
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -156,7 +159,11 @@ fun PlaylistDetailView(
     // After a sort the list starts again from the top (it used to stay on the row that was visible).
     var sortCount by remember(title) { mutableIntStateOf(0) }
     val fixedListState = rememberLazyListState()
+    var lastSort by remember(title) { mutableStateOf<SongSort?>(null) }
+    val context = LocalContext.current
+    var rowView by remember { mutableStateOf(SongRowView.load(context)) }
     val onSort: (SongSort) -> Unit = { sort ->
+        lastSort = sort
         sortCount++
         if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
     }
@@ -235,6 +242,14 @@ fun PlaylistDetailView(
                 onBackClick = onBackClick,
                 onChangeCoverClick = onChangeCoverClick,
                 onSort = if (tracks.size > 1) onSort else null,
+                currentSort = lastSort,
+                rowView = rowView,
+                onCycleView =
+                    if (tracks.isNotEmpty()) {
+                        { rowView = rowView.next().also { it.save(context) } }
+                    } else {
+                        null
+                    },
             )
         }
         // Songs still waiting to download (Downloaded) can't play yet, so PLAY / SHUFFLE leave them out.
@@ -278,7 +293,7 @@ fun PlaylistDetailView(
         @Composable
         fun SongRow(
             track: Track,
-            art: @Composable () -> Unit,
+            art: (@Composable () -> Unit)?,
             onClick: () -> Unit,
             actions: (@Composable () -> Unit)?,
         ) = SongTableRow(
@@ -287,7 +302,7 @@ fun PlaylistDetailView(
             duration = formatDuration(track.durationMs),
             isNowPlaying = track.id == playingTrackId,
             isDownloaded = track.id in downloadedIds,
-            artworkContent = art,
+            artworkContent = art.takeIf { rowView.artSize > 0 },
             onClick = if (selecting) ({ toggle(track) }) else onClick,
             onSwipeRight = if (selecting) null else ({ onSwipeRight(track) }),
             onSwipeLeft = if (selecting) null else ({ onSwipeLeft(track) }),
@@ -325,7 +340,7 @@ fun PlaylistDetailView(
                         art = {
                             TrackArtwork(
                                 artworkUrl = track.artworkUrl,
-                                size = 32,
+                                size = rowView.artSize,
                                 modifier =
                                     if (selecting) Modifier else Modifier.artworkHandle { play(track) },
                             )
@@ -343,7 +358,7 @@ fun PlaylistDetailView(
                     itemsIndexed(items = filtered, key = { index, track -> "${track.id}_$index" }) { _, track ->
                         SongRow(
                             track = track,
-                            art = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                            art = { TrackArtwork(artworkUrl = track.artworkUrl, size = rowView.artSize) },
                             onClick = { play(track) },
                             actions = null,
                         )
@@ -413,6 +428,9 @@ private fun DetailHeader(
     onBackClick: () -> Unit,
     onChangeCoverClick: (() -> Unit)?,
     onSort: ((SongSort) -> Unit)?,
+    currentSort: SongSort? = null,
+    rowView: SongRowView = SongRowView.LIST,
+    onCycleView: (() -> Unit)? = null,
 ) {
     val accent = LocalAccentColor.current
     Row(
@@ -464,7 +482,17 @@ private fun DetailHeader(
             )
             Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
         }
-        onSort?.let { SortButton(onSort = it) }
+        onCycleView?.let { cycle ->
+            // One icon: each tap switches to the next row style (compact → list → large); remembered.
+            IconButton(onClick = cycle) {
+                Icon(
+                    imageVector = rowView.icon,
+                    contentDescription = "Row style: ${rowView.label}. Tap for ${rowView.next().label}",
+                    tint = accent,
+                )
+            }
+        }
+        onSort?.let { SortButton(current = currentSort, onSort = it) }
         if (onChangeCoverClick != null) {
             IconButton(onClick = onChangeCoverClick) {
                 Icon(
@@ -574,4 +602,33 @@ private fun BarAction(
                 .clickable(onClick = onClick)
                 .padding(horizontal = 6.dp, vertical = 10.dp),
     )
+}
+
+/** How songs show inside a playlist: no covers, small covers, or big covers. Remembered across playlists. */
+@Suppress("MagicNumber")
+internal enum class SongRowView(
+    val label: String,
+    val artSize: Int,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    COMPACT("compact", 0, Icons.Outlined.ViewHeadline),
+    LIST("list", 32, Icons.AutoMirrored.Outlined.ViewList),
+    LARGE("large", 52, Icons.Outlined.ViewAgenda),
+    ;
+
+    fun next(): SongRowView = entries[(ordinal + 1) % entries.size]
+
+    fun save(context: android.content.Context) {
+        prefs(context).edit().putString(KEY, name).apply()
+    }
+
+    companion object {
+        private const val KEY = "playlist_song_row_view"
+
+        private fun prefs(context: android.content.Context) =
+            context.getSharedPreferences("clibeats_ui", android.content.Context.MODE_PRIVATE)
+
+        fun load(context: android.content.Context): SongRowView =
+            prefs(context).getString(KEY, null)?.let { saved -> entries.firstOrNull { it.name == saved } } ?: LIST
+    }
 }

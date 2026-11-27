@@ -58,6 +58,8 @@ title or artist (A–Z or Z–A).
 - **Swipe right** — add to queue.
 - **Swipe left** — add to ♥ Favorites.
 - **Hold** — menu: Play next, Add to queue, Add to playlist, Add to favorites.
+- Each swipe (and tab swiping, and Now Playing's swipe down / up) can be turned off in **Settings → Gestures**;
+  **[ RESET TO DEFAULTS ]** turns them all back on.
 
 ## Player
 

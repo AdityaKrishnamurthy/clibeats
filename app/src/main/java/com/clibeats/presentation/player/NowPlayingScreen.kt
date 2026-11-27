@@ -179,32 +179,37 @@ fun NowPlayingScreen(
     val dragOffset = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     val dismissPx = with(LocalDensity.current) { DISMISS_DRAG_DP.dp.toPx() }
+    val gestureSettings = com.clibeats.presentation.component.LocalGestureSettings.current
     val dragToDismiss =
-        Modifier.pointerInput(Unit) {
-            val tracker = VelocityTracker()
-            var total = 0f
-            detectVerticalDragGestures(
-                onDragStart = {
-                    tracker.resetTracking()
-                    total = 0f
-                },
-                onDragEnd = {
-                    val velocity = tracker.calculateVelocity().y
-                    if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
-                        onClose()
-                    } else {
-                        scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
-                    }
-                },
-                onDragCancel = { scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) } },
-                onVerticalDrag = { change, dy ->
-                    change.consume()
-                    total += dy
-                    // Track our own cumulative offset: local positions shift as the screen translates.
-                    tracker.addPosition(change.uptimeMillis, Offset(0f, total))
-                    scope.launch { dragOffset.snapTo((dragOffset.value + dy).coerceAtLeast(0f)) }
-                },
-            )
+        if (!gestureSettings.nowPlayingSwipeDown) {
+            Modifier
+        } else {
+            Modifier.pointerInput(gestureSettings) {
+                val tracker = VelocityTracker()
+                var total = 0f
+                detectVerticalDragGestures(
+                    onDragStart = {
+                        tracker.resetTracking()
+                        total = 0f
+                    },
+                    onDragEnd = {
+                        val velocity = tracker.calculateVelocity().y
+                        if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
+                            onClose()
+                        } else {
+                            scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
+                        }
+                    },
+                    onDragCancel = { scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) } },
+                    onVerticalDrag = { change, dy ->
+                        change.consume()
+                        total += dy
+                        // Track our own cumulative offset: local positions shift as the screen translates.
+                        tracker.addPosition(change.uptimeMillis, Offset(0f, total))
+                        scope.launch { dragOffset.snapTo((dragOffset.value + dy).coerceAtLeast(0f)) }
+                    },
+                )
+            }
         }
     val closeAction =
         Modifier.semantics {
@@ -256,7 +261,7 @@ fun NowPlayingScreen(
     // - down closes the player, as before.
     // It lives on parts of the screen that stay put while the header changes, so a drag is never cut off.
     val swipe =
-        Modifier.pointerInput(Unit) {
+        Modifier.pointerInput(gestureSettings) {
             val tracker = VelocityTracker()
             var total = 0f
             var toggling: Boolean? = null
@@ -274,17 +279,23 @@ fun NowPlayingScreen(
                     swiping = false
                     val velocity = tracker.calculateVelocity().y
                     when (toggling) {
-                        true -> {
-                            val moved = if (startedOpen) 1f - lyricsProgress else lyricsProgress
-                            val switch =
-                                velocity < -LYRICS_FLING_PX_S || (moved > COMPACT_AT && velocity <= LYRICS_FLING_PX_S)
-                            // Up moves the progress toward the other side: up from the cover raises it, up from
-                            // the lyrics lowers it.
-                            val progressVelocity = -velocity / lyricsDragPx * (if (startedOpen) -1f else 1f)
-                            settleLyrics(if (switch) !startedOpen else startedOpen, progressVelocity)
-                        }
+                        true ->
+                            if (!gestureSettings.nowPlayingSwipeUp) {
+                                settleLyrics(lyricsOpen)
+                            } else {
+                                val moved = if (startedOpen) 1f - lyricsProgress else lyricsProgress
+                                val switch =
+                                    velocity < -LYRICS_FLING_PX_S ||
+                                        (moved > COMPACT_AT && velocity <= LYRICS_FLING_PX_S)
+                                // Up moves the progress toward the other side: up from the cover raises it, up from
+                                // the lyrics lowers it.
+                                val progressVelocity = -velocity / lyricsDragPx * (if (startedOpen) -1f else 1f)
+                                settleLyrics(if (switch) !startedOpen else startedOpen, progressVelocity)
+                            }
                         false ->
-                            if (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S) {
+                            if (gestureSettings.nowPlayingSwipeDown &&
+                                (dragOffset.value > dismissPx || velocity > DISMISS_VELOCITY_PX_S)
+                            ) {
                                 onClose()
                             } else {
                                 scope.launch { dragOffset.animateTo(0f, tween(SNAP_BACK_MS)) }
@@ -302,7 +313,12 @@ fun NowPlayingScreen(
                     total += dy
                     tracker.addPosition(change.uptimeMillis, Offset(0f, total))
                     if (toggling == null) toggling = dy < 0
-                    if (toggling == true) {
+                    // Turned off in Settings → Gestures: that direction does nothing.
+                    val allowed =
+                        if (toggling == true) gestureSettings.nowPlayingSwipeUp else gestureSettings.nowPlayingSwipeDown
+                    if (!allowed) {
+                        total = 0f
+                    } else if (toggling == true) {
                         // How far up the finger has gone, as a share of the full switch.
                         val moved = (-total / lyricsDragPx).coerceIn(0f, 1f)
                         lyricsProgress = if (startedOpen) 1f - moved else moved

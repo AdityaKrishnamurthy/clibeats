@@ -205,7 +205,12 @@ private fun AppContent() {
         swipeLockedPages = if (locked) swipeLockedPages + page else swipeLockedPages - page
     }
 
-    CompositionLocalProvider(LocalAppNavigator provides { next -> router.navigate(next) }) {
+    val gesturesViewModel: com.clibeats.presentation.settings.GesturesViewModel = hiltViewModel()
+    val gestures by gesturesViewModel.gestures.collectAsStateWithLifecycle()
+    CompositionLocalProvider(
+        LocalAppNavigator provides { next -> router.navigate(next) },
+        com.clibeats.presentation.component.LocalGestureSettings provides gestures,
+    ) {
         MainLayout(
             activeTab = router.activeTab,
             onTabSelected = onTabSelected,
@@ -218,7 +223,7 @@ private fun AppContent() {
                     state = pagerState,
                     key = { tabs[it].route.key },
                     modifier = Modifier.fillMaxSize(),
-                    userScrollEnabled = pagerState.currentPage !in swipeLockedPages,
+                    userScrollEnabled = gestures.tabSwipe && pagerState.currentPage !in swipeLockedPages,
                 ) { page ->
                     val tab = tabs[page]
                     val tabRoute = router.topRoute(tab)

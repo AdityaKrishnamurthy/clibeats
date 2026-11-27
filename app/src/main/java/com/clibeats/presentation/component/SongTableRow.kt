@@ -99,7 +99,11 @@ fun SongTableRow(
         else -> CliBeatsBackground
     }
 
-    // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back).
+    // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back). Either can
+    // be turned off in Settings → Gestures.
+    val gestureSettings = LocalGestureSettings.current
+    val onSwipeRight = onSwipeRight.takeIf { gestureSettings.songSwipeRight }
+    val onSwipeLeft = onSwipeLeft.takeIf { gestureSettings.songSwipeLeft }
     var dragX by remember { mutableFloatStateOf(0f) }
     val swipeModifier =
         if (onSwipeRight == null && onSwipeLeft == null) {

@@ -16,9 +16,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,10 +32,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -47,6 +46,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,7 +61,6 @@ import com.clibeats.presentation.importer.ImportScreen
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsSurface
-import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import java.text.Collator
 
@@ -501,11 +500,12 @@ private enum class ClearTarget { FAVORITES, MOST_PLAYED, DOWNLOADED }
 /** Orders offered by the sort button in a playlist. */
 internal enum class SongSort(
     val label: String,
+    val shortLabel: String,
 ) {
-    TITLE_ASC("Title A → Z"),
-    TITLE_DESC("Title Z → A"),
-    ARTIST_ASC("Artist A → Z"),
-    ARTIST_DESC("Artist Z → A"),
+    TITLE_ASC("Title A → Z", "TITLE A→Z"),
+    TITLE_DESC("Title Z → A", "TITLE Z→A"),
+    ARTIST_ASC("Artist A → Z", "ARTIST A→Z"),
+    ARTIST_DESC("Artist Z → A", "ARTIST Z→A"),
 }
 
 /**
@@ -528,26 +528,31 @@ internal fun sortSongs(
 }
 
 @Composable
-internal fun SortButton(onSort: (SongSort) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(
-                imageVector = Icons.AutoMirrored.Outlined.Sort,
-                contentDescription = "Sort songs",
-                tint = CliBeatsAccent,
+internal fun SortButton(
+    current: SongSort?,
+    onSort: (SongSort) -> Unit,
+) {
+    // One tap sorts; each further tap goes to the next order (Title A→Z, Z→A, Artist A→Z, Z→A, …).
+    val next = SongSort.entries[((current?.ordinal ?: -1) + 1) % SongSort.entries.size]
+    Row(
+        modifier =
+            Modifier
+                .clickable(role = Role.Button, onClickLabel = "Sort by ${next.label}") { onSort(next) }
+                .padding(horizontal = 6.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = Icons.AutoMirrored.Outlined.Sort,
+            contentDescription = "Sort songs" + (current?.let { ", now ${it.label}" } ?: ""),
+            tint = CliBeatsAccent,
+        )
+        if (current != null) {
+            Text(
+                text = current.shortLabel,
+                style = MaterialTheme.typography.labelSmall,
+                color = CliBeatsAccent,
+                modifier = Modifier.padding(start = 4.dp),
             )
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }, containerColor = CliBeatsSurface) {
-            SongSort.entries.forEach { sort ->
-                DropdownMenuItem(
-                    text = { Text(sort.label, color = CliBeatsTextPrimary) },
-                    onClick = {
-                        open = false
-                        onSort(sort)
-                    },
-                )
-            }
         }
     }
 }

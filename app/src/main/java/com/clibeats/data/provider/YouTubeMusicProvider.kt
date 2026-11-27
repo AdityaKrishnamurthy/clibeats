@@ -19,6 +19,7 @@ import com.clibeats.data.provider.dto.NextRequest
 import com.clibeats.data.provider.dto.PlayerRequest
 import com.clibeats.data.provider.dto.SearchRequest
 import com.clibeats.data.provider.mapper.AlbumHit
+import com.clibeats.data.provider.mapper.artistSongsPlaylistId
 import com.clibeats.data.provider.mapper.chartPlaylistBrowseId
 import com.clibeats.data.provider.mapper.pageArtist
 import com.clibeats.data.provider.mapper.pageCover
@@ -26,6 +27,7 @@ import com.clibeats.data.provider.mapper.pageTitle
 import com.clibeats.data.provider.mapper.playlistTracks
 import com.clibeats.data.provider.mapper.radioContinuation
 import com.clibeats.data.provider.mapper.toAlbumHits
+import com.clibeats.data.provider.mapper.toArtistHits
 import com.clibeats.data.provider.mapper.toPlaylistHits
 import com.clibeats.data.provider.mapper.toRadioTrackList
 import com.clibeats.data.provider.mapper.toTrack
@@ -102,6 +104,27 @@ class YouTubeMusicProvider
                         artworkUrl = it.artworkUrl ?: album.artworkUrl,
                     )
                 }
+            }.getOrNull()
+
+        /**
+         * Every song by [artistName] (YouTube Music's own "Songs" list for the artist, about 100, most played
+         * first), found through the artist's page; null when the artist or its list can't be found.
+         */
+        suspend fun artistSongs(
+            artistName: String,
+            channelId: String? = null,
+        ): List<Track>? =
+            runCatching {
+                val id =
+                    channelId?.takeIf { it.startsWith("UC") } ?: run {
+                        val hits = api.search(SearchRequest.forArtists(artistName)).toArtistHits()
+                        (hits.firstOrNull { it.second.equals(artistName, ignoreCase = true) } ?: hits.firstOrNull())
+                            ?.first
+                    } ?: return@runCatching null
+                val artistPage = api.browse(BrowseRequest.page(id))
+                val songsId = artistPage.artistSongsPlaylistId()
+                val songs = songsId?.let { page(it)?.second }.orEmpty()
+                songs.ifEmpty { artistPage.playlistTracks() }.ifEmpty { null }
             }.getOrNull()
 
         /** The song behind a shared link's video id; null when YouTube Music can't be reached. */

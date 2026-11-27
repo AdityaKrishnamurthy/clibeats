@@ -58,7 +58,7 @@ private const val CURSOR_BLINK_MS = 1_100
 private const val HALF_CYCLE = 0.5f
 private val blinkEasing = Easing { fraction -> if (fraction < HALF_CYCLE) 0f else 1f }
 
-@Suppress("FunctionNaming", "LongMethod")
+@Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod")
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
@@ -82,6 +82,7 @@ fun SettingsScreen(
     var confirmClearDownloads by remember { mutableStateOf(false) }
     var confirmClearArtwork by remember { mutableStateOf(false) }
     var confirmClearSongs by remember { mutableStateOf(false) }
+    var confirmClearLyrics by remember { mutableStateOf(false) }
     var showManageDownloads by remember { mutableStateOf(false) }
 
     val accent = LocalAccentColor.current
@@ -126,6 +127,17 @@ fun SettingsScreen(
             confirmLabel = "Delete all",
             onConfirm = viewModel::clearAllDownloads,
             onDismiss = { confirmClearDownloads = false },
+        )
+    }
+    if (confirmClearLyrics) {
+        CliConfirmDialog(
+            command = "rm -r cache/lyrics",
+            message =
+                "Delete saved lyrics for $lyricsCount songs (${formatSize(lyricsBytes)})? Downloaded songs keep " +
+                    "theirs; the rest are looked up again when you open them.",
+            confirmLabel = "Clear",
+            onConfirm = viewModel::clearLyrics,
+            onDismiss = { confirmClearLyrics = false },
         )
     }
     if (confirmClearArtwork) {
@@ -236,7 +248,7 @@ fun SettingsScreen(
                     songs = lyricsCount,
                     bytes = lyricsBytes,
                     limit = viewModel.lyricsLimit,
-                    onClear = viewModel::clearLyrics,
+                    onClear = { confirmClearLyrics = true },
                 ),
         )
         TuiBlock(title = "Audio Quality", isActive = true) {
@@ -267,6 +279,7 @@ fun SettingsScreen(
                 )
             }
         }
+        GesturesSettingsBlock()
         BackupSettingsBlock(
             mirrorBackupsToDownloads = uiState.mirrorBackupsToDownloads,
             exchangeMessage = exchangeMessage,

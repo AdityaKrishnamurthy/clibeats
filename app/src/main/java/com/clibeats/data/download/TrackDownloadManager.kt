@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -92,6 +93,10 @@ class TrackDownloadManager
             scope.launch {
                 delay(LEFTOVER_CLEANUP_DELAY_MS)
                 store.removeLeftovers()
+                // Downloaded songs without saved lyrics (older downloads) get them now, while online.
+                onlineLyrics?.let { lyrics ->
+                    runCatching { lyrics.get().backfill(store.getDownloadedSongs().first()) }
+                }
             }
         }
 
@@ -179,6 +184,7 @@ class TrackDownloadManager
             try {
                 store.existingDownload(track.id)?.let { existing ->
                     updateStatus(track.id, DownloadStatus.Completed(existing))
+                    onlineLyrics?.let { lyrics -> scope.launch { lyrics.get().prefetch(track) } }
                     return true
                 }
 

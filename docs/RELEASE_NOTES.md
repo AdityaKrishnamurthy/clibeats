@@ -1,3 +1,29 @@
+# CLIBeats v2.8.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.1.apk` (verify with `SHA256SUMS.txt`)
+
+## New
+
+- **Gesture settings.** Settings → Gestures turns each swipe on or off: swipe a song right (queue) or left
+  (♥ Favorites), swipe between tabs, and in Now Playing swipe down (close) or up (cover ↔ lyrics).
+  **[ RESET TO DEFAULTS ]** turns them all back on.
+- **Row styles inside playlists.** A new icon next to sort switches the songs between compact (no covers), list and
+  large covers with each tap; your choice is remembered for every playlist.
+- **One-tap sort.** The sort button sorts straight away; each further tap moves to the next order (Title A→Z, Z→A,
+  Artist A→Z, Z→A), and the current order shows beside it.
+
+## Fixes
+
+- **Lyrics for downloaded songs offline.** Songs downloaded before lyrics were saved with downloads now fetch theirs
+  in the background soon after the app starts, so they show offline too.
+- **Song lengths in Recently played.** Songs started from a Home card no longer show "–"; the length is saved as
+  soon as the song plays.
+- **View artist shows all their songs.** The artist page now loads the artist's full song list from YouTube Music
+  (for example Ado's "ビンクスの酒 - Binks' Sake"), not just the top search results.
+- **Clearing lyrics asks first.** Settings → Storage and Cache → Lyrics → [ CLEAR ] now asks for confirmation.
+
+---
+
 # CLIBeats v2.8.0 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.0.apk` (verify with `SHA256SUMS.txt`)
