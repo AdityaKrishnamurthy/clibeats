@@ -63,4 +63,12 @@ class BackupContentsTest {
         val offer = downloadsToOffer(listOf(track("a"), track("b"), track("a"), local), have = setOf("youtube_music:b"))
         assertThat(offer.map { it.id }).containsExactly("youtube_music:a")
     }
+
+    @Test
+    fun `history keeps the newest plays and one play of every older song`() {
+        val plays = listOf("a" to 50L, "b" to 40L, "a" to 30L, "c" to 20L, "b" to 10L, "c" to 5L, "d" to 1L)
+        val kept = historyToKeep(plays, max = 2)
+        assertThat(kept).containsExactly("a" to 50L, "b" to 40L, "c" to 20L, "d" to 1L).inOrder()
+        assertThat(historyToKeep(plays, max = 100)).isEqualTo(plays)
+    }
 }
