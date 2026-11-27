@@ -1,3 +1,16 @@
+# CLIBeats v2.8.2 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.2.apk` (verify with `SHA256SUMS.txt`)
+
+## Playlist import
+
+- **Seek while checking a match.** In the Find sheet for a song that wasn't matched, the song you're previewing
+  gets a small seek bar right under it, so you can jump to any part to check it's the right version.
+- **Choose, then mark as found.** [ + ] now only chooses a result (✓); you can switch to another version of the
+  song at any time. The song is saved as found only when you tap **Mark as found**.
+
+---
+
 # CLIBeats v2.8.1 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.1.apk` (verify with `SHA256SUMS.txt`)

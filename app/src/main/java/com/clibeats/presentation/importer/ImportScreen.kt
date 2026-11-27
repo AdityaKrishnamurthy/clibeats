@@ -94,13 +94,23 @@ private fun ImportDialogs(
         )
     }
     manual?.let { pick ->
+        val loadedId by viewModel.loadedId.collectAsStateWithLifecycle()
+        val durationMs by viewModel.durationMs.collectAsStateWithLifecycle()
         FindMatchSheet(
             playingId = playingId,
             onPreview = viewModel::preview,
             pick = pick,
             onSearch = viewModel::search,
-            onPick = viewModel::pick,
+            onPick = viewModel::choose,
             onDismiss = viewModel::closeManual,
+            seek =
+                PreviewSeek(
+                    loadedId = loadedId,
+                    durationMs = durationMs,
+                    position = viewModel::livePositionMs,
+                    onSeek = viewModel::seekTo,
+                ),
+            onConfirm = viewModel::confirmPick,
         )
     }
 }

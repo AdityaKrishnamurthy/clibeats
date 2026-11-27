@@ -48,6 +48,8 @@ data class ManualPick(
     val query: String,
     val searching: Boolean = true,
     val results: List<Track> = emptyList(),
+    /** The result tapped with [ + ]: chosen, but only saved once "Mark as found" is tapped. */
+    val chosen: Track? = null,
 )
 
 @Suppress("TooManyFunctions") // one small handler per screen action
@@ -162,11 +164,35 @@ class ImportViewModel
             if (playingId.value == track.id) playback.pause() else playback.playTrack(track)
         }
 
-        fun pick(track: Track) {
+        /** [ + ] on a result: chooses it (tapped again, un-chooses it). Nothing is saved yet. */
+        fun choose(track: Track) {
+            _manual.update { it?.copy(chosen = if (it.chosen?.id == track.id) null else track) }
+        }
+
+        /** "Mark as found": saves the chosen result as this song's match. */
+        fun confirmPick() {
             val pick = _manual.value ?: return
+            val track = pick.chosen ?: return
             _manual.value = null
             viewModelScope.launch { importer.resolveManually(pick.playlistIndex, pick.songIndex, track) }
         }
+
+        /** The song loaded in the player (playing or paused): its result in the Find sheet gets a seek bar. */
+        val loadedId: StateFlow<String?> =
+            playback.playbackState
+                .map { it.currentTrack?.id }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), null)
+
+        /** The preview's length (for its seek bar). */
+        val durationMs: StateFlow<Long> =
+            playback.playbackState
+                .map { it.durationMs }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), 0L)
+
+        /** The preview's exact position now (read every frame by the seek bar). */
+        fun livePositionMs(): Long = playback.livePositionMs()
+
+        fun seekTo(positionMs: Long) = playback.seekTo(positionMs)
 
         fun closeManual() {
             _manual.value = null

@@ -5,6 +5,7 @@ package com.clibeats.presentation.importer
 import android.content.Context
 import android.os.Build
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,16 +31,22 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -210,7 +217,7 @@ private fun copyText(
     }
 }
 
-@Suppress("LongParameterList", "LongMethod")
+@Suppress("LongParameterList", "LongMethod", "CyclomaticComplexMethod")
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FindMatchSheet(
@@ -220,6 +227,8 @@ internal fun FindMatchSheet(
     onSearch: (String) -> Unit,
     onPick: (Track) -> Unit,
     onDismiss: () -> Unit,
+    seek: PreviewSeek? = null,
+    onConfirm: () -> Unit = {},
 ) {
     var query by rememberSaveable(pick.songIndex, pick.playlistIndex) { mutableStateOf(pick.query) }
     val keyboard = LocalSoftwareKeyboardController.current
@@ -237,7 +246,7 @@ internal fun FindMatchSheet(
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
             Text(
-                text = "Tap a song to play it, then [ + ] to add it.",
+                text = "Tap a song to play it, [ + ] to choose it, then Mark as found.",
                 style = MaterialTheme.typography.bodySmall,
                 color = CliBeatsTextSecondary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -278,56 +287,140 @@ internal fun FindMatchSheet(
                     LazyColumn(modifier = Modifier.fillMaxWidth().height(420.dp)) {
                         items(pick.results, key = { it.id }) { track ->
                             val playing = track.id == playingId
-                            Row(
+                            val chosen = pick.chosen?.id == track.id
+                            Column(
                                 modifier =
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .clickable(
-                                            role = Role.Button,
-                                            onClickLabel = if (playing) "Pause" else "Play ${track.title}",
-                                        ) { onPreview(track) }
-                                        .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+                                    Modifier.background(
+                                        if (chosen) CliBeatsAccent.copy(alpha = CHOSEN_ALPHA) else Color.Transparent,
+                                    ),
                             ) {
-                                TrackArtwork(artworkUrl = track.artworkUrl, size = 44)
-                                Spacer(Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (playing) "▶ ${track.title}" else track.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (playing) CliBeatsAccent else CliBeatsTextPrimary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                    Text(
-                                        text = track.artist,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = CliBeatsTextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
-                                }
-                                if (track.durationMs > 0) {
-                                    Text(
-                                        text = formatDuration(track.durationMs),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = CliBeatsTextSecondary,
-                                    )
-                                }
-                                Text(
-                                    text = "[ + ]",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = CliBeatsAccent,
+                                Row(
                                     modifier =
                                         Modifier
-                                            .clickable(role = Role.Button, onClickLabel = "Add ${track.title}") {
-                                                onPick(track)
-                                            }.padding(horizontal = 12.dp, vertical = 10.dp),
-                                )
+                                            .fillMaxWidth()
+                                            .clickable(
+                                                role = Role.Button,
+                                                onClickLabel = if (playing) "Pause" else "Play ${track.title}",
+                                            ) { onPreview(track) }
+                                            .padding(start = 16.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    TrackArtwork(artworkUrl = track.artworkUrl, size = 44)
+                                    Spacer(Modifier.width(12.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = if (playing) "▶ ${track.title}" else track.title,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = if (playing) CliBeatsAccent else CliBeatsTextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = track.artist,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = CliBeatsTextSecondary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    if (track.durationMs > 0) {
+                                        Text(
+                                            text = formatDuration(track.durationMs),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = CliBeatsTextSecondary,
+                                        )
+                                    }
+                                    Text(
+                                        text = if (chosen) "[ ✓ ]" else "[ + ]",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = CliBeatsAccent,
+                                        modifier =
+                                            Modifier
+                                                .clickable(
+                                                    role = Role.Button,
+                                                    onClickLabel = if (chosen) "Unchoose" else "Choose ${track.title}",
+                                                ) {
+                                                    onPick(track)
+                                                }.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    )
+                                }
+                                // The song being previewed: a seek bar right under it.
+                                if (seek != null && track.id == seek.loadedId && seek.durationMs > 0) {
+                                    PreviewSeekBar(seek = seek, playing = playing)
+                                }
                             }
                         }
                     }
             }
+            Box(modifier = Modifier.padding(16.dp)) {
+                CliButton(
+                    text = pick.chosen?.let { "Mark as found: ${it.title}" } ?: "Choose a song with [ + ]",
+                    primary = pick.chosen != null,
+                    onClick = { if (pick.chosen != null) onConfirm() },
+                )
+            }
         }
     }
 }
+
+/** The Find sheet's preview: which song is loaded, its length, its live position, and seeking. */
+internal class PreviewSeek(
+    val loadedId: String?,
+    val durationMs: Long,
+    val position: () -> Long,
+    val onSeek: (Long) -> Unit,
+)
+
+/** A slim seek bar under the previewed result: follows the song smoothly; drag or tap to jump. */
+@Composable
+private fun PreviewSeekBar(
+    seek: PreviewSeek,
+    playing: Boolean,
+) {
+    var position by remember { mutableLongStateOf(seek.position()) }
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    LaunchedEffect(playing, seek.loadedId) {
+        position = seek.position()
+        while (playing) {
+            withFrameNanos { if (dragging == null) position = seek.position() }
+        }
+    }
+    val duration = seek.durationMs.coerceAtLeast(1L)
+    val fraction = dragging ?: (position.toFloat() / duration).coerceIn(0f, 1f)
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = formatDuration((fraction * duration).toLong()),
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
+        Slider(
+            value = fraction,
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let {
+                    val target = (it * duration).toLong()
+                    seek.onSeek(target)
+                    position = target
+                }
+                dragging = null
+            },
+            colors =
+                SliderDefaults.colors(
+                    thumbColor = CliBeatsAccent,
+                    activeTrackColor = CliBeatsAccent,
+                    inactiveTrackColor = CliBeatsDivider,
+                ),
+            modifier = Modifier.weight(1f).height(28.dp).padding(horizontal = 8.dp),
+        )
+        Text(
+            text = formatDuration(seek.durationMs),
+            style = MaterialTheme.typography.labelSmall,
+            color = CliBeatsTextSecondary,
+        )
+    }
+}
+
+private const val CHOSEN_ALPHA = 0.14f
