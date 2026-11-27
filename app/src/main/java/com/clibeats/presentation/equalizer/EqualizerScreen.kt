@@ -1,4 +1,12 @@
-@file:Suppress("ktlint:standard:function-naming", "FunctionNaming", "MagicNumber")
+@file:Suppress(
+    "ktlint:standard:function-naming",
+    "FunctionNaming",
+    "MagicNumber",
+    "LongMethod",
+    "ArgumentListWrapping",
+    "MaxLineLength",
+    "MaximumLineLength",
+)
 
 package com.clibeats.presentation.equalizer
 

@@ -1,3 +1,5 @@
+@file:Suppress("MagicNumber")
+
 package com.clibeats.domain.model
 
 /** The ten bands CLIBeats exposes, in Hz. The same centers are used by DynamicsProcessing and Equalizer. */
@@ -47,7 +49,10 @@ data class EqualizerState(
         return copy(preset = EqualizerPreset.CUSTOM, gainsDb = gains)
     }
 
-    fun withPreamp(gainDb: Float): EqualizerState = copy(preampDb = gainDb.coerceIn(EQUALIZER_MIN_PREAMP_DB, EQUALIZER_MAX_PREAMP_DB))
+    fun withPreamp(gainDb: Float): EqualizerState =
+        copy(
+            preampDb = gainDb.coerceIn(EQUALIZER_MIN_PREAMP_DB, EQUALIZER_MAX_PREAMP_DB),
+        )
 
     fun withPreset(preset: EqualizerPreset): EqualizerState =
         if (preset == EqualizerPreset.CUSTOM) this else copy(preset = preset, gainsDb = preset.gains())

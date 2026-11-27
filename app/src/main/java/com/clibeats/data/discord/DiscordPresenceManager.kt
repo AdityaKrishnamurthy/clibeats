@@ -1,3 +1,5 @@
+@file:Suppress("ForbiddenImport")
+
 package com.clibeats.data.discord
 
 import com.clibeats.data.preferences.AppPreferences

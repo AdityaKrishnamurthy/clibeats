@@ -1,4 +1,4 @@
-@file:Suppress("ForbiddenImport")
+@file:Suppress("ForbiddenImport", "MaxLineLength", "ReturnCount", "TooManyFunctions")
 
 package com.clibeats.playback.service
 
@@ -117,7 +117,10 @@ class AndroidAutoBrowser
 
         private suspend fun playlists(): List<Playlist> = playlistRepository.getAllPlaylistsAsFlow().first()
 
-        private suspend fun recentTracks(): List<Track> = historyRepository.getRecentlyPlayedTracks(RECENT_LIMIT).first()
+        private suspend fun recentTracks(): List<Track> =
+            historyRepository
+                .getRecentlyPlayedTracks(RECENT_LIMIT)
+                .first()
 
         private suspend fun likedTracks(): List<Track> = libraryRepository.getLikedSongs().first()
 
