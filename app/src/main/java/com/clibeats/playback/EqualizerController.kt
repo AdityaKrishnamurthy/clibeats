@@ -8,6 +8,7 @@ import android.media.audiofx.AudioEffect
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.clibeats.data.preferences.AppPreferences
@@ -36,6 +37,7 @@ import kotlin.math.abs
  * hardware bands. Persistence lives in [AppPreferences]; this class only turns the state into audio
  * effects and exposes the system EQ panel intent.
  */
+@androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 @Singleton
 class EqualizerController
     @Inject
@@ -130,6 +132,7 @@ class EqualizerController
             }
         }
 
+        @RequiresApi(Build.VERSION_CODES.P)
         private fun attachDynamics(
             id: Int,
             state: EqualizerState,
