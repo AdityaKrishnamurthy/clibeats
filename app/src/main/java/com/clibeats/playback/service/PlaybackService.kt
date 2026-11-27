@@ -69,6 +69,9 @@ class PlaybackService : MediaLibraryService() {
 
     @Inject lateinit var androidAutoBrowser: AndroidAutoBrowser
 
+    /** Kept alive by the service so the effect follows the player's audio session. */
+    @Inject lateinit var equalizerController: com.clibeats.playback.EqualizerController
+
     /** Whether the playing song is in Favorites; drives the heart on the notification. */
     @Volatile private var currentLiked = false
 
