@@ -21,6 +21,11 @@ class EqualizerViewModel
 
         fun setPreset(preset: EqualizerPreset) = controller.setPreset(preset)
 
+        fun setBand(
+            index: Int,
+            gainDb: Float,
+        ) = controller.setBand(index, gainDb)
+
         fun stepBand(
             index: Int,
             deltaDb: Float,
