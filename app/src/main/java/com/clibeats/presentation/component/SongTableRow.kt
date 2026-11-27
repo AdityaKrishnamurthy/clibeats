@@ -84,6 +84,8 @@ fun SongTableRow(
     swipeRightLabel: String = "+ QUEUE",
     onLongPress: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
+    /** The right swipe isn't one of the song swipe actions (e.g. the Queue's remove), so ignore that setting. */
+    swipeRightAlwaysOn: Boolean = false,
     /** Selection mode: true/false draws `[x]`/`[ ]` in front of the row; null = not selecting. */
     selected: Boolean? = null,
     /** Greyed out, e.g. a song still waiting to download; it gets full colour when done. */
@@ -103,7 +105,7 @@ fun SongTableRow(
     // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back). Either can
     // be turned off in Settings → Gestures.
     val gestureSettings = LocalGestureSettings.current
-    val onSwipeRight = onSwipeRight.takeIf { gestureSettings.songSwipeRight != SwipeAction.OFF }
+    val onSwipeRight = onSwipeRight.takeIf { swipeRightAlwaysOn || gestureSettings.songSwipeRight != SwipeAction.OFF }
     val onSwipeLeft = onSwipeLeft.takeIf { gestureSettings.songSwipeLeft != SwipeAction.OFF }
     var dragX by remember { mutableFloatStateOf(0f) }
     val swipeModifier =

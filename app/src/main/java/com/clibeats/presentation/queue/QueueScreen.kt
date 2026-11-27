@@ -49,6 +49,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.clibeats.domain.model.Track
 import com.clibeats.presentation.component.CliConfirmDialog
+import com.clibeats.presentation.component.LocalGestureSettings
 import com.clibeats.presentation.component.ReorderableList
 import com.clibeats.presentation.component.SongTableRow
 import com.clibeats.presentation.component.TrackArtwork
@@ -367,7 +368,14 @@ private fun ReorderableUpcomingList(
                     )
                 },
                 onClick = { if (!isAnyDragging) viewModel.onTrackClick(track, queueIndex) },
-                onSwipeRight = { onRemove(queueIndex, track) },
+                // Remove has its own switch in Settings → Gestures (not the song swipe actions).
+                onSwipeRight =
+                    if (LocalGestureSettings.current.queueSwipeRemove) {
+                        { onRemove(queueIndex, track) }
+                    } else {
+                        null
+                    },
+                swipeRightAlwaysOn = true,
                 swipeRightLabel = "✕ REMOVE",
                 // Position counted from now (playing = 1), in front of the cover.
                 leading = {

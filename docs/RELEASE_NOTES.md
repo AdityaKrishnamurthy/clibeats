@@ -5,8 +5,8 @@
 ## New
 
 - **Gesture settings.** A new Gestures block in Settings (above Storage and Cache) lets you choose what swiping a
-  song right or left does — add to queue, play next, add to ♥ Favorites, or nothing — and turn off swiping between
-  tabs or Now Playing's swipe down (close) and up (cover ↔ lyrics). The ↺ icon at the top right of the block puts
+  song right or left does — add to queue, play next, add to ♥ Favorites, or nothing — and turn off the Queue's
+  swipe-right-to-remove, swiping between tabs or Now Playing's swipe down (close) and up (cover ↔ lyrics). The ↺ icon at the top right of the block puts
   everything back to the defaults.
 - **Playlist views.** An icon next to sort switches the songs between details, bigger details, grid and bigger
   grid with each tap; your choice is remembered for every playlist.

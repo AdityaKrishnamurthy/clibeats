@@ -16,6 +16,8 @@ data class GestureSettings(
     val songSwipeRight: SwipeAction = SwipeAction.QUEUE,
     /** Swiping a song to the left. */
     val songSwipeLeft: SwipeAction = SwipeAction.FAVORITE,
+    /** Swipe a song in the Queue to the right to remove it. */
+    val queueSwipeRemove: Boolean = true,
     /** Swipe left / right to move between the bottom tabs. */
     val tabSwipe: Boolean = true,
     /** Swipe down on Now Playing to close it. */

@@ -53,6 +53,7 @@ class AppPreferences
             val GESTURE_SONG_RIGHT = stringPreferencesKey("gesture_song_right_action")
             val GESTURE_SONG_LEFT = stringPreferencesKey("gesture_song_left_action")
             val GESTURE_TABS = booleanPreferencesKey("gesture_tab_swipe")
+            val GESTURE_QUEUE_REMOVE = booleanPreferencesKey("gesture_queue_swipe_remove")
             val GESTURE_NP_DOWN = booleanPreferencesKey("gesture_now_playing_down")
             val GESTURE_NP_UP = booleanPreferencesKey("gesture_now_playing_up")
             val LYRICS_PRONOUNCE = booleanPreferencesKey("lyrics_pronounce")
@@ -379,6 +380,7 @@ class AppPreferences
                 com.clibeats.domain.model.GestureSettings(
                     songSwipeRight = swipeAction(it[Keys.GESTURE_SONG_RIGHT], SwipeActionDefault.RIGHT),
                     songSwipeLeft = swipeAction(it[Keys.GESTURE_SONG_LEFT], SwipeActionDefault.LEFT),
+                    queueSwipeRemove = it[Keys.GESTURE_QUEUE_REMOVE] ?: true,
                     tabSwipe = it[Keys.GESTURE_TABS] ?: true,
                     nowPlayingSwipeDown = it[Keys.GESTURE_NP_DOWN] ?: true,
                     nowPlayingSwipeUp = it[Keys.GESTURE_NP_UP] ?: true,
@@ -389,6 +391,7 @@ class AppPreferences
             dataStore.edit {
                 it[Keys.GESTURE_SONG_RIGHT] = gestures.songSwipeRight.name
                 it[Keys.GESTURE_SONG_LEFT] = gestures.songSwipeLeft.name
+                it[Keys.GESTURE_QUEUE_REMOVE] = gestures.queueSwipeRemove
                 it[Keys.GESTURE_TABS] = gestures.tabSwipe
                 it[Keys.GESTURE_NP_DOWN] = gestures.nowPlayingSwipeDown
                 it[Keys.GESTURE_NP_UP] = gestures.nowPlayingSwipeUp

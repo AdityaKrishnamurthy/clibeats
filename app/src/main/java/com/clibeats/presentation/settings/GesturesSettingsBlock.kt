@@ -62,6 +62,9 @@ internal fun GesturesSettingsBlock(viewModel: GesturesViewModel = hiltViewModel(
             SwipeActionRow("← SWIPE SONG LEFT", gestures.songSwipeLeft) { action ->
                 viewModel.update { it.copy(songSwipeLeft = action) }
             }
+            GestureRow("QUEUE: SWIPE SONG RIGHT", "Remove the song from the queue", gestures.queueSwipeRemove) {
+                viewModel.update { it.copy(queueSwipeRemove = !it.queueSwipeRemove) }
+            }
             GestureRow("SWIPE BETWEEN TABS", "Swipe left / right to change tab", gestures.tabSwipe) {
                 viewModel.update { it.copy(tabSwipe = !it.tabSwipe) }
             }
