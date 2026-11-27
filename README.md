@@ -155,6 +155,12 @@ Stream online or play your own lossless library — no ads, no accounts, no trac
 - **In-app updates:** a pop-up when a new release is out (DOWNLOAD / LATER), checksum-verified download to
   Downloads with a progress bar above the player (`[VIEW]` / `[×]`), then INSTALL. Settings → Updates: auto-check
   daily / weekly / off and CHECK NOW.
+- **Android Auto / AAOS:** Recently Played, Playlists, Library and Queue roots over the existing media library
+  service, with voice search. Sideloaded builds need **Unknown sources** enabled in Android Auto's developer settings.
+- **10-band equalizer:** presets, pre-amp and a limiter on Android 9+ (`DynamicsProcessing`), with the platform
+  `Equalizer` on Android 8; **SYSTEM EQ** opens the phone's effects panel. Settings → Playback → EQUALIZER.
+- **Discord:** opt-in "Listening to CLIBeats" card preview; publishing is gated on Discord's official Social SDK
+  (see `docs/DISCORD_PRESENCE.md`) and never uses a user token.
 
 ### Storage & performance
 - **Two caches, each with its own limit and `[ CLEAR ]`:** artwork (64 MB–512 MB) and songs (256 MB–2 GB);

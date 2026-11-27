@@ -1,3 +1,29 @@
+# CLIBeats v2.9.0 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.9.0.apk` (verify with `SHA256SUMS.txt`)
+
+Android Auto, a 10-band equalizer, and a Discord presence preview.
+
+## Android Auto
+- Browse **Recently Played**, **Playlists** (Liked Songs + your playlists), **Library** (downloads and on-device
+  music) and **Queue** from the car screen; all four roots fit Android Auto's four-tab limit.
+- Selections start through the normal queue, and voice search covers the same library.
+- Android Auto requires **Unknown sources** for sideloaded apps (phone → Android Auto → Developer settings).
+
+## Equalizer
+- **10 bands** (31 Hz – 16 kHz), six presets, a pre-amp and a limiter so boosted bass does not clip.
+- Android 9+ uses `DynamicsProcessing`; Android 8 falls back to the platform `Equalizer`.
+- **SYSTEM EQ** opens the phone's audio-effects panel; standard session broadcasts let Wavelet/OEM EQ apps bind.
+- Reachable from Settings → Playback → **EQUALIZER**; everything is saved (and restored with backups).
+
+## Discord
+- Opt-in **Listening to CLIBeats** preview in Settings → Discord.
+- Publishing uses Discord's official Social SDK, which is a C++ prefab AAR downloaded from the Developer Portal and is
+  not bundled here; this build shows the preview and reports `[ SDK REQUIRED ]`. No user token or self-bot transport
+  is ever used. Setup: `docs/DISCORD_PRESENCE.md`.
+
+---
+
 # CLIBeats v2.8.6 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.6.apk` (verify with `SHA256SUMS.txt`)
