@@ -22,7 +22,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -31,8 +30,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,6 +40,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -61,7 +59,7 @@ enum class SettingsSection(
     UPDATES("Updates"),
 }
 
-internal val SettingsShape = RoundedCornerShape(16.dp)
+internal val SettingsShape = RoundedCornerShape(2.dp)
 
 /**
  * A panel of settings: the theme's surface colour (so Berry, Ocean, Grove... tint it) with a faint outline.
@@ -81,7 +79,7 @@ internal fun SettingsPanel(
                     .fillMaxWidth()
                     .clip(SettingsShape)
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), SettingsShape)
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, SettingsShape)
                     .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             content = content,
@@ -93,7 +91,7 @@ internal fun SettingsPanel(
 @Composable
 internal fun SettingsGroupLabel(text: String) {
     Text(
-        text = text.uppercase(),
+        text = "> " + text.uppercase(),
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(start = 6.dp, bottom = 6.dp, top = 4.dp).semantics { heading() },
@@ -114,7 +112,7 @@ internal fun SettingsGroup(
                     .fillMaxWidth()
                     .clip(SettingsShape)
                     .background(MaterialTheme.colorScheme.surface)
-                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f), SettingsShape),
+                    .border(1.dp, MaterialTheme.colorScheme.outlineVariant, SettingsShape),
         ) {
             rows.forEachIndexed { i, row ->
                 if (i > 0) {
@@ -134,7 +132,11 @@ internal fun SettingsGroup(
 private fun RowIcon(icon: ImageVector) {
     val accent = LocalAccentColor.current
     Box(
-        modifier = Modifier.size(36.dp).clip(CircleShape).background(accent.copy(alpha = 0.14f)),
+        modifier =
+            Modifier
+                .size(34.dp)
+                .background(accent.copy(alpha = 0.10f), SettingsShape)
+                .border(1.dp, accent.copy(alpha = 0.7f), SettingsShape),
         contentAlignment = Alignment.Center,
     ) {
         Icon(imageVector = icon, contentDescription = null, tint = accent, modifier = Modifier.size(20.dp))
@@ -210,25 +212,24 @@ internal fun SettingsSwitchRow(
     }
 }
 
-/** A switch in the accent colour. */
+/** An on/off toggle in the terminal style: a thin box with [ ON ] or [ OFF ]. */
 @Composable
 internal fun SettingsSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val accent = LocalAccentColor.current
-    Switch(
-        checked = checked,
-        onCheckedChange = onCheckedChange,
-        colors =
-            SwitchDefaults.colors(
-                checkedTrackColor = accent,
-                checkedThumbColor = readableOn(accent),
-                checkedBorderColor = accent,
-                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
-                uncheckedThumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                uncheckedBorderColor = MaterialTheme.colorScheme.outline,
-            ),
+    val color = if (checked) accent else MaterialTheme.colorScheme.onSurfaceVariant
+    Text(
+        text = if (checked) "[ ON ]" else "[ OFF ]",
+        style = MaterialTheme.typography.labelMedium,
+        color = color,
+        modifier =
+            Modifier
+                .border(1.dp, if (checked) accent else MaterialTheme.colorScheme.outlineVariant, SettingsShape)
+                .clickable(role = Role.Switch) { onCheckedChange(!checked) }
+                .semantics { stateDescription = if (checked) "On" else "Off" }
+                .padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
 
@@ -254,9 +255,9 @@ internal fun SettingsPageHeader(
             )
         }
         Text(
-            text = title,
+            text = "> " + title.uppercase(),
             style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onBackground,
+            color = LocalAccentColor.current,
             modifier = Modifier.semantics { heading() },
         )
     }
@@ -269,7 +270,7 @@ internal fun UsageBar(
     modifier: Modifier = Modifier,
 ) {
     val accent = LocalAccentColor.current
-    val shape = RoundedCornerShape(3.dp)
+    val shape = SettingsShape
     Box(
         modifier =
             modifier

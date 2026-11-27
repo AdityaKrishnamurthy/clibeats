@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -265,7 +264,7 @@ private fun CacheRow(
         ) {
             options.forEach { mb ->
                 val isSelected = mb == selectedMb
-                val shape = RoundedCornerShape(50)
+                val shape = SettingsShape
                 Text(
                     text = formatMb(mb),
                     style = MaterialTheme.typography.labelMedium,

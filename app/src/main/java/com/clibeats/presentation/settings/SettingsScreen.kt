@@ -36,10 +36,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DownloadForOffline
@@ -491,7 +489,7 @@ private fun ThemeCard(
                 .fillMaxWidth()
                 .clip(SettingsShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant)
-                .border(1.dp, accentColor.copy(alpha = 0.5f), SettingsShape)
+                .border(1.dp, accentColor, SettingsShape)
                 .clickable(role = Role.Button, onClickLabel = "Change theme", onClick = onClick)
                 .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -500,29 +498,24 @@ private fun ThemeCard(
             modifier =
                 Modifier
                     .size(48.dp)
-                    .clip(CircleShape)
-                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette))
-                    .border(2.dp, accentColor, CircleShape),
+                    .background(if (shownDark) darkOrb(palette) else lightOrb(palette), SettingsShape)
+                    .border(1.dp, accentColor, SettingsShape),
         )
         Spacer(Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = "Theme",
+                text = "> THEME",
                 style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurface,
+                color = accentColor,
             )
-            Text(text = theme, style = MaterialTheme.typography.bodyMedium, color = accentColor)
+            Text(text = theme, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             Text(
                 text = "Accent: $accent \u00b7 tap to change colours",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        Icon(
-            imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(text = "[ OPEN ]", style = MaterialTheme.typography.labelMedium, color = accentColor)
     }
 }
 
