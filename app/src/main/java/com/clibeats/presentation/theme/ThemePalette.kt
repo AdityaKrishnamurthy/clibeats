@@ -36,8 +36,8 @@ class ThemePalette private constructor(
                 "CLASSIC", "Classic",
                 Color(0xFF0C0C0C), Color(0xFF121212), Color(0xFF1A1A1A),
                 Color(0xFFF4F4EF), Color(0xFFFFFFFF), Color(0xFFE8E8E3),
-                // Neutral grey with terminal amber: the classic phosphor look, unlike any other theme.
-                swatch = Color(0xFFFFC107),
+                // Neutral grey with a soft silver-white accent: a clean default that no other theme looks like.
+                swatch = Color(0xFFE4E4E7),
             )
         val BERRY =
             ThemePalette(

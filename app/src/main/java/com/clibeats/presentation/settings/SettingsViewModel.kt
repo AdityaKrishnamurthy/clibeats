@@ -204,7 +204,7 @@ class SettingsViewModel
                 .stateIn(viewModelScope, SharingStarted.Eagerly, com.clibeats.presentation.theme.ThemePalette.CLASSIC)
 
         /**
-         * Picks a theme; its colour becomes the accent (Classic goes back to amber). The accent can
+         * Picks a theme; its colour becomes the accent (Classic goes back to silver-white). The accent can
          * still be changed below afterwards.
          */
         fun setThemePalette(palette: com.clibeats.presentation.theme.ThemePalette) {
@@ -212,7 +212,7 @@ class SettingsViewModel
                 appPreferences.setThemePalette(palette.name)
                 val accent =
                     if (palette == com.clibeats.presentation.theme.ThemePalette.CLASSIC) {
-                        AccentColor.AMBER.name
+                        AccentColor.WHITE.name
                     } else {
                         Accent.toHex(palette.swatch)
                     }
