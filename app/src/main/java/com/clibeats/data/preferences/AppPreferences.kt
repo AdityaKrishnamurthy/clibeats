@@ -50,6 +50,12 @@ class AppPreferences
             val PLAYLIST_VIEW = stringPreferencesKey("playlist_view")
             val LIBRARY_GROUP_VIEW = stringPreferencesKey("library_group_view")
             val LYRICS_TRANSLATE = booleanPreferencesKey("lyrics_translate")
+            val GESTURE_SONG_RIGHT = stringPreferencesKey("gesture_song_right_action")
+            val GESTURE_SONG_LEFT = stringPreferencesKey("gesture_song_left_action")
+            val GESTURE_TABS = booleanPreferencesKey("gesture_tab_swipe")
+            val GESTURE_QUEUE_RIGHT = stringPreferencesKey("gesture_queue_right_action")
+            val GESTURE_NP_DOWN = booleanPreferencesKey("gesture_now_playing_down")
+            val GESTURE_NP_UP = booleanPreferencesKey("gesture_now_playing_up")
             val LYRICS_PRONOUNCE = booleanPreferencesKey("lyrics_pronounce")
             val HOME_VIEW = stringPreferencesKey("home_view")
             val AUTO_QUEUE_RELATED = booleanPreferencesKey("auto_queue_related")
@@ -368,6 +374,30 @@ class AppPreferences
             }
         }
 
+        /** Settings → Gestures (all on unless turned off). */
+        val gestures: Flow<com.clibeats.domain.model.GestureSettings> =
+            dataStore.data.map {
+                com.clibeats.domain.model.GestureSettings(
+                    songSwipeRight = swipeAction(it[Keys.GESTURE_SONG_RIGHT], SwipeActionDefault.RIGHT),
+                    songSwipeLeft = swipeAction(it[Keys.GESTURE_SONG_LEFT], SwipeActionDefault.LEFT),
+                    queueSwipeRight = swipeAction(it[Keys.GESTURE_QUEUE_RIGHT], SwipeActionDefault.QUEUE),
+                    tabSwipe = it[Keys.GESTURE_TABS] ?: true,
+                    nowPlayingSwipeDown = it[Keys.GESTURE_NP_DOWN] ?: true,
+                    nowPlayingSwipeUp = it[Keys.GESTURE_NP_UP] ?: true,
+                )
+            }
+
+        suspend fun setGestures(gestures: com.clibeats.domain.model.GestureSettings) {
+            dataStore.edit {
+                it[Keys.GESTURE_SONG_RIGHT] = gestures.songSwipeRight.name
+                it[Keys.GESTURE_SONG_LEFT] = gestures.songSwipeLeft.name
+                it[Keys.GESTURE_QUEUE_RIGHT] = gestures.queueSwipeRight.name
+                it[Keys.GESTURE_TABS] = gestures.tabSwipe
+                it[Keys.GESTURE_NP_DOWN] = gestures.nowPlayingSwipeDown
+                it[Keys.GESTURE_NP_UP] = gestures.nowPlayingSwipeUp
+            }
+        }
+
         /** Lyrics: show each line's translation (into the phone's language) under it. */
         val lyricsTranslate: Flow<Boolean> = dataStore.data.map { it[Keys.LYRICS_TRANSLATE] ?: false }
 
@@ -421,3 +451,17 @@ private const val DEFAULT_SONG_CACHE_MB = 512
 
 /** Stored download id meaning "no update download in progress or kept". */
 const val NO_DOWNLOAD = -1L
+
+private object SwipeActionDefault {
+    val RIGHT = com.clibeats.domain.model.SwipeAction.QUEUE
+    val LEFT = com.clibeats.domain.model.SwipeAction.FAVORITE
+    val QUEUE = com.clibeats.domain.model.SwipeAction.REMOVE
+}
+
+private fun swipeAction(
+    saved: String?,
+    default: com.clibeats.domain.model.SwipeAction,
+): com.clibeats.domain.model.SwipeAction {
+    val all = com.clibeats.domain.model.SwipeAction.entries
+    return all.firstOrNull { it.name == saved } ?: default
+}

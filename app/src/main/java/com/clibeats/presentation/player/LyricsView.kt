@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -78,7 +79,6 @@ import androidx.compose.ui.unit.sp
 import com.clibeats.domain.model.LyricLine
 import com.clibeats.domain.model.Lyrics
 import com.clibeats.domain.model.PlaybackState
-import com.clibeats.presentation.theme.CliBeatsBorderInactive
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
@@ -231,15 +231,17 @@ private fun LyricsToggle(
     on: Boolean,
     onClick: () -> Unit,
 ) {
-    val accent = LocalAccentColor.current
+    // The song's colour, lifted until it reads clearly on the dark background (a dark cover's colour could
+    // make the buttons nearly invisible).
+    val accent = readableAccent(LocalAccentColor.current)
     val shape = RoundedCornerShape(8.dp)
     Box(
         modifier =
             Modifier
                 .size(TOGGLE_SIZE)
                 .clip(shape)
-                .background(if (on) accent.copy(alpha = 0.16f) else Color.Transparent)
-                .border(1.dp, if (on) accent else CliBeatsBorderInactive, shape)
+                .background(if (on) accent.copy(alpha = 0.22f) else Color.Black.copy(alpha = 0.25f))
+                .border(1.dp, if (on) accent else CliBeatsTextPrimary.copy(alpha = 0.35f), shape)
                 .toggleable(value = on, role = Role.Switch, onValueChange = { onClick() })
                 .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
@@ -247,7 +249,7 @@ private fun LyricsToggle(
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = if (on) accent else CliBeatsTextSecondary,
+            tint = if (on) accent else CliBeatsTextPrimary.copy(alpha = 0.85f),
             modifier = Modifier.size(20.dp),
         )
     }
@@ -769,3 +771,16 @@ private const val BREAK_DOTS = 3
 private const val BREAK_DOTS_MIN_MS = 3_000L
 private val BREAK_HEIGHT = 30.dp
 private const val EDGE_FADE = 0.08f
+
+/** [color] lightened toward white until it stands out on a dark background (it keeps its hue). */
+private fun readableAccent(color: Color): Color {
+    var c = color
+    var step = 0
+    while (c.luminance() < MIN_TOGGLE_LUMINANCE && step < 10) {
+        c = androidx.compose.ui.graphics.lerp(c, Color.White, 0.15f)
+        step++
+    }
+    return c
+}
+
+private const val MIN_TOGGLE_LUMINANCE = 0.38f

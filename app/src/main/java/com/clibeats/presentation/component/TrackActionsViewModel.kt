@@ -30,7 +30,32 @@ class TrackActionsViewModel
         private val playbackRepository: PlaybackRepository,
         private val downloadManager: TrackDownloadManager,
         private val notices: Notices,
+        private val appPreferences: com.clibeats.data.preferences.AppPreferences? = null,
+        private val playlistPicks: PlaylistPicks? = null,
     ) : ViewModel() {
+        private val gestures =
+            (appPreferences?.gestures ?: kotlinx.coroutines.flow.flowOf(com.clibeats.domain.model.GestureSettings()))
+                .stateIn(viewModelScope, SharingStarted.Eagerly, com.clibeats.domain.model.GestureSettings())
+
+        /** Swiping a song right: whatever Settings → Gestures says (add to queue by default). */
+        fun swipeRight(track: Track) = perform(gestures.value.songSwipeRight, track)
+
+        /** Swiping a song left: whatever Settings → Gestures says (add to ♥ Favorites by default). */
+        fun swipeLeft(track: Track) = perform(gestures.value.songSwipeLeft, track)
+
+        fun perform(
+            action: com.clibeats.domain.model.SwipeAction,
+            track: Track,
+        ) {
+            when (action) {
+                com.clibeats.domain.model.SwipeAction.QUEUE -> addToQueue(track)
+                com.clibeats.domain.model.SwipeAction.PLAY_NEXT -> playNext(track)
+                com.clibeats.domain.model.SwipeAction.FAVORITE -> favorite(track)
+                com.clibeats.domain.model.SwipeAction.ADD_TO_PLAYLIST -> playlistPicks?.request(track)
+                com.clibeats.domain.model.SwipeAction.REMOVE, com.clibeats.domain.model.SwipeAction.OFF -> Unit
+            }
+        }
+
         val downloadedTrackIds: StateFlow<Set<String>> = downloadManager.downloadedTrackIds
         val downloads: StateFlow<Map<String, DownloadStatus>> = downloadManager.downloads
 

@@ -42,6 +42,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.clibeats.domain.model.SwipeAction
 import com.clibeats.presentation.theme.CliBeatsAccent
 import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsDivider
@@ -80,9 +81,12 @@ fun SongTableRow(
     onClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     onSwipeRight: (() -> Unit)? = null,
-    swipeRightLabel: String = "+ QUEUE",
+    /** The hint behind the row when swiping right; by default the song swipe action's. */
+    swipeRightLabel: String? = null,
     onLongPress: (() -> Unit)? = null,
     onSwipeLeft: (() -> Unit)? = null,
+    /** The right swipe isn't one of the song swipe actions (e.g. the Queue's remove), so ignore that setting. */
+    swipeRightAlwaysOn: Boolean = false,
     /** Selection mode: true/false draws `[x]`/`[ ]` in front of the row; null = not selecting. */
     selected: Boolean? = null,
     /** Greyed out, e.g. a song still waiting to download; it gets full colour when done. */
@@ -99,7 +103,11 @@ fun SongTableRow(
         else -> CliBeatsBackground
     }
 
-    // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back).
+    // Swipe right = add to queue, swipe left = add to favorites (row follows the finger, snaps back). Either can
+    // be turned off in Settings → Gestures.
+    val gestureSettings = LocalGestureSettings.current
+    val onSwipeRight = onSwipeRight.takeIf { swipeRightAlwaysOn || gestureSettings.songSwipeRight != SwipeAction.OFF }
+    val onSwipeLeft = onSwipeLeft.takeIf { gestureSettings.songSwipeLeft != SwipeAction.OFF }
     var dragX by remember { mutableFloatStateOf(0f) }
     val swipeModifier =
         if (onSwipeRight == null && onSwipeLeft == null) {
@@ -131,7 +139,9 @@ fun SongTableRow(
         }
 
     Box(modifier = modifier.fillMaxWidth().then(swipeModifier)) {
-        if (dragX != 0f) SwipeHint(dragX, swipeRightLabel)
+        if (dragX != 0f) {
+            SwipeHint(dragX, swipeRightLabel ?: gestureSettings.songSwipeRight.hint, gestureSettings.songSwipeLeft.hint)
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -309,10 +319,11 @@ private const val SWIPE_MAX_FACTOR = 1.5f
 private fun BoxScope.SwipeHint(
     dragX: Float,
     rightLabel: String,
+    leftLabel: String,
 ) {
     val right = dragX > 0f
     Text(
-        text = if (right) rightLabel else "♥ FAVORITE",
+        text = if (right) rightLabel else leftLabel,
         style = MaterialTheme.typography.labelMedium,
         color = CliBeatsAccent,
         modifier =

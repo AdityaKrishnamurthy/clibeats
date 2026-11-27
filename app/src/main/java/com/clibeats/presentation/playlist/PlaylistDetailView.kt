@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -39,12 +40,16 @@ import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.automirrored.outlined.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.ViewList
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -82,12 +87,14 @@ import com.clibeats.presentation.component.TrackArtwork
 import com.clibeats.presentation.component.TuiTextField
 import com.clibeats.presentation.layout.LockTabSwipe
 import com.clibeats.presentation.search.formatDuration
+import com.clibeats.presentation.theme.CliBeatsBackground
 import com.clibeats.presentation.theme.CliBeatsDestructive
 import com.clibeats.presentation.theme.CliBeatsSurface
 import com.clibeats.presentation.theme.CliBeatsSurfaceVariant
 import com.clibeats.presentation.theme.CliBeatsTextPrimary
 import com.clibeats.presentation.theme.CliBeatsTextSecondary
 import com.clibeats.presentation.theme.LocalAccentColor
+import com.clibeats.util.ARTWORK_FULL_PX
 import com.clibeats.util.ARTWORK_THUMB_PX
 import com.clibeats.util.artworkUrlFor
 
@@ -156,7 +163,11 @@ fun PlaylistDetailView(
     // After a sort the list starts again from the top (it used to stay on the row that was visible).
     var sortCount by remember(title) { mutableIntStateOf(0) }
     val fixedListState = rememberLazyListState()
+    var lastSort by remember(title) { mutableStateOf<SongSort?>(null) }
+    val context = LocalContext.current
+    var rowView by remember { mutableStateOf(SongRowView.load(context)) }
     val onSort: (SongSort) -> Unit = { sort ->
+        lastSort = sort
         sortCount++
         if (onReorder != null) onReorder(sortSongs(tracks, sort)) else viewSort = sort
     }
@@ -235,6 +246,14 @@ fun PlaylistDetailView(
                 onBackClick = onBackClick,
                 onChangeCoverClick = onChangeCoverClick,
                 onSort = if (tracks.size > 1) onSort else null,
+                currentSort = lastSort,
+                rowView = rowView,
+                onCycleView =
+                    if (tracks.isNotEmpty()) {
+                        { rowView = rowView.next().also { it.save(context) } }
+                    } else {
+                        null
+                    },
             )
         }
         // Songs still waiting to download (Downloaded) can't play yet, so PLAY / SHUFFLE leave them out.
@@ -278,7 +297,7 @@ fun PlaylistDetailView(
         @Composable
         fun SongRow(
             track: Track,
-            art: @Composable () -> Unit,
+            art: (@Composable () -> Unit)?,
             onClick: () -> Unit,
             actions: (@Composable () -> Unit)?,
         ) = SongTableRow(
@@ -288,6 +307,7 @@ fun PlaylistDetailView(
             isNowPlaying = track.id == playingTrackId,
             isDownloaded = track.id in downloadedIds,
             artworkContent = art,
+            large = rowView == SongRowView.LARGE,
             onClick = if (selecting) ({ toggle(track) }) else onClick,
             onSwipeRight = if (selecting) null else ({ onSwipeRight(track) }),
             onSwipeLeft = if (selecting) null else ({ onSwipeLeft(track) }),
@@ -311,6 +331,15 @@ fun PlaylistDetailView(
                         color = CliBeatsTextSecondary,
                     )
                 }
+            rowView.isGrid ->
+                SongGrid(
+                    tracks = filtered,
+                    columns = rowView.columns,
+                    playingTrackId = playingTrackId,
+                    selectedIds = if (selecting) selectedIds else null,
+                    onClick = { track -> if (selecting) toggle(track) else play(track) },
+                    onLongPress = { track -> toggle(track) },
+                )
             // Dragging only makes sense on the whole list, not a filtered part of it.
             onReorder != null && !searching ->
                 ReorderableList(
@@ -325,7 +354,7 @@ fun PlaylistDetailView(
                         art = {
                             TrackArtwork(
                                 artworkUrl = track.artworkUrl,
-                                size = 32,
+                                size = rowView.artSize,
                                 modifier =
                                     if (selecting) Modifier else Modifier.artworkHandle { play(track) },
                             )
@@ -343,7 +372,7 @@ fun PlaylistDetailView(
                     itemsIndexed(items = filtered, key = { index, track -> "${track.id}_$index" }) { _, track ->
                         SongRow(
                             track = track,
-                            art = { TrackArtwork(artworkUrl = track.artworkUrl, size = 32) },
+                            art = { TrackArtwork(artworkUrl = track.artworkUrl, size = rowView.artSize) },
                             onClick = { play(track) },
                             actions = null,
                         )
@@ -413,6 +442,9 @@ private fun DetailHeader(
     onBackClick: () -> Unit,
     onChangeCoverClick: (() -> Unit)?,
     onSort: ((SongSort) -> Unit)?,
+    currentSort: SongSort? = null,
+    rowView: SongRowView = SongRowView.DETAILS,
+    onCycleView: (() -> Unit)? = null,
 ) {
     val accent = LocalAccentColor.current
     Row(
@@ -464,7 +496,17 @@ private fun DetailHeader(
             )
             Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = CliBeatsTextSecondary)
         }
-        onSort?.let { SortButton(onSort = it) }
+        onCycleView?.let { cycle ->
+            // One icon: each tap switches to the next row style (compact → list → large); remembered.
+            IconButton(onClick = cycle) {
+                Icon(
+                    imageVector = rowView.icon,
+                    contentDescription = "Row style: ${rowView.label}. Tap for ${rowView.next().label}",
+                    tint = accent,
+                )
+            }
+        }
+        onSort?.let { SortButton(current = currentSort, onSort = it) }
         if (onChangeCoverClick != null) {
             IconButton(onClick = onChangeCoverClick) {
                 Icon(
@@ -575,3 +617,109 @@ private fun BarAction(
                 .padding(horizontal = 6.dp, vertical = 10.dp),
     )
 }
+
+/** How songs show inside a playlist: details, bigger details, grid, bigger grid. Remembered across playlists. */
+@Suppress("MagicNumber")
+internal enum class SongRowView(
+    val label: String,
+    /** 0 for the row styles, otherwise how many covers across. */
+    val columns: Int,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+) {
+    DETAILS("details", 0, Icons.AutoMirrored.Outlined.ViewList),
+    LARGE("bigger details", 0, Icons.Outlined.ViewAgenda),
+    GRID("grid", 3, Icons.Outlined.Apps),
+    LARGE_GRID("bigger grid", 2, Icons.Outlined.GridView),
+    ;
+
+    val isGrid: Boolean get() = columns > 0
+    val artSize: Int get() = if (this == LARGE) 48 else 32
+
+    fun next(): SongRowView = entries[(ordinal + 1) % entries.size]
+
+    fun save(context: android.content.Context) {
+        prefs(context).edit().putString(KEY, name).apply()
+    }
+
+    companion object {
+        private const val KEY = "playlist_song_view"
+
+        private fun prefs(context: android.content.Context) =
+            context.getSharedPreferences("clibeats_ui", android.content.Context.MODE_PRIVATE)
+
+        fun load(context: android.content.Context): SongRowView =
+            prefs(context).getString(KEY, null)?.let { saved -> entries.firstOrNull { it.name == saved } } ?: DETAILS
+    }
+}
+
+/** Songs as covers in [columns] columns (title and artist under each); tap plays, hold selects. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Suppress("LongParameterList")
+@Composable
+private fun SongGrid(
+    tracks: List<Track>,
+    columns: Int,
+    playingTrackId: String?,
+    selectedIds: Set<String>?,
+    onClick: (Track) -> Unit,
+    onLongPress: (Track) -> Unit,
+) {
+    val accent = LocalAccentColor.current
+    androidx.compose.foundation.lazy.grid.LazyVerticalGrid(
+        columns = androidx.compose.foundation.lazy.grid.GridCells.Fixed(columns),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        items(tracks.size, key = { "${tracks[it].id}_$it" }) { index ->
+            val track = tracks[index]
+            val playing = track.id == playingTrackId
+            val selected = selectedIds?.contains(track.id) == true
+            Column(
+                modifier =
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(
+                            if (selected) accent.copy(alpha = SELECTED_TILE_ALPHA) else CliBeatsBackground,
+                        )
+                        .combinedClickable(onClick = { onClick(track) }, onLongClick = { onLongPress(track) })
+                        .padding(4.dp),
+            ) {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(CliBeatsSurfaceVariant)
+                            .then(if (playing) Modifier.border(2.dp, accent, RoundedCornerShape(6.dp)) else Modifier),
+                ) {
+                    AsyncImage(
+                        model = artworkUrlFor(track.artworkUrl, ARTWORK_FULL_PX),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                Text(
+                    text = (if (playing) "▶ " else "") + track.title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (playing) accent else CliBeatsTextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(
+                    text = track.artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = CliBeatsTextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+private const val SELECTED_TILE_ALPHA = 0.18f

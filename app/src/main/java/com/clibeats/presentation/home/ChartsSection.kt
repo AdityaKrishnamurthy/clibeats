@@ -245,8 +245,8 @@ internal fun OpenedCollectionView(
         onTrackClick = { list, index -> onPlay(list, index, opened.title) },
         onRemoveClick = null,
         removeLabel = "",
-        onSwipeRight = trackActions::addToQueue,
-        onSwipeLeft = trackActions::favorite,
+        onSwipeRight = trackActions::swipeRight,
+        onSwipeLeft = trackActions::swipeLeft,
         selection = selection,
         headerActions =
             if (tracks.isEmpty()) {

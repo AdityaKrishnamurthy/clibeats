@@ -81,6 +81,16 @@ class PlaybackRepositoryImpl
                     queuePersistence.persistPlaybackPosition(playerAdapter)
                 }
             }
+            // Songs saved without a length (Home cards, some links) get it once the player knows it, so lists
+            // like Recently played show it.
+            repositoryScope.launch {
+                playerAdapter.playbackState
+                    .map { it.currentTrack?.id to it.durationMs }
+                    .distinctUntilChanged()
+                    .collect { (id, duration) ->
+                        if (id != null && duration > 0) runCatching { songDao.fillMissingDuration(id, duration) }
+                    }
+            }
             repositoryScope.launch {
                 playerAdapter.playbackState
                     .map { it.currentTrack }

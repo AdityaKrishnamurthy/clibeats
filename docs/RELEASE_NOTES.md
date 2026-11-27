@@ -1,3 +1,34 @@
+# CLIBeats v2.8.1 — Release Notes
+
+**Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.1.apk` (verify with `SHA256SUMS.txt`)
+
+## New
+
+- **Gesture settings.** A new Gestures block in Settings (above Storage and Cache) lets you choose what swiping a
+  song right or left does — add to queue, play next, add to ♥ Favorites, add to playlist, or nothing — and what
+  swiping right in the Queue does (remove by default, or any of those), turn off swiping between tabs or Now Playing's swipe down (close) and up (cover ↔ lyrics). The ↺ icon at the top right of the block puts
+  everything back to the defaults.
+- **Playlist views.** An icon next to sort switches the songs between details, bigger details, grid and bigger
+  grid with each tap; your choice is remembered for every playlist.
+- **One-tap sort.** The sort button sorts straight away; each further tap moves to the next order (Title A→Z, Z→A,
+  Artist A→Z, Z→A), shown in a small pop-up.
+
+## Fixes
+
+- **Lyrics for downloaded songs offline.** Songs downloaded before lyrics were saved with downloads now fetch theirs
+  in the background soon after the app starts, so they show offline too.
+- **Song lengths in Recently played.** Songs started from a Home card no longer show "–"; the length is saved as
+  soon as the song plays.
+- **View artist shows all their songs.** The artist page now loads the artist's full song list from YouTube Music
+  (for example Ado's "ビンクスの酒 - Binks' Sake"), not just the top search results.
+- **Smooth tab switching.** Tapping Library from Search no longer gets stuck on Search, and going back to a tab
+  (e.g. a playlist open on Home) no longer lags: all four tabs stay loaded.
+- **Readable lyrics buttons.** The 文A and abc buttons keep the song's colour but lighten it when it's too dark to
+  see on the background.
+- **Clearing lyrics asks first.** Settings → Storage and Cache → Lyrics → [ CLEAR ] now asks for confirmation.
+
+---
+
 # CLIBeats v2.8.0 — Release Notes
 
 **Build target:** Android 8.0+ (API 26+) · **Download:** `CLIBeats-v2.8.0.apk` (verify with `SHA256SUMS.txt`)

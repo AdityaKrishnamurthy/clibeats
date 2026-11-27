@@ -93,6 +93,35 @@ fun SearchResponse.toAlbumHits(): List<AlbumHit> {
     }
 }
 
+/** Artists from an artists-filtered search, in result order: their channel id (`UC...`) and name. */
+fun SearchResponse.toArtistHits(): List<Pair<String, String>> {
+    val root = contents ?: return emptyList()
+    return findAll(root, "musicResponsiveListItemRenderer").mapNotNull { item ->
+        val browseId =
+            item.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+                ?.takeIf { it.startsWith("UC") } ?: return@mapNotNull null
+        val name =
+            item.nav("flexColumns")?.safeArray()?.firstOrNull()
+                ?.nav("musicResponsiveListItemFlexColumnRenderer", "text", "runs")?.safeArray()
+                ?.mapNotNull { it.nav("text")?.safeString() }?.joinToString("").orEmpty()
+        if (name.isBlank()) null else browseId to name
+    }
+}
+
+/**
+ * An artist page's full song list (the "Songs" / "Top songs" shelf's title link, a `VL...` playlist), or null when
+ * the page has none. The shelf itself only shows five songs.
+ */
+fun BrowseResponse.artistSongsPlaylistId(): String? {
+    val root = contents ?: return null
+    return findAll(root, "musicShelfRenderer").firstNotNullOfOrNull { shelf ->
+        shelf.nav("title", "runs")?.safeArray()?.firstOrNull()
+            ?.nav("navigationEndpoint", "browseEndpoint", "browseId")?.safeString()
+            ?.takeIf { it.startsWith("VL") }
+            ?: shelf.nav("bottomEndpoint", "browseEndpoint", "browseId")?.safeString()?.takeIf { it.startsWith("VL") }
+    }
+}
+
 /**
  * Playlists from a playlists-filtered search, in result order: their page id (`VL...`), name,
  * "Creator • 10M views" and cover.

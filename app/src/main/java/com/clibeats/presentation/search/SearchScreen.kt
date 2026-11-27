@@ -192,11 +192,11 @@ fun SearchScreen(
                         onTrackClick = { index -> viewModel.onPlayRecent(recentSearches, index) },
                         onClear = { confirmClearRecent = true },
                         onAddToQueue = { track ->
-                            trackActions.addToQueue(track)
+                            trackActions.swipeRight(track)
                             viewModel.rememberPick(track)
                         },
                         onFavorite = { track ->
-                            trackActions.favorite(track)
+                            trackActions.swipeLeft(track)
                             viewModel.rememberPick(track)
                         },
                         onMore = { menuTrack = it },
@@ -222,11 +222,11 @@ fun SearchScreen(
                             playingTrackId = playingId,
                             onTrackClick = { index -> viewModel.onPlay(currentState.tracks, index) },
                             onAddToQueue = { track ->
-                                trackActions.addToQueue(track)
+                                trackActions.swipeRight(track)
                                 viewModel.rememberPick(track)
                             },
                             onFavorite = { track ->
-                                trackActions.favorite(track)
+                                trackActions.swipeLeft(track)
                                 viewModel.rememberPick(track)
                             },
                             onPlayNext = { track ->

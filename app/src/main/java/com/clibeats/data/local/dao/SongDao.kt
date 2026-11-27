@@ -22,6 +22,13 @@ interface SongDao {
     @Upsert
     suspend fun upsertAll(songs: List<SongEntity>)
 
+    /** Sets the length of a stored song saved without one (e.g. from a Home card), once the player knows it. */
+    @Query("UPDATE songs SET duration_ms = :durationMs WHERE id = :id AND duration_ms <= 0")
+    suspend fun fillMissingDuration(
+        id: String,
+        durationMs: Long,
+    )
+
     /** Sets the cover of a stored song that has none (e.g. saved by an earlier import); never replaces one. */
     @Query("UPDATE songs SET artwork_url = :artworkUrl WHERE id = :id AND (artwork_url IS NULL OR artwork_url = '')")
     suspend fun fillMissingArtwork(

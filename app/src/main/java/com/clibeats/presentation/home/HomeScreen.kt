@@ -239,8 +239,8 @@ fun HomeScreen(
                 downloadedIds = downloadedIds,
                 playingTrackId = playingId,
                 onPlay = { index -> homeViewModel.playFromList(recentlyPlayed, index) },
-                onQueue = trackActions::addToQueue,
-                onFavorite = trackActions::favorite,
+                onQueue = trackActions::swipeRight,
+                onFavorite = trackActions::swipeLeft,
                 onLongPress = { addToPlaylistTrack = it },
             )
             item { Spacer(modifier = Modifier.height(12.dp)) }
@@ -338,8 +338,8 @@ fun HomeScreen(
                         downloadedIds = downloadedIds,
                         playingTrackId = playingId,
                         onPlay = { index -> homeViewModel.playFromList(state.tracks, index) },
-                        onQueue = trackActions::addToQueue,
-                        onFavorite = trackActions::favorite,
+                        onQueue = trackActions::swipeRight,
+                        onFavorite = trackActions::swipeLeft,
                         onLongPress = { addToPlaylistTrack = it },
                     )
                 }
